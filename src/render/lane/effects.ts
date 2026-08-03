@@ -151,8 +151,10 @@ export function drawCelebrateStars(ctx: CanvasRenderingContext2D, hints: RenderH
 // pitゾーンのピンはmachine-space座標を持つためlaneシーンでは実座標を描けない。
 // 代わりに sim.updateSweep が 'sweeping'→'returning' に切り替わる瞬間
 // (=まさにピンをピットへ送った瞬間、'garagara'sfxと同じタイミング)を検出し、
-// デッキ手前から機械マスク下端へ滑り込んでいくシルエット+ほこりパフを
-// 約1秒だけ描く。完璧な物理でなく「奥に吸い込まれた」と伝わればよい。
+// デッキ手前から機械マスク下端へ滑り込んでいくシルエット+ほこりパフを描く。
+// 4歳児にも「あ、奥に吸い込まれた」とはっきり伝わるよう、約1秒→1.7秒に
+// 延長し、残像の数・不透明度・ほこりパフの量と広がりを底上げした
+// (受け入れ検証: 元の約1秒は瞬き一つで見逃されやすいとの指摘)。
 let lastSweepPhase: MachineState['sweep']['phase'] = 'idle';
 let pitBurstAt: number | null = null;
 
@@ -164,7 +166,7 @@ export function drawPitSuckIn(ctx: CanvasRenderingContext2D, state: MachineState
   lastSweepPhase = phase;
   if (pitBurstAt === null) return;
 
-  const DURATION = 1.0;
+  const DURATION = 1.7;
   const t = (time - pitBurstAt) / DURATION;
   if (t >= 1) { pitBurstAt = null; return; }
   if (t < 0) return;
@@ -174,35 +176,38 @@ export function drawPitSuckIn(ctx: CanvasRenderingContext2D, state: MachineState
   const endY = LANE_VIEW.backWallY + 16;
   const y = lerp(startY, endY, eased);
   const scale = lerp(1, 0.22, eased);
-  const alpha = 1 - eased;
+  // 序盤(登場直後)は不透明度をしっかり保ち、終盤でふわっと消える
+  // カーブにして「見えた!」という時間を稼ぐ(単純な線形フェードより長持ち)。
+  const alpha = 1 - eased * eased;
 
   ctx.save();
-  ctx.globalAlpha = alpha * 0.9;
-  const n = 5;
+  ctx.globalAlpha = alpha * 0.98;
+  const n = 7;
   for (let i = 0; i < n; i++) {
-    const off = (i - (n - 1) / 2) * 24 * scale;
+    const off = (i - (n - 1) / 2) * 26 * scale;
     ctx.save();
-    ctx.translate(LANE_VIEW.centerX + off, y + Math.sin(i * 1.7 + t * 6) * 4 * scale);
+    ctx.translate(LANE_VIEW.centerX + off, y + Math.sin(i * 1.7 + t * 6) * 5 * scale);
     ctx.rotate(i * 0.6 + t * 2.2);
-    ctx.fillStyle = 'rgba(232,228,218,0.92)';
+    ctx.fillStyle = 'rgba(232,228,218,0.95)';
     ctx.beginPath();
-    ctx.ellipse(0, 0, 6 * scale, 15 * scale, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 0, 7 * scale, 17 * scale, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
   ctx.restore();
 
-  // ほこりパフ(吸い込まれた直後にふわっと)
-  if (eased > 0.45) {
-    const puffT = (eased - 0.45) / 0.55;
+  // ほこりパフ(吸い込まれた直後にふわっと、より長く・大きく漂う)
+  if (eased > 0.35) {
+    const puffT = (eased - 0.35) / 0.65;
     ctx.save();
-    ctx.globalAlpha = (1 - puffT) * 0.5;
-    ctx.fillStyle = 'rgba(214,204,188,0.6)';
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2;
-      const r = 8 + puffT * 42;
+    ctx.globalAlpha = (1 - puffT) * 0.65;
+    ctx.fillStyle = 'rgba(214,204,188,0.7)';
+    const puffN = 9;
+    for (let i = 0; i < puffN; i++) {
+      const a = (i / puffN) * Math.PI * 2;
+      const r = 10 + puffT * 64;
       ctx.beginPath();
-      ctx.arc(LANE_VIEW.centerX + Math.cos(a) * r, endY + Math.sin(a) * r * 0.5, 5 + puffT * 6, 0, Math.PI * 2);
+      ctx.arc(LANE_VIEW.centerX + Math.cos(a) * r, endY + Math.sin(a) * r * 0.5, 6 + puffT * 9, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.restore();

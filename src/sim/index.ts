@@ -79,6 +79,11 @@ export class MachineSim {
   private jamActive = false;
   private jamTimer = 0;
   private stallScheduled = false;
+  /** scheduleStall()で予約したmachineStallタイマーの実体への参照。故障が
+      発火前に修理された場合、この参照を使ってtimers配列から取り除き
+      (cancelStallTimer())、発火済みの故障のせいで後から強制的に
+      belt.run/elevator.runがfalseにされる事故を防ぐ。 */
+  private stallTimerEntry: { t: number; fn: () => void } | null = null;
   private kotoAccum = 0;
 
   private orientAnim: OrientAnim | null = null;
@@ -129,6 +134,7 @@ export class MachineSim {
     this.beltQueue = []; this.elevQueue = []; this.topQueue = []; this.rackWaiting = [];
     this.sweepQueueIds = [];
     this.jamPinId = null; this.jamActive = false; this.jamTimer = 0; this.stallScheduled = false;
+    this.stallTimerEntry = null;
     this.kotoAccum = 0; this.orientAnim = null; this.orientIdleTimer = 0; this.tenthPause = null;
     this.ballMode = 'idle'; this.ballPaused = false; this.fullRunActive = false;
     this.tableLeverSpring = false; this.placeTimer = 0; this.lastRollerAngle = null;
@@ -226,6 +232,11 @@ export class MachineSim {
     if (!on) {
       this.state.belt.run = false;
       this.state.elevator.run = false;
+    } else {
+      // 電源再投入(=修理完了してカバーを閉める直前)時点で古いstall予約が
+      // 残っていたら破棄する。再発防止の保険(通常はfreeStuckPin側で
+      // 既に破棄されているはずだが、経路を問わず安全側に倒す)。
+      this.cancelStallTimer();
     }
   }
 
@@ -237,6 +248,9 @@ export class MachineSim {
   startTestFeed(): void {
     this.state.testMode = true;
     this.state.belt.run = true;
+    // ここに来る時点で(close-coverまで進めた=)故障は直っているはずなので、
+    // 発火し損ねたstallタイマーが残っていれば破棄する(再発防止の保険)。
+    this.cancelStallTimer();
   }
 
   /** カバー/扉を閉め戻す操作。閉じきったら試運転モードへ（'cover-close'用） */
@@ -350,6 +364,12 @@ export class MachineSim {
     this.jamActive = false;
     this.jamTimer = 0;
     this.state.belt.vibrate = 0;
+    // [致命的バグ修正] pin-jam形成時にscheduleStall(2.3)で仕込まれた
+    // machineStallタイマーが、詰まりを早く解消してもキャンセルされず
+    // そのまま発火し、startTestFeed()直後にbelt.run/elevator.runを
+    // 強制falseに戻して復旧不能なソフトロックになっていた。ここで
+    // 未発火のタイマーを確実に破棄する。
+    this.cancelStallTimer();
     this.fixFault('pin-jam');
     bus.emit('pin:freed', { pin: freedId });
     bus.emit('sfx', { id: 'pachin' });
@@ -609,13 +629,32 @@ export class MachineSim {
   private scheduleStall(delay: number): void {
     if (this.stallScheduled) return;
     this.stallScheduled = true;
-    this.schedule(delay, () => this.machineStall());
+    const entry = { t: delay, fn: () => this.machineStall() };
+    this.stallTimerEntry = entry;
+    this.timers.push(entry);
+  }
+
+  /** 未発火のmachineStallタイマーがあれば取り除く。既に発火済み(=timers配列
+      から抜けている)場合は何もしない安全な操作。stallScheduledもリセット
+      するので、以降まだ壊れている故障があれば改めてscheduleStallできる。 */
+  private cancelStallTimer(): void {
+    if (this.stallTimerEntry) {
+      const idx = this.timers.indexOf(this.stallTimerEntry);
+      if (idx !== -1) this.timers.splice(idx, 1);
+      this.stallTimerEntry = null;
+    }
+    this.stallScheduled = false;
   }
 
   private machineStall(): void {
+    this.stallTimerEntry = null;
     bus.emit('sfx', { id: 'whirr' });
     this.schedule(0.55, () => bus.emit('sfx', { id: 'sputter' }));
     this.schedule(1.05, () => {
+      // [二重ガード] pin-jam/belt-derailのどちらもすでに修理済みなら、
+      // (キャンセルし損ねた古いタイマーが万一残っていても)機械を
+      // 止めない。停止させる正当な理由が消えている場合の最終防衛線。
+      if (!this.hasUnfixed('pin-jam') && !this.hasUnfixed('belt-derail')) return;
       bus.emit('sfx', { id: 'gata' });
       bus.emit('camera:shake', { power: 0.4 });
       this.state.belt.run = false;
