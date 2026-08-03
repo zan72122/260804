@@ -55,6 +55,11 @@ export class UIOverlay {
     this.mode = mode;
   }
 
+  /** flowから真の状態(MachineState/Progress由来)を流し込み、ローカル楽観状態とのズレを解消する。 */
+  syncState(partial: Partial<UIState>): void {
+    Object.assign(this.uiState, partial);
+  }
+
   register(input: InputSystem): void {
     for (const action of ALL_ACTIONS) {
       const item: Interactable = {

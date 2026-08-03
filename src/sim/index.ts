@@ -90,6 +90,10 @@ export class MachineSim {
 
   private tableLeverSpring = false;
   private lastRollerAngle: number | null = null;
+  /** belt-trace(なぞり)でderailが0になった後、roller-spin(円でなぞる)の
+      確認動作待ちかどうか。true中に貯まった回転量が一周分でbelt-derail確定修理。 */
+  private rollerConfirmPending = false;
+  private rollerConfirmAngle = 0;
 
   constructor() {
     this.pool = createPool();
@@ -121,6 +125,7 @@ export class MachineSim {
     this.kotoAccum = 0; this.orientAnim = null; this.orientIdleTimer = 0; this.tenthPause = null;
     this.ballMode = 'idle'; this.ballPaused = false; this.fullRunActive = false;
     this.tableLeverSpring = false; this.placeTimer = 0; this.lastRollerAngle = null;
+    this.rollerConfirmPending = false; this.rollerConfirmAngle = 0;
     this.extra.clear();
     this.liveOrder = [];
 
@@ -189,7 +194,13 @@ export class MachineSim {
     this.stallScheduled = false;
     if (faults.includes('belt-derail')) this.scheduleStall(1.0);
 
-    const fallen = this.state.pins.filter((p) => p.zone === 'lane' && p.pose === 'lying');
+    // 通常投球(bowl)は演出上「9本倒れ1本残る」(ballistics.pickStanding)ため
+    // pose==='lying'だけを掃くと毎回9本しか回収されず、rack.slots(10枠)が
+    // count>=10に到達できず'rack:full'が永遠に発火しない(=table-drop以降
+    // 完全に詰む)統合バグがあった。実機のピンセッターは倒れていない
+    // 残りピンも含めて毎フレーム一旦すべて回収するため、lane上の全ピン
+    // (直立していても)を対象にする。
+    const fallen = this.state.pins.filter((p) => p.zone === 'lane');
     this.sweepQueueIds = fallen.map((p) => p.id);
     if (this.sweepQueueIds.length > 0) {
       this.state.sweep.phase = 'sweeping';
@@ -335,10 +346,15 @@ export class MachineSim {
     if (this.state.belt.derail <= 0) return;
     if (distanceToPath(BELT_PATH, x, y) > 80) return;
     this.state.belt.derail = clamp(this.state.belt.derail - moveDist * 0.006, 0, 1);
-    if (this.state.belt.derail <= 0.01) {
+    if (this.state.belt.derail <= 0.01 && !this.rollerConfirmPending) {
       this.state.belt.derail = 0;
-      this.fixFault('belt-derail');
       bus.emit('sfx', { id: 'pachin' });
+      // ベルトは溝に戻ったが、まだ故障は確定修理しない。仕様どおり
+      // ローラーを指で円になぞって「ベルト全体が連動する」ことを
+      // 確認してから初めて belt-derail を fixFault する。
+      this.rollerConfirmPending = true;
+      this.rollerConfirmAngle = 0;
+      this.lastRollerAngle = null;
     }
   }
 
@@ -353,6 +369,15 @@ export class MachineSim {
       while (d < -Math.PI) d += Math.PI * 2;
       this.state.belt.rollerAngle += d;
       this.state.belt.offset += Math.abs(d) * 60;
+      if (this.rollerConfirmPending && this.hasUnfixed('belt-derail')) {
+        this.rollerConfirmAngle += Math.abs(d);
+        // 4歳児向けに寛容: ほぼ一周(約320度)でOKとする
+        if (this.rollerConfirmAngle >= Math.PI * 2 * 0.89) {
+          this.rollerConfirmPending = false;
+          this.fixFault('belt-derail');
+          bus.emit('sfx', { id: 'chime' });
+        }
+      }
     }
     this.lastRollerAngle = ang;
   }
@@ -598,14 +623,23 @@ export class MachineSim {
     for (let i = 0; i < ids.length; i++) {
       const p = this.pinById(ids[i]);
       if (p.stuck) { this.positionOnBelt(p); continue; }
-      if (!st.run || st.derail > 0) { this.positionOnBelt(p); continue; }
+      // pin-jamが未確定の間、先頭の候補ピンは「詰まり形成中」としてrun停止/
+      // derail(ベルト空転)の影響を受けず角まで進む。pin-jamはbelt-derailと
+      // 同時発生し得るが、derailの修理(belt-trace)はpower-off後のfixステップ
+      // でしか行えないため、derailブロックに従うと角に到達するピンが
+      // 永遠に現れず、詰まりピンが見つからずゲームが進行不能になっていた
+      // (統合バグ: pin-jamとbelt-derailの併発でsoft-lock)。
+      // 「壊れた瞬間には既に詰まっていた」という前提で、この1本だけは
+      // 常時進行させて確定的にjamを形成する。
+      const isJamCandidate = this.jamActive && this.jamPinId === null
+        && this.hasUnfixed('pin-jam') && p.t < BELT_CORNER_T;
+      if (!isJamCandidate && (!st.run || st.derail > 0)) { this.positionOnBelt(p); continue; }
       const ahead = i > 0 ? this.pinById(ids[i - 1]) : null;
       const jitter = this.extraOf(p.id).speedJitter;
       let nt = p.t + dt * BELT_T_SPEED * jitter;
       if (ahead) nt = Math.min(nt, ahead.t - BELT_MIN_GAP_T);
 
-      if (this.jamActive && this.jamPinId === null && this.hasUnfixed('pin-jam')
-        && p.t < BELT_CORNER_T && nt >= BELT_CORNER_T) {
+      if (isJamCandidate && nt >= BELT_CORNER_T) {
         nt = BELT_CORNER_T;
         p.stuck = true;
         this.jamPinId = p.id;

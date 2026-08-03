@@ -28,9 +28,11 @@ export const FAULT_GESTURE: Record<FaultId, { kind: GestureKind; dir: number }> 
   'flap-stuck': { kind: 'swipe', dir: -Math.PI / 2 },
 };
 
-/** 初回=固定2故障、2周目以降=5種から1つランダム */
+/** 初回=固定2故障(pin-jam/belt-derail)+11番のflap-stuck、2周目以降=5種から1つランダム。
+    CONTRACTS.md「初回=固定故障['pin-jam','belt-derail']+11番でflap-stuck」に対応
+    （flap-stuckは find-fault/fix では扱わずball-returnステップで自然解消: faults.ts内 repairGateIds/allNonFlapFixed 参照）。 */
 export function pickFaults(firstTime: boolean): FaultId[] {
-  if (firstTime) return ['pin-jam', 'belt-derail'];
+  if (firstTime) return ['pin-jam', 'belt-derail', 'flap-stuck'];
   const idx = Math.floor(Math.random() * ALL_FAULTS.length);
   return [ALL_FAULTS[idx]];
 }

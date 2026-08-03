@@ -15,6 +15,8 @@ import { drawMachineScene } from './render/machine';
 
 import { GameFlow } from './flow';
 import type { SceneId } from './core/types';
+import { getButtons, buttonCenter } from './ui/layout';
+import type { UIAction } from './ui';
 
 const canvasEl = document.getElementById('game');
 if (!(canvasEl instanceof HTMLCanvasElement)) {
@@ -79,3 +81,26 @@ const render = (time: number): void => {
 };
 
 startLoop(update, render);
+
+// ── デバッグ/検証用フック(残置可) ────────────────────────────────────
+// ワールド(machine-space or lane-space)座標→画面CSSピクセル座標への変換は
+// CameraController.screenToWorld の逆算(applyTransformの逆変換)。
+(window as unknown as { __game: unknown }).__game = {
+  flow, sim, cam, lm, input, ui,
+  screenOf(wx: number, wy: number): { sx: number; sy: number } {
+    const layout = lm.layout;
+    const zoom = cam.camera.zoom;
+    return {
+      sx: (wx - cam.camera.x) * zoom + layout.w / 2,
+      sy: (wy - cam.camera.y) * zoom + layout.h / 2,
+    };
+  },
+  /** UIボタン(画面座標)の中心を返す。位置はuiState非依存(色/アイコンのみ依存)。 */
+  uiButtonScreen(action: UIAction): { sx: number; sy: number } | null {
+    const dummy = { muted: false, speedLevel: 1 as 0 | 1 | 2, decorIdx: 0, xray: false };
+    const b = getButtons(ui.mode, lm.layout, dummy).find((x) => x.id === action);
+    if (!b) return null;
+    const c = buttonCenter(b);
+    return { sx: c.x, sy: c.y };
+  },
+};

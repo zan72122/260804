@@ -106,6 +106,21 @@ export class GameFlow {
     this.decayCelebrate(dt);
     this.tickStep(dt);
     this.applyCamera(false);
+    this.syncUIState();
+  }
+
+  // ── UIのローカル楽観状態を真値(sim.state/progress)で上書きする ──────────
+  // ui は xray/速度/ミュート/装飾をタップ直後に見た目だけ先取りで更新するため、
+  // 真の値(simが握るMachineState、flowが握るProgress)とズレうる。毎フレーム
+  // 安価な代入で同期し直すことでズレを解消する。
+  private syncUIState(): void {
+    const speedIdx = SPEED_ORDER.indexOf(this.sim.state.simSpeed);
+    this.ui.syncState({
+      xray: this.sim.state.xray,
+      speedLevel: (speedIdx >= 0 ? speedIdx : 1) as 0 | 1 | 2,
+      muted: isMuted(),
+      decorIdx: Math.max(0, DECOR_ORDER.indexOf(this.progress.decoration)),
+    });
   }
 
   // ── 契約にない「奥へスワイプ/タップ」ナビゲーション専用Interactable ──────
@@ -151,7 +166,11 @@ export class GameFlow {
     bus.on('pin:oriented', () => {
       if (this.step_ === 'orient-pins' || this.step_ === 'rack-fill') {
         this.orientedCount += 1;
-        if (this.step_ === 'orient-pins' && this.orientedCount >= this.sim.state.pins.length) {
+        // ピンプールは固定15本(free-drop用の予備込み)だが、通常周回で実際に
+        // 流れているのはそのうち 'gone'(未使用/プール中)以外の本数だけ。
+        // プール総数と比べると永久に満たされず先へ進めなかったバグの修正。
+        const flowingCount = this.sim.state.pins.filter((p) => p.zone !== 'gone').length;
+        if (this.step_ === 'orient-pins' && this.orientedCount >= flowingCount) {
           this.goto('rack-fill');
         }
       } else if (this.step_ === 'full-run' && this.scene_ === 'machine' && !this.fullRunOrientShown) {
@@ -436,6 +455,13 @@ export class GameFlow {
           : { x: WORLD.w * 0.5, y: WORLD.h * 0.4 };
         const robot = { x: WORLD.w * 0.62, y: WORLD.h * 0.28 };
         this.guide(target, robot, 'idle', { kind: 'tap', dir: 0 });
+        // 開いた扉の中を少し見せてから「発見」演出(fixステップの寄りカメラ)へ。
+        // 契約上 sim/ui のどちらも 'fault:found' を発火しない設計だったため
+        // (bus.on('fault:found',...)が永久に呼ばれず find-fault → fix へ
+        // 遷移できなかった)、時間経過での自動発火はflowの責務として自前で行う。
+        if (this.activeFaultId && this.clock - this.stepEnteredAt > 1.6) {
+          bus.emit('fault:found', { id: this.activeFaultId });
+        }
         break;
       }
 
@@ -444,7 +470,13 @@ export class GameFlow {
           ? faultFocus(state, this.activeFaultId)
           : { x: WORLD.w * 0.5, y: WORLD.h * 0.4 };
         const robot = { x: target.x + 120, y: target.y - 80 };
-        const gesture = this.activeFaultId ? FAULT_GESTURE[this.activeFaultId] : { kind: 'tap' as GestureKind, dir: 0 };
+        let gesture = this.activeFaultId ? FAULT_GESTURE[this.activeFaultId] : { kind: 'tap' as GestureKind, dir: 0 };
+        // belt-derailはベルトなぞり(belt-trace)完了後、ローラーを円でなぞる
+        // (roller-spin)確認が残る。derail<=0はその「トレース済み・確認待ち」
+        // を示す(sim側の唯一の真実state.belt.derailで判定、新規フィールド不要)。
+        if (this.activeFaultId === 'belt-derail' && state.belt.derail <= 0) {
+          gesture = { kind: 'circle', dir: 0 };
+        }
         this.guide(target, robot, 'idle', gesture);
         break;
       }
