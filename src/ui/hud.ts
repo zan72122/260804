@@ -213,9 +213,12 @@ function injectStyle() {
       box-shadow: 0 10px 0 rgba(0,0,0,0.15), 0 6px 24px rgba(255,120,170,0.5);
       animation: hudStartPulse 1.15s ease-in-out infinite;
     }
+    /* transform(scale)は使わない: バウンディングボックスが動き続けると自動テスト等の
+       「要素が安定するまで待つ」判定が終わらなくなるため、box-shadow(グロー)のみで
+       脈動を表現する(見た目の押し寄せ感は保ちつつ、ヒットボックスは常に静止させる) */
     @keyframes hudStartPulse {
-      0%, 100% { transform: scale(1); box-shadow: 0 10px 0 rgba(0,0,0,0.15), 0 6px 24px rgba(255,120,170,0.5); }
-      50% { transform: scale(1.09); box-shadow: 0 10px 0 rgba(0,0,0,0.15), 0 12px 36px rgba(255,120,170,0.75); }
+      0%, 100% { box-shadow: 0 10px 0 rgba(0,0,0,0.15), 0 6px 24px rgba(255,120,170,0.5), 0 0 0 0 rgba(255,158,196,0.55); }
+      50% { box-shadow: 0 10px 0 rgba(0,0,0,0.15), 0 6px 24px rgba(255,120,170,0.5), 0 0 0 16px rgba(255,158,196,0); }
     }
     #hud-testrun {
       position: absolute; left: 0; right: 0;
