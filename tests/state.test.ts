@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  advance, chooseFromComplete, DARK_PHASES, nextPhase, passOf, Phase
+  advance, chooseFromComplete, nextPhase, passOf, Phase
 } from "../src/statemachine";
 
 describe("state machine", () => {
@@ -41,12 +41,13 @@ describe("state machine", () => {
     expect(passOf("demag")).toBe(0);
   });
 
-  it("UV-meaningful phases are exactly the dark ones", () => {
-    for (const p of ["uv", "uv2", "record", "record2", "free"] as Phase[]) {
-      expect(DARK_PHASES.has(p)).toBe(true);
+  it("the second inspection pass repeats magnetize/fluid/curtain/uv/record", () => {
+    const secondPass: Phase[] = ["magnetize2", "fluid2", "curtain2", "uv2", "record2"];
+    let p: Phase = "rotate";
+    for (const expected of secondPass) {
+      p = advance(p);
+      expect(p).toBe(expected);
     }
-    for (const p of ["clean", "fluid", "rotate", "demag", "complete"] as Phase[]) {
-      expect(DARK_PHASES.has(p)).toBe(false);
-    }
+    expect(advance(p)).toBe("demag");
   });
 });

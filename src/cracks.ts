@@ -34,6 +34,18 @@ export function detectability(tangent: number, fluxAngle: number): number {
   return s * s;
 }
 
+/**
+ * Effective particle-holding strength for a given detectability.
+ * Weak leakage cannot hold particles against the flowing bath, so a
+ * soft threshold separates "forms an indication" from "washes away".
+ * Shared by the simulation and the tests so they judge by the same rule.
+ */
+export function leakStrength(d: number): number {
+  const t = (d - 0.42) / 0.3;
+  const c = t < 0 ? 0 : t > 1 ? 1 : t;
+  return c * c * (3 - 2 * c);
+}
+
 function samplePoly(
   rnd: () => number,
   cx: number, cy: number,
@@ -51,8 +63,10 @@ function samplePoly(
   for (let i = 0; i < n; i++) {
     const t = i / (n - 1);
     const a = (1 - t) * (1 - t), b = 2 * (1 - t) * t, c = t * t;
-    const jx = (rnd() - 0.5) * 0.012;
-    const jy = (rnd() - 0.5) * 0.012;
+    // jitter stays small so local tangents keep the crack's overall
+    // direction — otherwise a "parallel" crack grows detectable kinks
+    const jx = (rnd() - 0.5) * 0.005;
+    const jy = (rnd() - 0.5) * 0.005;
     pts.push({
       x: a * p0.x + b * p1.x + c * p2.x + jx,
       y: a * p0.y + b * p1.y + c * p2.y + jy
@@ -84,29 +98,30 @@ function clampIntoFace(polys: Vec[][], maxR: number): void {
   }
 }
 
+interface BranchSpec { offset: number; bend: number; len: number; }
+
 function makeCrack(
   rnd: () => number,
   pass: 1 | 2,
   baseAngle: number,
   center: Vec,
-  withBranch: boolean
+  bend: number,
+  branch: BranchSpec | null
 ): Crack {
   const len = 0.62 + rnd() * 0.22;
-  const bend = (rnd() - 0.5) * 0.5;
   const main = samplePoly(rnd, center.x, center.y, baseAngle, len, bend, 26);
   const polys = [main];
-  if (withBranch) {
+  if (branch) {
     const i = 8 + Math.floor(rnd() * 8);
     const at = main[i];
-    const dir = baseAngle + (rnd() < 0.5 ? 1 : -1) * (0.5 + rnd() * 0.4);
-    const bl = 0.16 + rnd() * 0.1;
-    const branch = samplePoly(
+    const dir = baseAngle + branch.offset;
+    const b = samplePoly(
       rnd,
-      at.x + (Math.cos(dir) * bl) / 2,
-      at.y + (Math.sin(dir) * bl) / 2,
-      dir, bl, (rnd() - 0.5) * 0.08, 8
+      at.x + (Math.cos(dir) * branch.len) / 2,
+      at.y + (Math.sin(dir) * branch.len) / 2,
+      dir, branch.len, branch.bend, 8
     );
-    polys.push(branch);
+    polys.push(b);
   }
   clampIntoFace(polys, 0.62);
   return {
@@ -123,17 +138,23 @@ function makeCrack(
  * Vertical slice: exactly two cracks.
  * Crack A: roughly vertical -> detected by horizontal flux (yoke at 0 deg, pass 1).
  * Crack B: roughly horizontal with a slight tilt and a small branch ->
- * nearly invisible in pass 1, clearly detected after the 90 deg rotation.
+ * invisible in pass 1, clearly detected after the 90 deg rotation.
+ * Bend/branch angles are bounded so that no local tangent of a crack
+ * wanders into the other pass's detectable range (the game's core lesson).
  */
 export function generateCracks(seed: number): Crack[] {
   const rnd = mulberry32(seed);
   const aAngle = Math.PI / 2 + (rnd() - 0.5) * 0.55;
   const aCenter = { x: -0.18 - rnd() * 0.22, y: (rnd() - 0.5) * 0.4 };
-  const a = makeCrack(rnd, 1, aAngle, aCenter, false);
+  const a = makeCrack(rnd, 1, aAngle, aCenter, (rnd() - 0.5) * 0.3, null);
 
-  const tilt = (0.28 + rnd() * 0.14) * (rnd() < 0.5 ? 1 : -1);
+  const tilt = (0.2 + rnd() * 0.1) * (rnd() < 0.5 ? 1 : -1);
   const bCenter = { x: 0.2 + rnd() * 0.18, y: (rnd() - 0.5) * 0.36 };
-  const b = makeCrack(rnd, 2, tilt, bCenter, true);
+  const b = makeCrack(rnd, 2, tilt, bCenter, (rnd() - 0.5) * 0.16, {
+    offset: (rnd() < 0.5 ? 1 : -1) * (0.15 + rnd() * 0.07),
+    bend: (rnd() - 0.5) * 0.04,
+    len: 0.18 + rnd() * 0.08
+  });
   return [a, b];
 }
 

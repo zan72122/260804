@@ -1,6 +1,7 @@
 import { SFX } from "./audio";
 import {
-  Crack, detectability, fluxAngleForYoke, generateCracks, meanAccum, meanReveal
+  Crack, detectability, fluxAngleForYoke, generateCracks, leakStrength,
+  meanAccum, meanReveal
 } from "./cracks";
 import {
   C, DirtBlob, drawBackground, drawCloth, drawCurtain, drawCurtainTab,
@@ -59,6 +60,7 @@ export class Game {
   private ctx: CanvasRenderingContext2D;
   private sfx = new SFX();
   private w = 0; private h = 0; private dpr = 1;
+  private inset = { t: 0, b: 0, l: 0, r: 0 };
   private L!: Layout;
   private time = 0;
 
@@ -83,7 +85,6 @@ export class Game {
   private ptr: Vec2 = { x: 0, y: 0 };
   private ptrPrev: Vec2 = { x: 0, y: 0 };
   private ptrDownAt: Vec2 = { x: 0, y: 0 };
-  private ptrDownT = 0;
   private ptrMoved = false;
   private ptrSpeed = 0;
 
@@ -144,7 +145,7 @@ export class Game {
     const q = new URLSearchParams(location.search);
     this.seedBase = q.has("seed") ? Number(q.get("seed")) : ((Math.random() * 1e9) | 0);
     this.resize();
-    this.newInspection(true);
+    this.newInspection();
     window.addEventListener("resize", () => this.resize());
     window.visualViewport?.addEventListener("resize", () => this.resize());
     canvas.addEventListener("pointerdown", (e) => this.onDown(e));
@@ -160,6 +161,12 @@ export class Game {
     this.dpr = Math.min(2, window.devicePixelRatio || 1);
     this.w = window.innerWidth;
     this.h = window.innerHeight;
+    const cs = getComputedStyle(document.documentElement);
+    const px = (name: string): number => {
+      const v = parseFloat(cs.getPropertyValue(name));
+      return Number.isFinite(v) ? v : 0;
+    };
+    this.inset = { t: px("--sat"), b: px("--sab"), l: px("--sal"), r: px("--sar") };
     this.canvas.width = Math.round(this.w * this.dpr);
     this.canvas.height = Math.round(this.h * this.dpr);
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
@@ -187,15 +194,21 @@ export class Game {
     const robot = portrait
       ? { x: w * 0.13, y: h * 0.84, s: m * 0.15 }
       : { x: w * 0.1, y: h * 0.76, s: m * 0.17 };
+    // keep the whole yoke silhouette on screen while it waits in its tray
+    const yokeHalf = partR * 0.92;
     const yokeHome = portrait
-      ? { x: w * 0.82, y: h * 0.82 }
-      : { x: w * 0.88, y: h * 0.72 };
+      ? { x: Math.min(w * 0.82, w - yokeHalf - 6), y: h * 0.82 }
+      : { x: Math.min(w * 0.88, w - yokeHalf - 6), y: h * 0.72 };
     const br = clamp(m * 0.09, 36, 56);
     const magnetBtn = portrait
       ? { x: w * 0.82, y: Math.min(h * 0.82, tableY + (h - tableY) * 0.5), r: br }
       : { x: w * 0.88, y: h * 0.68, r: br };
     const mw = clamp(w * 0.28, 110, 160);
-    const meter = { x: w - mw / 2 - 12, y: h * 0.055 + 8, w: mw };
+    const meter = {
+      x: w - mw / 2 - 12 - this.inset.r,
+      y: Math.max(h * 0.055 + 8, this.inset.t + 8),
+      w: mw
+    };
     const ringR = m * 0.24;
     const demag = {
       ringX: w * 0.3, ringY: portrait ? h * 0.42 : h * 0.44, ringR,
@@ -206,8 +219,7 @@ export class Game {
 
   // ------------------------------------------------------------ inspection
 
-  private newInspection(freshStyle: boolean): void {
-    if (freshStyle) this.styleIdx = this.styleIdx % STYLES.length;
+  private newInspection(): void {
     this.cracks = generateCracks(this.seedBase + this.playCount * 131 + this.styleIdx * 17);
     const rnd = mulberry32(this.seedBase + this.playCount * 977 + 5);
     this.dirt = [];
@@ -242,6 +254,7 @@ export class Game {
     this.demagIntro = 0;
     this.ringIn = 0;
     this.partScale = 1;
+    this.cleanShine = -1;
     this.yokePos = { ...this.L.yokeHome };
     this.partPos = { ...this.L.partC };
     this.sfx.stopLoops();
@@ -275,10 +288,15 @@ export class Game {
         this.lampActive = false;
         this.foundFx = -1;
         if (p === "free") {
-          // bring the part back onto the bench for free UV play
+          // bring the part back onto the bench and hide the indications
+          // again — the whole point of the free room is re-finding them
+          // with the lamp, not admiring an already-lit answer
           this.partPos = { ...this.L.partC };
           this.partScale = 1;
           this.ringIn = 0;
+          for (const c of this.cracks) {
+            for (const arr of c.reveal) arr.fill(0);
+          }
           if (this.curtainMode !== "dark") {
             this.curtainMode = "dark";
             this.fabricAlpha = 0;
@@ -339,7 +357,6 @@ export class Game {
     this.ptr = p;
     this.ptrPrev = { ...p };
     this.ptrDownAt = { ...p };
-    this.ptrDownT = this.time;
     this.ptrMoved = false;
     this.idleT = 0;
     this.downPhase(p);
@@ -350,7 +367,7 @@ export class Game {
     e.preventDefault();
     const p = this.toLocal(e);
     const dx = p.x - this.ptr.x, dy = p.y - this.ptr.y;
-    if (Math.hypot(p.x - this.ptrDownAt.x, p.y - this.ptrDownAt.y) > 14) this.ptrMoved = true;
+    if (Math.hypot(p.x - this.ptrDownAt.x, p.y - this.ptrDownAt.y) > 26) this.ptrMoved = true;
     this.ptrPrev = { ...this.ptr };
     this.ptr = p;
     this.ptrSpeed = Math.hypot(dx, dy);
@@ -363,7 +380,9 @@ export class Game {
     this.ptrId = null;
     this.ptrDown = false;
     const p = this.toLocal(e);
-    const isTap = !this.ptrMoved && this.time - this.ptrDownT < 0.45;
+    // no time limit: small children press slowly, and a slow press must
+    // never turn a button tap into a silent failure
+    const isTap = !this.ptrMoved;
     this.idleT = 0;
     this.upPhase(p, isTap);
   }
@@ -515,7 +534,7 @@ export class Game {
 
   private startGame(): void {
     this.playCount = 0;
-    this.newInspection(true);
+    this.newInspection();
     this.sfx.ding();
     this.go("arrive");
   }
@@ -563,7 +582,7 @@ export class Game {
         }
         this.playCount++;
         if (b.id === "newPart") this.styleIdx = (this.styleIdx + 1) % STYLES.length;
-        this.newInspection(true);
+        this.newInspection();
         this.go(chooseFromComplete(b.id as CompleteChoice));
         return;
       }
@@ -611,7 +630,7 @@ export class Game {
   }
 
   private freeHomeBtn(): { x: number; y: number; r: number } {
-    return { x: 46, y: 46, r: 34 };
+    return { x: 46 + this.inset.l, y: 46 + this.inset.t, r: 34 };
   }
 
   private wipeAt(p: Vec2): void {
@@ -661,12 +680,19 @@ export class Game {
     this.updateCurtain(dt);
     this.updateParticles(dt);
     if (this.fieldFx > 0) this.fieldFx -= dt;
-    if (this.foundFx >= 0) this.foundFx += dt;
+    if (this.foundFx >= 0) {
+      this.foundFx += dt;
+      // let the celebration end so idle hints (robot pointing) can return
+      if (this.foundFx > 3) this.foundFx = -1;
+    }
     if (this.photoAnim >= 0) {
       this.photoAnim += dt;
       if (this.photoAnim > 1.2) this.photoAnim = -1;
     }
-    if (this.cleanShine >= 0) this.cleanShine += dt;
+    if (this.cleanShine >= 0) {
+      this.cleanShine += dt;
+      if (this.cleanShine > 1.6) this.cleanShine = -1;
+    }
     if (this.hintPing > 0) this.hintPing -= dt;
     this.wet = Math.max(0, this.wet - dt * 0.08);
 
@@ -858,7 +884,7 @@ export class Game {
       for (let pi = 0; pi < c.polys.length; pi++) {
         const pts = c.polys[pi];
         for (let i = 0; i < pts.length; i++) {
-          const eff = smooth((detectability(c.tang[pi][i], flux) - 0.12) / 0.5);
+          const eff = leakStrength(detectability(c.tang[pi][i], flux));
           if (eff < 0.01) continue;
           const near = clamp(1.6 - Math.hypot(pts[i].x - lx, pts[i].y - ly), 0.25, 1.4);
           c.accum[pi][i] = Math.min(1, c.accum[pi][i] + dt * eff * 0.9 * near);
@@ -884,7 +910,7 @@ export class Game {
               const dx = pts[j].x - p.x, dy = pts[j].y - p.y;
               const dd = dx * dx + dy * dy;
               if (dd < 0.06) {
-                const eff = smooth((detectability(c.tang[pi][j], flux) - 0.12) / 0.5);
+                const eff = leakStrength(detectability(c.tang[pi][j], flux));
                 if (eff > 0.03) {
                   const k = (eff * 2.4 * dt) / Math.max(0.015, dd);
                   p.vx += dx * k * 0.05;
@@ -955,11 +981,16 @@ export class Game {
       this.renderTitle();
       return;
     }
+    if (this.phase === "complete") {
+      // the album is its own scene — no ghost bench furniture behind it
+      this.renderComplete();
+      return;
+    }
 
     drawTable(ctx, w, this.L.tableY, h);
 
     // demag ring behind the part
-    if (this.phase === "demag" || (this.phase === "complete" && this.ringIn > 0)) {
+    if (this.phase === "demag") {
       const d = this.L.demag;
       const x = lerp(-d.ringR, d.ringX, smooth(this.ringIn));
       drawDemagRing(ctx, x, d.ringY, d.ringR, this.residual);
@@ -1043,18 +1074,37 @@ export class Game {
     }
     if ((this.phase === "uv" || this.phase === "uv2" || this.phase === "free") &&
         this.lampActive) {
-      const { c: lc } = this.lampLight();
-      drawUvLamp(ctx, lc.x + this.L.partR * 0.34, lc.y - this.L.partR * 0.4, this.L.partR * 0.26, true);
+      // lamp hovers at the pool's upper-right rim, glass tilted toward the
+      // pool, with a soft cone so the light visibly comes from the tool —
+      // and the body never covers the area being scanned
+      const { c: lc, r: lr } = this.lampLight();
+      const s = this.L.partR * 0.24;
+      const rot = 0.62;
+      const lx = lc.x + lr * 0.62, ly = lc.y - lr * 0.95;
+      const gx = lx - Math.sin(rot) * s * 0.62;
+      const gy = ly + Math.cos(rot) * s * 0.62;
+      const dir = Math.atan2(lc.y - gy, lc.x - gx);
+      const len = Math.hypot(lc.x - gx, lc.y - gy) + lr * 0.6;
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      const cone = ctx.createLinearGradient(gx, gy, lc.x, lc.y);
+      cone.addColorStop(0, "rgba(160,125,255,0.22)");
+      cone.addColorStop(1, "rgba(160,125,255,0)");
+      ctx.fillStyle = cone;
+      ctx.beginPath();
+      ctx.moveTo(gx, gy);
+      ctx.lineTo(gx + Math.cos(dir + 0.5) * len, gy + Math.sin(dir + 0.5) * len);
+      ctx.lineTo(gx + Math.cos(dir - 0.5) * len, gy + Math.sin(dir - 0.5) * len);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+      drawUvLamp(ctx, lx, ly, s, true, rot);
     }
 
-    // meter during demag
-    if (this.phase === "demag") {
-      drawMeter(ctx, this.L.meter.x, this.L.meter.y, this.L.meter.w, this.residual);
-      if (this.demagIntro >= 1 && this.residual > 0.1) {
-        // big soft arrow: pull the part left through the ring
-        const y = this.L.demag.ringY - this.L.demag.ringR * 1.25;
-        this.drawSoftArrow(this.partPos.x - 20, y, this.L.demag.ringX, y);
-      }
+    // demag guidance arrow (meter itself is drawn above the curtain trim)
+    if (this.phase === "demag" && this.demagIntro >= 1 && this.residual > 0.1) {
+      const y = this.L.demag.ringY - this.L.demag.ringR * 1.25;
+      this.drawSoftArrow(this.partPos.x - 20, y, this.L.demag.ringX, y);
     }
 
     // magnet button
@@ -1077,14 +1127,18 @@ export class Game {
       drawCurtainTab(ctx, w / 2, this.cover * h, clamp(this.L.partR * 0.3, 26, 42), pulse);
     }
 
+    // residual-magnetism gauge sits on top of everything during demag
+    if (this.phase === "demag") {
+      drawMeter(ctx, this.L.meter.x, this.L.meter.y, this.L.meter.w, this.residual);
+    }
+
     // album chip
-    if (this.photos.length > 0 && this.phase !== "complete" && this.phase !== "free") {
+    if (this.photos.length > 0 && this.phase !== "free") {
       this.renderAlbumChip();
     }
     if (this.photoAnim >= 0 && this.photoAnim < 1.1) this.renderPhotoAnim();
 
     if (this.phase === "free") this.renderFreeHome();
-    if (this.phase === "complete") this.renderComplete();
 
     this.renderIdleHint();
   }
@@ -1397,7 +1451,7 @@ export class Game {
     const ctx = this.ctx;
     const s = 44;
     ctx.save();
-    ctx.translate(14 + s / 2, 14 + s / 2);
+    ctx.translate(14 + this.inset.l + s / 2, 14 + this.inset.t + s / 2);
     ctx.rotate(-0.06);
     ctx.fillStyle = "#fff";
     rr(ctx, -s / 2, -s / 2, s, s * 0.82, 4);
@@ -1423,7 +1477,7 @@ export class Game {
     const t = clamp(this.photoAnim / 0.9, 0, 1);
     const e = smooth(t);
     const from = this.photoFrom;
-    const to = { x: 14 + 22, y: 14 + 22 };
+    const to = { x: 14 + this.inset.l + 22, y: 14 + this.inset.t + 22 };
     const x = lerp(from.x, to.x, e);
     const y = lerp(from.y, to.y, e);
     const s = lerp(this.L.partR * 1.15, 44, e);
@@ -1580,7 +1634,7 @@ export class Game {
   private completeButtons(): { id: CompleteChoice | "free"; x: number; y: number; s: number }[] {
     const { w, h } = this;
     const s = clamp(Math.min(w, h) * 0.2, 84, 130);
-    const y = h * (this.L.portrait ? 0.78 : 0.78);
+    const y = Math.min(h * 0.78, h - this.inset.b - s * 0.6 - 6);
     const gap = Math.min(s * 1.35, w / 3.4);
     return [
       { id: "again", x: w / 2 - gap, y, s },

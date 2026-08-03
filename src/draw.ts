@@ -361,36 +361,41 @@ export function drawNozzle(
   ctx.restore();
 }
 
+/**
+ * Handheld UV-A lamp: pink grip on top, violet body, glowing glass at the
+ * BOTTOM so the drawn tool visibly shines down onto its light pool.
+ * `rot` tilts the whole lamp (positive leans the glass toward -x).
+ */
 export function drawUvLamp(
   ctx: CanvasRenderingContext2D,
-  x: number, y: number, s: number, on: boolean
+  x: number, y: number, s: number, on: boolean, rot = 0
 ): void {
   ctx.save();
   ctx.translate(x, y);
-  ctx.rotate(-0.35);
-  // handle
+  ctx.rotate(rot);
+  // grip on top
   ctx.fillStyle = C.pink;
-  rr(ctx, -s * 0.2, s * 0.3, s * 0.4, s * 1.0, s * 0.2);
+  rr(ctx, -s * 0.2, -s * 1.3, s * 0.4, s * 1.0, s * 0.2);
   ctx.fill();
   ctx.fillStyle = "rgba(255,255,255,0.35)";
-  rr(ctx, -s * 0.12, s * 0.4, s * 0.14, s * 0.75, s * 0.07);
+  rr(ctx, -s * 0.12, -s * 1.15, s * 0.14, s * 0.75, s * 0.07);
   ctx.fill();
   // body
-  const g = ctx.createLinearGradient(0, -s * 0.7, 0, s * 0.4);
+  const g = ctx.createLinearGradient(0, -s * 0.4, 0, s * 0.7);
   g.addColorStop(0, "#6a4fc9");
   g.addColorStop(1, "#4a3591");
   ctx.fillStyle = g;
-  rr(ctx, -s * 0.62, -s * 0.62, s * 1.24, s * 1.0, s * 0.3);
+  rr(ctx, -s * 0.62, -s * 0.38, s * 1.24, s * 1.0, s * 0.3);
   ctx.fill();
-  // glass
+  // glass facing down
   ctx.fillStyle = on ? "#b9a0ff" : "#3d2f70";
   ctx.beginPath();
-  ctx.ellipse(0, -s * 0.62, s * 0.5, s * 0.2, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, s * 0.62, s * 0.5, s * 0.2, 0, 0, Math.PI * 2);
   ctx.fill();
   if (on) {
     ctx.fillStyle = "rgba(185,160,255,0.35)";
     ctx.beginPath();
-    ctx.ellipse(0, -s * 0.62, s * 0.72, s * 0.32, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, s * 0.62, s * 0.72, s * 0.32, 0, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.restore();

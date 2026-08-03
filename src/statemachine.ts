@@ -45,11 +45,6 @@ const NEXT: Record<Phase, Phase | null> = {
   free: null
 };
 
-/** Phases where the hood is closed (dark ambient, UV meaningful). */
-export const DARK_PHASES: ReadonlySet<Phase> = new Set([
-  "uv", "record", "uv2", "record2", "free"
-]);
-
 /** Which crack pass a phase is working on (0 = none). */
 export function passOf(phase: Phase): 0 | 1 | 2 {
   switch (phase) {

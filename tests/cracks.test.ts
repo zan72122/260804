@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
-  detectability, fluxAngleForYoke, generateCracks, meanAccum, meanReveal
+  Crack, detectability, fluxAngleForYoke, generateCracks, leakStrength,
+  meanAccum, meanReveal
 } from "../src/cracks";
 
 const FLUX_PASS1 = fluxAngleForYoke(0);   // poles left/right -> horizontal flux
 const FLUX_PASS2 = fluxAngleForYoke(90);  // after rotation -> vertical flux
 
-function meanDetectability(crack: ReturnType<typeof generateCracks>[number], flux: number): number {
-  let s = 0, n = 0;
-  for (const arr of crack.tang) for (const t of arr) { s += detectability(t, flux); n++; }
-  return s / n;
+/** per-point effective strengths, the same rule the renderer accumulates by */
+function effs(crack: Crack, flux: number): number[][] {
+  return crack.tang.map((arr) => arr.map((t) => leakStrength(detectability(t, flux))));
 }
 
 describe("crack generation", () => {
@@ -32,19 +32,32 @@ describe("crack generation", () => {
     }
   });
 
-  it("crack A leaks strongly under pass-1 flux, crack B only after rotation", () => {
-    for (const seed of [1, 7, 42, 999, 12345]) {
+  it("crack A lights fully in pass 1; crack B stays dark until the rotation — for every seed", () => {
+    // Judged point-by-point with the same leakStrength rule the game
+    // accumulates by, so a passing test means the *rendered* behaviour
+    // holds: no local kink of the "parallel" crack may form a line.
+    for (let seed = 0; seed < 300; seed++) {
       const [a, b] = generateCracks(seed);
-      // vertical-ish crack vs horizontal flux: strong indication
-      expect(meanDetectability(a, FLUX_PASS1)).toBeGreaterThan(0.6);
-      // the tilted horizontal crack barely shows in pass 1...
-      expect(meanDetectability(b, FLUX_PASS1)).toBeLessThan(0.45);
-      // ...and pops after the 90-degree rotation
-      expect(meanDetectability(b, FLUX_PASS2)).toBeGreaterThan(0.55);
-      // pass-2 beats pass-1 decisively for crack B
-      expect(meanDetectability(b, FLUX_PASS2)).toBeGreaterThan(
-        meanDetectability(b, FLUX_PASS1) * 1.8
-      );
+      // A under horizontal flux: nearly every point holds particles
+      const aE = effs(a, FLUX_PASS1).flat();
+      expect(aE.filter((e) => e > 0.5).length / aE.length).toBeGreaterThan(0.85);
+      // B under horizontal flux: essentially nothing, and never two
+      // consecutive points strong enough to draw a line segment
+      const bE1 = effs(b, FLUX_PASS1);
+      const all = bE1.flat();
+      expect(all.reduce((s, v) => s + v, 0) / all.length).toBeLessThan(0.05);
+      for (const poly of bE1) {
+        let run = 0;
+        for (const e of poly) {
+          run = e > 0.35 ? run + 1 : 0;
+          expect(run).toBeLessThanOrEqual(1);
+        }
+      }
+      // B after the 90-degree rotation: main line fully strong, branch clear
+      const bE2 = effs(b, FLUX_PASS2);
+      expect(bE2[0].filter((e) => e > 0.5).length / bE2[0].length).toBeGreaterThan(0.85);
+      const br = bE2[1];
+      expect(br.reduce((s, v) => s + v, 0) / br.length).toBeGreaterThan(0.5);
     }
   });
 
@@ -70,5 +83,15 @@ describe("crack generation", () => {
     expect(detectability(Math.PI / 2, 0)).toBeCloseTo(1);
     expect(detectability(0, 0)).toBeCloseTo(0);
     expect(detectability(Math.PI / 4, 0)).toBeCloseTo(0.5);
+  });
+
+  it("leakStrength gates weak leakage to zero and saturates strong leakage", () => {
+    expect(leakStrength(0)).toBe(0);
+    expect(leakStrength(0.42)).toBe(0);
+    expect(leakStrength(0.3)).toBe(0);
+    expect(leakStrength(0.72)).toBe(1);
+    expect(leakStrength(1)).toBe(1);
+    expect(leakStrength(0.57)).toBeGreaterThan(0.2);
+    expect(leakStrength(0.57)).toBeLessThan(0.8);
   });
 });

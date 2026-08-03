@@ -78,6 +78,16 @@ async function tap(page, x, y) {
   await page.mouse.up();
 }
 
+/** A small child's tap: slow press (700ms) with a little wobble. */
+async function tapSlow(page, x, y) {
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await wait(350);
+  await page.mouse.move(x + 8, y + 6);
+  await wait(350);
+  await page.mouse.up();
+}
+
 /** Hold the pointer down and wiggle around a point until check() passes. */
 async function holdWiggle(page, cx, cy, radius, check, timeoutMs = 20000) {
   await page.mouse.move(cx, cy);
@@ -221,8 +231,9 @@ async function playThrough(page, dir, { rotateMidGame = false } = {}) {
   await waitPhase(page, "magnetize2", 8000);
   await shoot(page, dir, "08-rotated");
 
+  // second magnetize uses a slow, wobbly child-style press
   s = await snap(page);
-  await tap(page, s.magnetBtn[0], s.magnetBtn[1]);
+  await tapSlow(page, s.magnetBtn[0], s.magnetBtn[1]);
   await waitPhase(page, "fluid2");
   s = await snap(page);
   await holdWiggle(page, s.partC[0], s.partC[1], R * 0.45, async () => {
@@ -319,10 +330,26 @@ async function main() {
         const s = await snap(page);
         await tap(page, s.buttons.free[0], s.buttons.free[1]);
         await waitPhase(page, "free", 8000);
-        await wait(800);
-        await shoot(page, dir, "13-free-scan");
+        await wait(600);
+        // indications must be hidden again until the lamp re-finds them
+        await shoot(page, dir, "13-free-dark");
         const s2 = await snap(page);
-        await tap(page, s2.freeHome[0], s2.freeHome[1]);
+        const [px2, py2] = s2.partC;
+        const [ox2, oy2] = s2.lampOffset;
+        await page.mouse.move(px2 - ox2, py2 - oy2 + 40);
+        await page.mouse.down();
+        for (let i = 0; i <= 20; i++) {
+          const a = (i / 20) * Math.PI * 2;
+          await page.mouse.move(
+            px2 - ox2 + Math.cos(a) * s2.partR * 0.4,
+            py2 - oy2 + Math.sin(a) * s2.partR * 0.4
+          );
+          await wait(70);
+        }
+        await shoot(page, dir, "13-free-scan");
+        await page.mouse.up();
+        const s3 = await snap(page);
+        await tap(page, s3.freeHome[0], s3.freeHome[1]);
         await waitPhase(page, "complete", 8000);
         console.log("PASS free-scan");
       } catch (e) {
