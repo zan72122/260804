@@ -91,6 +91,11 @@ function drawOpeningGlow(ctx: CanvasRenderingContext2D, door: number, time: numb
   ctx.restore();
 }
 
+/** 一度でも扉が全開になったら true。以後の再閉鎖は不透明パネルではなく
+    透明カバーで描く(=「くるん」「ストン」区間で機構が隠れない)。
+    セッション中(resetを跨いでも)維持してよい仕様のためモジュールスコープで保持。 */
+let everOpened = false;
+
 function drawHandle(ctx: CanvasRenderingContext2D, lx: number, ly: number, accent: Accent): void {
   ctx.save();
   ctx.translate(lx, ly);
@@ -119,6 +124,114 @@ function drawHandle(ctx: CanvasRenderingContext2D, lx: number, ly: number, accen
 }
 
 /**
+ * 一度開いた後の再閉鎖で使う「透明安全カバー」。ポリカーボネート風の
+ * 低い不透明度で塗り、枠・隅ボルト・斜めの反射ハイライトだけをしっかり主張する
+ * ことで「カバーはある」ことを伝えつつ、中の機構(選別機・ラック・テーブル等)を
+ * はっきり見せる。淡くカラフルな案内光が中を流れる装飾も添える。
+ */
+function drawGlassCover(
+  ctx: CanvasRenderingContext2D, door: number, time: number, accent: Accent,
+): void {
+  const hingeX = HOUSING.x;
+  const angle = door * (Math.PI * 0.47);
+  const scaleX = Math.max(0.015, Math.cos(angle));
+  const fadeAlpha = door > 0.9 ? lerp(1, 0.15, (door - 0.9) / 0.1) : 1;
+
+  ctx.save();
+  ctx.globalAlpha = fadeAlpha;
+  ctx.translate(hingeX, 0);
+  ctx.scale(scaleX, 1);
+
+  const w = HOUSING.w;
+  const y = HOUSING.y;
+  const h = HOUSING.h;
+
+  ctx.save();
+  roundRectPath(ctx, 0, y, w, h, 24);
+  ctx.clip();
+
+  // ガラス面(中の機構がはっきり見える低い不透明度)
+  const glass = ctx.createLinearGradient(0, y, w, y + h);
+  glass.addColorStop(0, 'rgba(205,228,242,0.16)');
+  glass.addColorStop(0.5, 'rgba(222,242,250,0.06)');
+  glass.addColorStop(1, 'rgba(196,222,238,0.14)');
+  ctx.fillStyle = glass;
+  ctx.fillRect(0, y, w, h);
+
+  // カラフルな案内光が中をゆっくり流れる(装飾)
+  for (let i = 0; i < 3; i++) {
+    const t = (time * 0.05 + i / 3) % 1;
+    const bx = w * t;
+    const c = i === 0 ? accent.a : i === 1 ? accent.b : '#ffffff';
+    const band = ctx.createLinearGradient(bx - 70, 0, bx + 70, 0);
+    band.addColorStop(0, 'rgba(255,255,255,0)');
+    band.addColorStop(0.5, c);
+    band.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.save();
+    ctx.globalAlpha = 0.14;
+    ctx.fillStyle = band;
+    ctx.fillRect(bx - 70, y, 140, h);
+    ctx.restore();
+  }
+
+  // 斜めの反射ハイライト(ガラス感)
+  ctx.save();
+  ctx.globalAlpha = 0.2;
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.moveTo(w * 0.05, y);
+  ctx.lineTo(w * 0.2, y);
+  ctx.lineTo(w * 0.07, y + h);
+  ctx.lineTo(w * -0.08, y + h);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(w * 0.6, y);
+  ctx.lineTo(w * 0.68, y);
+  ctx.lineTo(w * 0.55, y + h);
+  ctx.lineTo(w * 0.47, y + h);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+
+  ctx.restore(); // clip
+
+  // 枠(はっきり見せて「カバーがある」ことを伝える)
+  ctx.lineWidth = 6;
+  ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+  roundRectPath(ctx, 0, y, w, h, 24);
+  ctx.stroke();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = 'rgba(120,150,170,0.55)';
+  roundRectPath(ctx, 3, y + 3, w - 6, h - 6, 22);
+  ctx.stroke();
+
+  // 隅のボルト
+  const boltAt = (bx: number, by: number): void => {
+    ctx.beginPath();
+    ctx.arc(bx, by, 7, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(60,70,80,0.5)';
+    ctx.stroke();
+  };
+  boltAt(20, y + 20);
+  boltAt(w - 20, y + 20);
+  boltAt(20, y + h - 20);
+  boltAt(w - 20, y + h - 20);
+
+  // 取っ手(見た目の連続性を保つ)
+  const localHandleX = DOOR_HANDLE.x - hingeX;
+  ctx.save();
+  ctx.globalAlpha *= 0.92;
+  drawHandle(ctx, localHandleX, DOOR_HANDLE.y, accent);
+  ctx.restore();
+
+  ctx.restore();
+}
+
+/**
  * 扉/カバー本体。HOUSING左端(x)を蝶番に、door(0..1)に応じてX方向に
  * 遠近圧縮(scaleX=cos)させることで「奥へ開く」立体感を疑似的に表現する。
  */
@@ -130,11 +243,18 @@ export function drawDoorCover(
   drawOpeningGlow(ctx, door, time, accent);
 
   if (door >= 0.995) {
+    everOpened = true;
     // 全開: パネルは格納され、取っ手のみ蝶番脇に小さく見える
     ctx.save();
     ctx.globalAlpha = 0.9;
     drawHandle(ctx, HOUSING.x + 6, DOOR_HANDLE.y, accent);
     ctx.restore();
+    return;
+  }
+
+  if (everOpened) {
+    // 一度開いた後の再閉鎖: 不透明パネルではなく透明カバーで機構を隠さない
+    drawGlassCover(ctx, door, time, accent);
     return;
   }
 

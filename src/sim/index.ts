@@ -26,11 +26,15 @@ const BELT_LEN = pathLength(BELT_PATH);
 const TOP_LEN = pathLength(TOP_PATH);
 const BALL_LEN = pathLength(BALL_PATH);
 
-const BELT_T_SPEED = 0.22;
+// 通常プレイの搬送ペース改善: 実測で1本あたり4〜5秒(orient-pins〜rack-fill
+// 合計45〜60秒)と長すぎたため、ベルト/エレベーター/上部搬送の速度を約1.6倍に
+// 引き上げ、1本あたり2.5〜3秒程度になるよう調整(くるん操作自体のジェスチャー
+// 判定時間は据え置き、運搬部分のみ短縮)。
+const BELT_T_SPEED = 0.35;
 const BELT_MIN_GAP_T = 70 / BELT_LEN;
-const TOP_T_SPEED = 0.3;
+const TOP_T_SPEED = 0.48;
 const TOP_MIN_GAP_T = 65 / TOP_LEN;
-const ELEV_T_SPEED = 1 / 1.3;
+const ELEV_T_SPEED = 1 / 0.85;
 const BALL_T_SPEED = 0.24;
 
 const ELEV_INTAKE_ANGLE = Math.atan2(ELEVATOR.intake[1] - ELEVATOR.cy, ELEVATOR.intake[0] - ELEVATOR.cx);
@@ -38,7 +42,10 @@ const ELEV_RELEASE_ANGLE_RAW = Math.atan2(ELEVATOR.release[1] - ELEVATOR.cy, ELE
 const ELEV_RELEASE_ANGLE = ELEV_RELEASE_ANGLE_RAW < ELEV_INTAKE_ANGLE
   ? ELEV_RELEASE_ANGLE_RAW + Math.PI * 2 : ELEV_RELEASE_ANGLE_RAW;
 
-type BallMode = 'idle' | 'bowling' | 'toPit' | 'returning' | 'done';
+// 'pitHold' = 通常プレイ(ガイド進行)でボールがピット到達後、flowが
+// ball-returnステップに入って releaseBall() を呼ぶまで待機する状態。
+// full-run/free-play では従来通り自動で 'returning' へ進む。
+type BallMode = 'idle' | 'bowling' | 'toPit' | 'pitHold' | 'returning' | 'done';
 type OrientStyle = 'kurun' | 'koron' | 'through';
 
 interface OrientAnim {
@@ -163,7 +170,11 @@ export class MachineSim {
   update(dt: number): void {
     if (dt <= 0) return;
     dt = clamp(dt, 0, 0.05);
-    const simDt = dt * clamp(this.state.simSpeed || 1, 0.1, 3);
+    // full-run(無人の完全試運転)は誰も操作を待たないため、通常プレイの
+    // 表示速度(state.simSpeed、UIのHUDに影響)には触れず、内部だけ約1.5倍で
+    // 進めて全体を90秒以内に収める。
+    const runBoost = this.fullRunActive ? 1.5 : 1;
+    const simDt = dt * clamp(this.state.simSpeed || 1, 0.1, 3) * runBoost;
 
     this.updateTimers(simDt);
     this.updateTweens(simDt);
@@ -255,6 +266,15 @@ export class MachineSim {
     this.fullRunActive = true;
     this.state.testMode = false;
     this.startBowl(0, 1, true);
+  }
+
+  /** 通常プレイ(ガイド進行)で pit 待機中のボールを解放し、地下経路の旅を開始する。
+      flowが 'ball-return' ステップに入った瞬間に呼ぶ想定。pitHold中でなければno-op
+      (full-run/free-playは自動で 'returning' になっているため二重発火しても無害)。 */
+  releaseBall(): void {
+    if (this.ballMode !== 'pitHold') return;
+    this.ballMode = 'returning';
+    bus.emit('sfx', { id: 'roll-under' });
   }
 
   setFreePlay(v: boolean): void {
@@ -614,8 +634,13 @@ export class MachineSim {
       st.vibrate = Math.max(st.vibrate, Math.min(1, this.jamTimer / 0.6));
       this.kotoAccum -= dt;
       if (this.kotoAccum <= 0) {
-        this.kotoAccum = randRange(0.7, 1.1);
-        bus.emit('sfx', { id: 'koto', vol: 0.6 });
+        // 放置時間が長いほど間隔を伸ばし音量を落とす(4歳児が長時間詰まりに
+        // 気づかず放置しても、コトコトが単調に連呼せず自然にフェードしていく)。
+        // ~15秒でほぼ間延び/減衰しきる緩やかなカーブ。
+        const idleFactor = clamp(this.jamTimer / 15, 0, 1);
+        const vol = lerp(0.6, 0.22, idleFactor) * randRange(0.85, 1.05);
+        this.kotoAccum = randRange(lerp(0.7, 1.6, idleFactor), lerp(1.1, 2.8, idleFactor));
+        bus.emit('sfx', { id: 'koto', vol });
       }
     }
 
@@ -917,13 +942,29 @@ export class MachineSim {
       if (this.ballTimer <= 0) {
         ball.zone = 'pit';
         ball.x = PIT.x; ball.y = PIT.y + 30; ball.rot = 0;
-        this.ballMode = 'returning';
         ball.t = 0;
         this.ballPaused = false;
-        bus.emit('sfx', { id: 'roll-under' });
-        if (this.fullRunActive) this.schedule(0.5, () => this.startBreakdown([]));
+        if (this.fullRunActive || this.freePlayOn) {
+          // full-run/free-playは従来通り自動で地下経路の旅を始める。
+          this.ballMode = 'returning';
+          bus.emit('sfx', { id: 'roll-under' });
+          if (this.fullRunActive) this.schedule(0.5, () => this.startBreakdown([]));
+        } else {
+          // 通常プレイ(ガイド進行)ではボールはpit到達後そのまま待機し、
+          // flowが ball-return ステップに入った時に呼ぶ releaseBall() で
+          // 地下経路の旅を開始する。こうすることでステップ11「ボール
+          // リターン」が毎周必ず見える(仕様通り)。修正前はここで無条件に
+          // 'returning' へ進めていたため、find-fault/fix等でプレイヤーが
+          // 手間取っている間にボールが誰も見ていないうちに帰ってきてしまい、
+          // 'ball-return' ステップに入った時には既に ball:returned が
+          // (無視されて)発火済みでソフトロックしていた。
+          this.ballMode = 'pitHold';
+        }
       }
       return;
+    }
+    if (this.ballMode === 'pitHold') {
+      return; // releaseBall() が呼ばれるまで待機
     }
     if (this.ballMode === 'returning') {
       if (this.ballPaused) return;
@@ -946,7 +987,13 @@ export class MachineSim {
         bus.emit('sfx:stop', { id: 'roll-under' });
         bus.emit('sfx', { id: 'pon' });
         bus.emit('ball:returned', {});
-        this.fullRunActive = false;
+        // 注意: ここで fullRunActive を false にしない。full-run はボールが
+        // 帰って来るのがラック10本/ストンより先(ボールの旅の方が短い)ため、
+        // 従来はここで即falseにしてしまい、その後 placeInRack() の
+        // `if (this.fullRunActive || this.freePlayOn)` が常にfalseになって
+        // dropTable()が呼ばれず「ストン」が一生起きないバグがあった。
+        // fullRunActiveは次の reset()(=次の周回開始)まで維持し、full-run
+        // 一周の間ずっとラック満杯→自動dropTableが機能するようにする。
       }
       return;
     }

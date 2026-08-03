@@ -47,6 +47,12 @@ export class GameFlow {
   private lm: LayoutManager;
 
   private step_: FlowStep = 'title';
+  /** goto()の再入ガード用。コンストラクタの初回 goto('title') は
+      step_ の初期値が既に'title'のため、単純な「同一ステップならno-op」
+      ガードだと初回のenterTitle()自体がスキップされてしまう
+      (ui.show('title')等が呼ばれずタイトル画面が無反応になるバグを
+      実際に踏んだ)。この不発を避けるため初回だけは必ず通す。 */
+  private started = false;
   private scene_: SceneId = 'lane';
   readonly hints: RenderHints = createDefaultHints();
 
@@ -69,7 +75,13 @@ export class GameFlow {
 
   private strikeAt: number | null = null;
   private fullRunOrientShown = false;
-  private fullRunReturnedAt: number | null = null;
+  // full-run終了判定: 「rack満杯かつtable:placedかつball:returned」の全達成を
+  // 順不同で待つ(以前はball:returnedだけを見ており、ボールの方が遥かに早く
+  // 帰るためラック/ストンが終わる前にcelebrateへ抜けてしまっていた)。
+  private fullRunRackDone = false;
+  private fullRunTableDone = false;
+  private fullRunBallDone = false;
+  private fullRunSettleAt: number | null = null;
   private firstFullRunShowcase = true;
   private showcasePoint: { x: number; y: number; zoom: number } | null = null;
   private showcaseExpireAt = 0;
@@ -89,6 +101,7 @@ export class GameFlow {
 
     this.ui.onAction = (a) => this.handleUIAction(a);
     this.registerApproachInteractable();
+    this.registerFaultSpotInteractable();
     this.lm.onChange(() => this.applyCamera(true));
     this.wireBus();
 
@@ -141,6 +154,36 @@ export class GameFlow {
     this.input.register(approach);
   }
 
+  // ── 契約にない「故障箇所付近タップで発見」専用Interactable ────────────
+  // find-fault は自動で先へ進めず、(a)故障箇所付近(半径150ワールド単位)への
+  // タップ、または(b)修理Interactable本体への接触、のどちらかで「発見」と
+  // みなしfixへ進む。修理Interactable本体(stuck-pin/belt-trace/guide-fix/
+  // rack-gate)は既にrepairGateIds()経由でfind-fault中も入力許可されて
+  // いるが、それらはsimのメソッドを直接叩くだけでflowへの通知手段がない。
+  // このInteractableをpriority最大で登録し、find-fault中は他の候補より
+  // 先にヒット判定させることで「近くに触れたら見つかる」を一元的に実現する
+  // (詳細は最終レポートの「契約逸脱」参照)。
+  private registerFaultSpotInteractable(): void {
+    const FIND_RADIUS = 150;
+    const spot: Interactable = {
+      id: 'fault-spot',
+      scene: 'machine',
+      priority: 1000,
+      enabled: () => this.step_ === 'find-fault' && this.activeFaultId !== null,
+      hit: (x: number, y: number) => {
+        if (!this.activeFaultId) return false;
+        const p = faultFocus(this.sim.state, this.activeFaultId);
+        return Math.hypot(x - p.x, y - p.y) < FIND_RADIUS;
+      },
+      onDown: () => {
+        if (this.step_ === 'find-fault' && this.activeFaultId) {
+          bus.emit('fault:found', { id: this.activeFaultId });
+        }
+      },
+    };
+    this.input.register(spot);
+  }
+
   private wireBus(): void {
     bus.on('pins:down', () => {
       if (this.step_ === 'bowl') this.goto('breakdown');
@@ -184,6 +227,7 @@ export class GameFlow {
         this.goto('table-drop');
       } else if (this.step_ === 'full-run') {
         this.showcaseAt(RACK.x + RACK.w / 2, RACK.y + RACK.h / 2, 1.3);
+        this.fullRunRackDone = true;
       }
     });
 
@@ -194,16 +238,22 @@ export class GameFlow {
         this.tablePlacedAt = this.clock;
       } else if (this.step_ === 'full-run') {
         this.showcaseAt(TABLE.x, TABLE.yDown, 1.2);
+        this.fullRunTableDone = true;
       }
     });
 
     bus.on('ball:returned', () => {
+      // ステップに関わらず必ずlatchする(取りこぼし対策の堅牢化)。以前は
+      // step==='ball-return' の瞬間しか記録しなかったため、他ステップ中に
+      // 発火したイベントが握りつぶされ、ball-returnステップに入っても
+      // 二度と完了判定されずソフトロックする経路があった
+      // (根本原因はsim側のpitHoldで別途修正済みだが、取りこぼし耐性として残す)。
+      this.ballReturnedAt = this.clock;
       if (this.step_ === 'ball-return') {
         bus.emit('voice', { id: 'ball-back' });
-        this.ballReturnedAt = this.clock;
       } else if (this.step_ === 'full-run') {
         this.showcaseAt(BALL_EXIT.x, BALL_EXIT.y, 1.3);
-        this.fullRunReturnedAt = this.clock;
+        this.fullRunBallDone = true;
       }
     });
 
@@ -217,6 +267,13 @@ export class GameFlow {
 
   // ── ステップ遷移 ──────────────────────────────────────────────────
   private goto(step: FlowStep): void {
+    // 再入ガード: 同一ステップへの遷移はno-op。full-run/celebrate周辺で
+    // 複数のイベント経路(rack:full/table:placed/ball:returned等)がほぼ
+    // 同時に条件を満たした際、低頻度で goto が二重・三重に呼ばれ
+    // (stepEnteredAt/idleがリセットされ続ける・bus.emit('flow')が余分に
+    // 飛ぶ等)不安定になる再入経路が確認されていたため、明示的に防ぐ。
+    if (this.started && step === this.step_) return;
+    this.started = true;
     this.step_ = step;
     this.stepEnteredAt = this.clock;
     this.idle.setThresholds(DEFAULT_THRESHOLDS);
@@ -303,7 +360,10 @@ export class GameFlow {
     const ids = repairGateIds(this.sim.state);
     if (ids.length === 0) { this.goto('close-cover'); return; }
     this.idle.setThresholds(FIND_FAULT_THRESHOLDS);
-    this.gate(ids);
+    // 'fault-spot'(故障箇所付近タップで発見)はInputSystemのallow-listに
+    // 明示的に含めないと isAllowed() で弾かれ、いくらタップしても反応しない
+    // (registerApproachInteractableと同じ理由でここに含める必要がある)。
+    this.gate([...ids, 'fault-spot']);
     bus.emit('voice', { id: 'stuck' });
   }
 
@@ -341,6 +401,11 @@ export class GameFlow {
 
   private enterBallReturn(): void {
     this.ballReturnedAt = null;
+    // 通常プレイではsimがpitでボールを保留している。ここで解放し地下経路の
+    // 旅を開始させる(見つけたばかりの11番「ボールリターン」を毎周必ず見せる)。
+    // full-run/free-play中はこのステップに入らない(既にsim側で自動解放済み)
+    // ためno-op。
+    this.sim.releaseBall();
     this.gate(['flap']);
   }
 
@@ -352,7 +417,10 @@ export class GameFlow {
     this.scene_ = 'lane';
     this.strikeAt = null;
     this.fullRunOrientShown = false;
-    this.fullRunReturnedAt = null;
+    this.fullRunRackDone = false;
+    this.fullRunTableDone = false;
+    this.fullRunBallDone = false;
+    this.fullRunSettleAt = null;
     this.showcasePoint = null;
     this.gate([]);
     this.sim.startFullRun();
@@ -370,6 +438,11 @@ export class GameFlow {
   }
 
   private enterFreePlay(): void {
+    // machine全景シーンへ切替。以前はここでシーンを切り替えておらず、
+    // scene_==='lane' のままだったため InputSystem.getScene() が 'lane' を
+    // 返し続け、'machine' シーンで登録されている操作(free-drop等)が
+    // hit判定の候補に一切入らず全操作無反応になっていた。
+    this.scene_ = 'machine';
     this.sim.setFreePlay(true);
     this.ui.show('freeplay');
     this.gate('all');
@@ -455,13 +528,12 @@ export class GameFlow {
           : { x: WORLD.w * 0.5, y: WORLD.h * 0.4 };
         const robot = { x: WORLD.w * 0.62, y: WORLD.h * 0.28 };
         this.guide(target, robot, 'idle', { kind: 'tap', dir: 0 });
-        // 開いた扉の中を少し見せてから「発見」演出(fixステップの寄りカメラ)へ。
-        // 契約上 sim/ui のどちらも 'fault:found' を発火しない設計だったため
-        // (bus.on('fault:found',...)が永久に呼ばれず find-fault → fix へ
-        // 遷移できなかった)、時間経過での自動発火はflowの責務として自前で行う。
-        if (this.activeFaultId && this.clock - this.stepEnteredAt > 1.6) {
-          bus.emit('fault:found', { id: this.activeFaultId });
-        }
+        // 「みつける遊び」: 自動では先へ進まない。故障箇所付近(半径150)への
+        // タップ、または修理Interactable本体への接触のどちらかで
+        // registerFaultSpotInteractable() が 'fault:found' を発火し、
+        // bus.on('fault:found') 経由で fix へ遷移する。3〜5秒みつけられない
+        // 場合はidle-guide(FIND_FAULT_THRESHOLDS: look4s→spotlight7s→
+        // gesture10s)が光・ジェスチャーで自然に誘導する。
         break;
       }
 
@@ -528,6 +600,11 @@ export class GameFlow {
         const robot = { x: FLAP.x - 100, y: FLAP.y - 80 };
         const target = { x: FLAP.x, y: FLAP.y };
         this.guide(target, robot, 'idle', { kind: 'swipe', dir: -Math.PI / 2 });
+        // イベント取りこぼし対策: ball:returned が(何らかの理由で)握りつぶされて
+        // いても、state.ball.zone==='returned' を直接ポーリングして進行判定する。
+        if (this.ballReturnedAt === null && state.ball.zone === 'returned') {
+          this.ballReturnedAt = this.clock;
+        }
         if (this.ballReturnedAt !== null && this.clock - this.ballReturnedAt > 1.2) {
           this.ballReturnedAt = null;
           this.goto('unlock');
@@ -565,9 +642,16 @@ export class GameFlow {
             lookY: this.showcasePoint?.y ?? WORLD.h / 2,
             visible: true,
           };
-          if (this.fullRunReturnedAt !== null && this.clock - this.fullRunReturnedAt > 1.2) {
-            this.fullRunReturnedAt = null;
-            this.goto('celebrate');
+          // ストライク→回収→くるん→ラック→ストン→ボール返却の全連続を必ず
+          // 見せてからcelebrateへ進む。以前はball:returnedだけを見ていたため、
+          // ボールの方がラック満杯/ストンより遥かに早く帰ってくる関係で
+          // 「ストン」演出が始まる前にcelebrateへ抜けてしまっていた。
+          if (this.fullRunRackDone && this.fullRunTableDone && this.fullRunBallDone) {
+            if (this.fullRunSettleAt === null) this.fullRunSettleAt = this.clock;
+            if (this.clock - this.fullRunSettleAt > 1.2) {
+              this.fullRunSettleAt = null;
+              this.goto('celebrate');
+            }
           }
         }
         this.hints.spotlight = null;

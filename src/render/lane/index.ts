@@ -12,6 +12,7 @@ import {
   drawCelebrateStars,
   drawGesture,
   drawHintRobot,
+  drawPitSuckIn,
   drawSpotlight,
   drawSweepBar,
 } from './effects';
@@ -78,6 +79,7 @@ export function drawLaneScene(
 
   drawLaneBackground(ctx, cam, layout, state, hints, time);
   drawSweepBar(ctx, state, time);
+  drawPitSuckIn(ctx, state, time);
 
   const depths: Depth[] = [];
   for (const pin of state.pins) {

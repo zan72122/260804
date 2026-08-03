@@ -33,6 +33,14 @@ export function drawPit(ctx: CanvasRenderingContext2D, time: number): void {
     ctx.stroke();
   }
 
+  // 上からの柔らかい灯り(ピンが山積みでも埋もれて見えないように)
+  const glow = ctx.createRadialGradient(x + w * 0.5, y + h * 0.25, 10, x + w * 0.5, y + h * 0.35, w * 0.65);
+  glow.addColorStop(0, 'rgba(255,246,222,0.20)');
+  glow.addColorStop(1, 'rgba(255,246,222,0)');
+  ctx.fillStyle = glow;
+  roundRectPath(ctx, x, y, w, h, 14);
+  ctx.fill();
+
   ctx.restore();
 
   // クッションカーテン（上端からぶら下がる短冊、ゆらゆら揺れる）

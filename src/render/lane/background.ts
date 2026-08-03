@@ -7,6 +7,7 @@ import type { CameraController } from '../../core/camera';
 import type { Layout, MachineState, RenderHints } from '../../core/types';
 import { LANE_VIEW } from '../../core/geometry';
 import { boardsHalfWidthAt, clamp01, laneHalfWidthAt } from './util';
+import { getAccent } from '../machine/decoration';
 
 // ── 木目パターン(1回だけタイルを焼いてキャッシュ) ──────────────────────
 let woodPattern: CanvasPattern | null = null;
@@ -141,6 +142,16 @@ export function drawLaneBackground(
   // 側壁(観客席風パネル) — レーン台形の外側全部
   drawSideWalls(ctx, left, right, top, bottom);
 
+  // 横画面などでカメラ可視域がLANE_VIEW幅より広い時、左右の余白が単なる暗幕に
+  // 見えないよう、隣のレーンの気配・ネオン装飾・観客シルエットで埋める。
+  // (装飾の線幅/サイズはワールド座標基準だと低zoom時に細くなりすぎて見えなく
+  // なるため、cam.camera.zoomの逆数で軽く補正し画面上の見た目サイズを保つ。
+  // 位置は実際に見えている画面端(c0.x/c1.x、marginを足す前)基準にする —
+  // 260のfill用パディング込みのleft/rightを使うと画面外に配置されてしまう)。
+  const realLeft = Math.min(c0.x, c1.x);
+  const realRight = Math.max(c0.x, c1.x);
+  drawSideDecor(ctx, realLeft, realRight, top, bottom, time, cam.camera.zoom);
+
   // 天井ダウンライト(奥から手前へ数段)
   const lightYs = [LANE_VIEW.backWallY + 60, 640, 1000, 1320];
   for (const ly of lightYs) {
@@ -230,6 +241,113 @@ function drawSideWalls(
       ctx.stroke();
     }
     ctx.restore();
+  }
+  ctx.restore();
+}
+
+/**
+ * 側壁の余白を埋める装飾一式: 隣のレーンの気配・ネオン装飾チューブ・観客
+ * シルエット。可視域(left/right)がレーン本体の外側にどれだけ余っているかで
+ * 濃さ/表示を決める(狭いときは自然に何も出ない)。
+ */
+function drawSideDecor(
+  ctx: CanvasRenderingContext2D, left: number, right: number, top: number, bottom: number, time: number,
+  zoom: number,
+): void {
+  const midY = 700;
+  const laneEdge = laneHalfWidthAt(midY);
+  const marginL = LANE_VIEW.centerX - laneEdge - left;
+  const marginR = right - (LANE_VIEW.centerX + laneEdge);
+  const minMargin = 90;
+  // 低zoom(横画面でズームアウトした「休止中」構図など)で線が細くなりすぎて
+  // 見えなくなるのを防ぐスケール補正。1/zoomに比例させつつ極端な値はclampする。
+  const sizeScale = Math.max(1, Math.min(4.2, 1 / Math.max(0.15, zoom)));
+
+  for (const side of [-1, 1] as const) {
+    const margin = side < 0 ? marginL : marginR;
+    if (margin < minMargin) continue;
+    const edgeX = side < 0 ? left : right;
+
+    drawNeighborLaneHint(ctx, side, edgeX, top, bottom, margin);
+    drawAudienceRow(ctx, edgeX - side * 16, top, bottom, sizeScale);
+
+    // ネオン装飾チューブ(縦、差し色でパルス)
+    const accent = getAccent(time);
+    const bandX = edgeX - side * Math.min(46, margin * 0.35);
+    const pulse = 0.6 + 0.4 * Math.sin(time * 2.2 + side);
+    ctx.save();
+    ctx.globalAlpha = 0.5 * pulse;
+    ctx.strokeStyle = accent.a;
+    ctx.lineWidth = 7 * sizeScale;
+    ctx.lineCap = 'round';
+    ctx.shadowColor = accent.glowStrong;
+    ctx.shadowBlur = 18 * sizeScale;
+    ctx.beginPath();
+    ctx.moveTo(bandX, Math.max(top, LANE_VIEW.backWallY + 20));
+    ctx.lineTo(bandX, Math.min(bottom, LANE_VIEW.nearY + 20));
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+/** 余白の奥に「隣のレーンがある」気配だけをうっすら示す(簡略化、フル描画はしない)。 */
+function drawNeighborLaneHint(
+  ctx: CanvasRenderingContext2D, side: -1 | 1, outerX: number, top: number, bottom: number, margin: number,
+): void {
+  if (margin < 170) return;
+  const yTop = Math.max(top, LANE_VIEW.backWallY + 10);
+  const yBottom = Math.min(bottom, LANE_VIEW.h + 20);
+  if (yBottom - yTop < 80) return;
+  const x0 = outerX - side * 22;
+  const x1 = outerX - side * Math.min(margin - 40, 160);
+
+  ctx.save();
+  const g = ctx.createLinearGradient(x0, 0, x1, 0);
+  g.addColorStop(0, 'rgba(70,58,44,0)');
+  g.addColorStop(0.55, 'rgba(90,72,50,0.45)');
+  g.addColorStop(1, 'rgba(45,36,28,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.moveTo(x0, yTop);
+  ctx.lineTo(x1, yTop + 34);
+  ctx.lineTo(x1, yBottom - 34);
+  ctx.lineTo(x0, yBottom);
+  ctx.closePath();
+  ctx.fill();
+
+  // 隣レーンのピンのシルエット(奥にうっすら、賑わい感だけ)
+  ctx.globalAlpha = 0.28;
+  ctx.fillStyle = '#e8e4da';
+  const pinX = (x0 + x1) / 2;
+  const pinY = yTop + 56;
+  for (let i = 0; i < 3; i++) {
+    ctx.beginPath();
+    ctx.ellipse(pinX + (i - 1) * 12, pinY, 4, 11, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+/** 観客席の頭+肩シルエットを縦に並べ、単なる暗幕でないことを伝える。 */
+function drawAudienceRow(
+  ctx: CanvasRenderingContext2D, x: number, top: number, bottom: number, sizeScale: number,
+): void {
+  const yStart = Math.max(top, LANE_VIEW.backWallY + 50);
+  const yEnd = Math.min(bottom, LANE_VIEW.nearY - 30);
+  if (yEnd - yStart < 90) return;
+
+  ctx.save();
+  ctx.fillStyle = 'rgba(58,50,76,0.55)';
+  const step = 78;
+  for (let y = yStart; y < yEnd; y += step) {
+    const scale = laneHalfWidthAt(y) / laneHalfWidthAt(LANE_VIEW.nearY);
+    const r = (15 + 5 * Math.sin(y * 0.045)) * Math.max(0.5, scale) * sizeScale;
+    ctx.beginPath();
+    ctx.ellipse(x, y, r * 0.72, r, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x, y - r * 0.95, r * 0.42, 0, Math.PI * 2);
+    ctx.fill();
   }
   ctx.restore();
 }

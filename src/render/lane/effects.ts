@@ -146,6 +146,69 @@ export function drawCelebrateStars(ctx: CanvasRenderingContext2D, hints: RenderH
   drawStars(ctx, LANE_VIEW.centerX, LANE_VIEW.deckY - 30, c, time);
 }
 
+// ── スイープ直後、ピットへ吸い込まれる残像(「ガラガラッ」でピンが一瞬で
+//    消える見た目を和らげる演出) ─────────────────────────────────────────
+// pitゾーンのピンはmachine-space座標を持つためlaneシーンでは実座標を描けない。
+// 代わりに sim.updateSweep が 'sweeping'→'returning' に切り替わる瞬間
+// (=まさにピンをピットへ送った瞬間、'garagara'sfxと同じタイミング)を検出し、
+// デッキ手前から機械マスク下端へ滑り込んでいくシルエット+ほこりパフを
+// 約1秒だけ描く。完璧な物理でなく「奥に吸い込まれた」と伝わればよい。
+let lastSweepPhase: MachineState['sweep']['phase'] = 'idle';
+let pitBurstAt: number | null = null;
+
+export function drawPitSuckIn(ctx: CanvasRenderingContext2D, state: MachineState, time: number): void {
+  const phase = state.sweep.phase;
+  if (lastSweepPhase === 'sweeping' && phase !== 'sweeping') {
+    pitBurstAt = time;
+  }
+  lastSweepPhase = phase;
+  if (pitBurstAt === null) return;
+
+  const DURATION = 1.0;
+  const t = (time - pitBurstAt) / DURATION;
+  if (t >= 1) { pitBurstAt = null; return; }
+  if (t < 0) return;
+
+  const eased = t * t * (3 - 2 * t); // smoothstep
+  const startY = LANE_VIEW.deckY - 26;
+  const endY = LANE_VIEW.backWallY + 16;
+  const y = lerp(startY, endY, eased);
+  const scale = lerp(1, 0.22, eased);
+  const alpha = 1 - eased;
+
+  ctx.save();
+  ctx.globalAlpha = alpha * 0.9;
+  const n = 5;
+  for (let i = 0; i < n; i++) {
+    const off = (i - (n - 1) / 2) * 24 * scale;
+    ctx.save();
+    ctx.translate(LANE_VIEW.centerX + off, y + Math.sin(i * 1.7 + t * 6) * 4 * scale);
+    ctx.rotate(i * 0.6 + t * 2.2);
+    ctx.fillStyle = 'rgba(232,228,218,0.92)';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 6 * scale, 15 * scale, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+
+  // ほこりパフ(吸い込まれた直後にふわっと)
+  if (eased > 0.45) {
+    const puffT = (eased - 0.45) / 0.55;
+    ctx.save();
+    ctx.globalAlpha = (1 - puffT) * 0.5;
+    ctx.fillStyle = 'rgba(214,204,188,0.6)';
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      const r = 8 + puffT * 42;
+      ctx.beginPath();
+      ctx.arc(LANE_VIEW.centerX + Math.cos(a) * r, endY + Math.sin(a) * r * 0.5, 5 + puffT * 6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+
 // ── ロボット配置 ────────────────────────────────────────────────────────
 export function drawHintRobot(ctx: CanvasRenderingContext2D, hints: RenderHints, time: number): void {
   const r = hints.robot;

@@ -191,11 +191,29 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, cx: number, cy: n
 const LOGO_LINES = ['ガコン！くるん！', 'レーンのうらがわ こうじょう'];
 const LOGO_COLORS = [PALETTE.pink, PALETTE.sun, PALETTE.sky, PALETTE.mintDeep, PALETTE.lavenderDeep];
 
+/**
+ * 実測(ctx.measureText)に基づく2パス方式でフォントサイズを逆算する。
+ * CJK全角文字は測定なしの概算(w/(文字数*係数))だと幅を過小評価し、
+ * 390幅などの狭い画面で見切れていたため、基準サイズで実測→
+ * layout.w×0.92に収まるよう逆算する。iPad等の広い画面では上限で頭打ちにする。
+ */
+function fitLogoFontSize(ctx: CanvasRenderingContext2D, layout: Layout): number {
+  const isPortrait = layout.orientation === 'portrait';
+  const cap = isPortrait ? 56 : 46;
+  const probe = 100;
+  ctx.font = `800 ${probe}px ${FONT_STACK}`;
+  let maxLineWidth = 0;
+  for (const line of LOGO_LINES) {
+    maxLineWidth = Math.max(maxLineWidth, ctx.measureText(line).width);
+  }
+  const targetWidth = layout.w * 0.92;
+  const fitSize = maxLineWidth > 0 ? (targetWidth / maxLineWidth) * probe : probe;
+  return Math.max(18, Math.min(fitSize, cap));
+}
+
 /** かわいいレタリング風タイトルロゴ。1文字ずつ色と浮遊アニメを変える。 */
 export function drawTitleLogo(ctx: CanvasRenderingContext2D, layout: Layout, topY: number, time: number): number {
-  const isPortrait = layout.orientation === 'portrait';
-  const maxLineChars = Math.max(...LOGO_LINES.map((l) => [...l].length));
-  const fontSize = Math.max(22, Math.min(layout.w / (maxLineChars * 0.62), isPortrait ? 56 : 46));
+  const fontSize = fitLogoFontSize(ctx, layout);
   const lineHeight = fontSize * 1.18;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';

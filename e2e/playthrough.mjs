@@ -189,7 +189,35 @@ async function main() {
   mark('door open (paka)');
   await shot('04-find-fault');
 
-  // ── 6. find-fault: 少し待つと自動でfixへ(発見演出) ───────────────
+  // ── 6. find-fault: 「みつける遊び」— 自動では進まないため、故障箇所付近を
+  //    タップして発見する(仕様変更: find-faultは自動スキップしなくなった)。
+  {
+    const st = await getState();
+    const faultId = st.faults.find((f) => !f.fixed && f.id !== 'flap-stuck')?.id;
+    // faultFocus相当の座標をsim.stateから概算(pin-jam=ベルト曲がり角付近,
+    // belt-derail=ROLLER, guide-shift=ORIENTER, rack-gate=stuckGateのスロット)
+    const FOCUS = {
+      'pin-jam': [560, 945],
+      'belt-derail': [860, 975],
+      'guide-shift': [700, 235],
+      'rack-gate': null, // 下で動的に算出
+    };
+    let pt = faultId ? FOCUS[faultId] : null;
+    if (faultId === 'rack-gate') {
+      const RACK_SLOTS = [
+        [1180, 400], [1255, 400], [1330, 400], [1405, 400],
+        [1218, 348], [1293, 348], [1368, 348],
+        [1255, 300], [1330, 300],
+        [1293, 256],
+      ];
+      const slot = st.rack.stuckGate ?? 0;
+      pt = RACK_SLOTS[slot];
+    }
+    if (pt) {
+      mark(`find-fault: 故障箇所(${faultId})付近をタップ (${pt[0]},${pt[1]})`);
+      await gestureWorld([pt, pt]);
+    }
+  }
   await waitStep('fix', 6000);
   await shot('05-fix');
 
@@ -336,7 +364,9 @@ async function main() {
   await shot('11-full-run');
 
   // ── 13. full-run(自動)→celebrate→replay-menu ─────────────────────
-  await waitStep('celebrate', 20000);
+  // full-runはストライク→回収→くるん→ラック10本→ストン→ボール返却を
+  // 全部見せてから celebrate へ進む(修正済み)。実測30秒前後だが余裕を見て60秒。
+  await waitStep('celebrate', 60000);
   await shot('12-celebrate');
   await waitStep('replay-menu', 8000);
   await shot('13-replay-menu');

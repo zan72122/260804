@@ -8,8 +8,10 @@ export type HintStage = 'none' | 'look' | 'spotlight' | 'gesture';
 
 export interface IdleThresholds { look: number; spotlight: number; gesture: number }
 
-export const DEFAULT_THRESHOLDS: IdleThresholds = { look: 3.5, spotlight: 5, gesture: 6.5 };
-export const FIND_FAULT_THRESHOLDS: IdleThresholds = { look: 5, spotlight: 8, gesture: 11 };
+// 4歳児向けに短縮: 通常ステップは2.5s/4s/5.5s、故障発見は少し長めに4s/7s/10s
+// (見つける遊びの間は待つが、迷子にならない程度で自然に誘導する)。
+export const DEFAULT_THRESHOLDS: IdleThresholds = { look: 2.5, spotlight: 4, gesture: 5.5 };
+export const FIND_FAULT_THRESHOLDS: IdleThresholds = { look: 4, spotlight: 7, gesture: 10 };
 
 export class IdleGuide {
   private t = 0;
