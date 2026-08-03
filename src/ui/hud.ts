@@ -104,13 +104,17 @@ function injectStyle() {
       touch-action: manipulation;
       border: none;
       border-radius: 999px;
+      width: 72px;
+      height: 72px;
       min-width: 72px;
       min-height: 72px;
+      flex: none;
       font-size: 34px;
       line-height: 1;
       display: flex;
       align-items: center;
       justify-content: center;
+      overflow: hidden;
       background: linear-gradient(180deg,#ffffff 0%,#ffe3ef 100%);
       box-shadow: 0 6px 0 rgba(0,0,0,0.12), 0 3px 10px rgba(0,0,0,0.18);
       color: #4a3b45;
@@ -120,8 +124,12 @@ function injectStyle() {
       padding: 0;
     }
     .hud-btn:active { transform: scale(0.9) translateY(3px); box-shadow: 0 2px 0 rgba(0,0,0,0.12); }
-    .hud-btn.big { min-width: 104px; min-height: 104px; font-size: 48px; }
-    .hud-btn.small { min-width: 72px; min-height: 72px; font-size: 26px; }
+    .hud-btn.big {
+      width: clamp(84px, 24vw, 108px); height: clamp(84px, 24vw, 108px);
+      min-width: 84px; min-height: 84px;
+      font-size: clamp(38px, 11vw, 50px);
+    }
+    .hud-btn.small { width: 72px; height: 72px; min-width: 72px; min-height: 72px; font-size: 26px; }
     .hud-btn.disabled { opacity: 0.35; pointer-events: none; }
     .hud-check {
       position: absolute; top: -6px; right: -6px;
@@ -162,7 +170,7 @@ function injectStyle() {
       transition: opacity 0.4s ease;
     }
     #hud-select.ready { opacity: 1; pointer-events: auto; }
-    .hud-select-row { display: flex; gap: 28px; }
+    .hud-select-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px 22px; max-width: 92vw; }
     #hud-back {
       position: absolute;
       top: calc(env(safe-area-inset-top, 0px) + 14px);
