@@ -761,7 +761,7 @@ export class MachineSim {
   private tryEnterRack(p: Pin): void {
     const rack = this.state.rack;
     const filled = rack.slots.filter((s) => s !== null).length;
-    if (filled >= 10 || rack.stuckGate === filled) {
+    if (filled >= 10 || rack.stuckGate === filled || this.tenthPause) {
       this.rackWaiting.push(p.id);
       this.positionAtRackEntry(p, this.rackWaiting.length - 1);
       return;
@@ -906,6 +906,7 @@ export class MachineSim {
       this.positionBall();
       if (ball.t >= 1) {
         ball.zone = 'returned';
+        ball.t = 0; // render-laneがpop-inイージングの駆動にball.tを再利用するため0から再スタート
         ball.x = BALL_EXIT.x; ball.y = BALL_EXIT.y; ball.rot = 0;
         this.ballMode = 'done';
         bus.emit('sfx:stop', { id: 'roll-under' });
@@ -913,6 +914,10 @@ export class MachineSim {
         bus.emit('ball:returned', {});
         this.fullRunActive = false;
       }
+      return;
+    }
+    if (this.ballMode === 'done' && ball.t < 1) {
+      ball.t = clamp(ball.t + dt / 0.5, 0, 1);
     }
   }
 }
