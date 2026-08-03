@@ -23,7 +23,7 @@ import { layout } from '../core/layout';
 import { input } from '../input/gestures';
 import { effects } from '../render/effects';
 import { createFault, FAULT_KINDS } from '../sim/faults';
-import { COORDS } from './coords';
+import { COORDS, stepGapT, stepParkedFor } from './coords';
 
 // ---------------------------------------------------------------------------
 // モジュール内トランジェント状態(GameState には持たない演出専用の一時変数。
@@ -96,6 +96,14 @@ function nextSafetyTarget(state: GameState): { x: number; y: number } {
   return COORDS.lockIcon;
 }
 
+// 「今、ステップの隙間があるワールド座標」(dropR固定・中心はcoords.stepGapTで追跡)。
+// crankCheckで回した後もズレないよう、restoreStep関連のホットスポット/カメラ/
+// 持ち手ステップの表示すべてがこれを参照する(A7統合修正)。
+function stepGapSpot(state: GameState): { x: number; y: number; r: number } {
+  const p = state.escalator.pathPoint(stepGapT(state.escalator));
+  return { x: p.x, y: p.y, r: COORDS.stepGapDrop.r };
+}
+
 function chosenStepIndex(state: GameState): number {
   const model = state.escalator;
   let best = 0;
@@ -148,15 +156,20 @@ function computeCameraTarget(state: GameState): Cam {
         : tight([COORDS.fenceParked, COORDS.fenceDrop, COORDS.stopSwitch, COORDS.lockIcon]);
 
     case 'openPlate': {
-      const closed = tight([COORDS.plateHandleBottom]);
+      const closed = tight([COORDS.plateHandle]);
       const open = wideLoop();
       return lerpCam(closed, open, state.plateOpen);
     }
 
     case 'removeStep': {
-      const stepPos = model.pathPoint(COORDS.stepPullT);
+      const stepPos = model.pathPoint(stepGapT(model));
+      if (state.stepRemoved >= 1 && state.mode === 'stepPlay') {
+        // stepPlay: 抜いたステップを隙間へドラッグで戻す瞬間は、置き場と隙間の両方が
+        // 画面に入っていないと縦画面で「どこに戻せばいいか」見えなくなる。
+        return tight([stepParkedFor(model), stepPos]);
+      }
       const target = state.handleAttached ? stepPos : COORDS.stepHandleSpot;
-      return tight(portrait ? [target] : [COORDS.stepHandleSpot, stepPos, COORDS.stepParked]);
+      return tight(portrait ? [target] : [COORDS.stepHandleSpot, stepPos]);
     }
 
     case 'inspect': {
@@ -165,9 +178,17 @@ function computeCameraTarget(state: GameState): Cam {
     }
 
     case 'repair': {
-      const hs: { x: number; y: number }[] = state.fault
-        ? state.fault.hotspots(state).map((h) => ({ x: h.x, y: h.y }))
-        : [model.pathPoint(0.5)];
+      // ドラッグ系(roller/chainGuide)は掴む場所とドロップ先の両方を画面に入れる
+      // (縦画面で片方しか見えないと「どこへ持っていけばいいか」誤操作になる)。
+      const hs: { x: number; y: number }[] = [];
+      if (state.fault) {
+        for (const h of state.fault.hotspots(state)) {
+          hs.push({ x: h.x, y: h.y });
+          if (h.dropX !== undefined && h.dropY !== undefined) hs.push({ x: h.dropX, y: h.dropY });
+        }
+      } else {
+        hs.push(model.pathPoint(0.5));
+      }
       if (state.fault && state.fault.kind === 'roller' && !portrait) hs.push(COORDS.toolbox);
       if (hs.length === 0) hs.push(model.pathPoint(state.fault ? state.fault.anchorT : 0.5));
       return tight(hs);
@@ -177,13 +198,15 @@ function computeCameraTarget(state: GameState): Cam {
       return tight([COORDS.crankWheel]);
 
     case 'restoreStep': {
-      const stepPos = model.pathPoint(COORDS.stepPullT);
-      return tight(portrait ? [stepPos] : [COORDS.stepParked, stepPos]);
+      // ドラッグの持ち手(置き場)とドロップ先(隙間)の両方を常に画面に入れる
+      // (縦画面でも一方だけズームすると、置き場が見えず「戻せない」誤操作になる)。
+      const stepPos = model.pathPoint(stepGapT(model));
+      return tight([stepParkedFor(model), stepPos]);
     }
 
     case 'closePlate': {
       const open = wideLoop();
-      const closed = tight([COORDS.plateHandleBottom]);
+      const closed = tight([COORDS.plateHandle]);
       return lerpCam(open, closed, 1 - state.plateOpen);
     }
 
@@ -239,9 +262,9 @@ function computeHotspots(state: GameState): Hotspot[] {
           id: 'plateHandleOpen',
           kind: 'swipe',
           dir: 'up',
-          x: COORDS.plateHandleBottom.x,
-          y: COORDS.plateHandleBottom.y,
-          r: COORDS.plateHandleBottom.r
+          x: COORDS.plateHandle.x,
+          y: COORDS.plateHandle.y,
+          r: COORDS.plateHandle.r
         }
       ];
 
@@ -252,20 +275,22 @@ function computeHotspots(state: GameState): Hotspot[] {
         ];
       }
       if (state.stepRemoved < 1 && stepAnim !== 'removing') {
-        const p = state.escalator.pathPoint(COORDS.stepPullT);
+        const p = state.escalator.pathPoint(stepGapT(state.escalator));
         return [{ id: 'stepPull', kind: 'swipe', dir: 'up', x: p.x, y: p.y, r: 90 }];
       }
       if (state.stepRemoved >= 1 && state.mode === 'stepPlay') {
+        const gap = stepGapSpot(state);
+        const parked = stepParkedFor(state.escalator);
         return [
           {
             id: 'stepReturn',
             kind: 'drag',
-            x: COORDS.stepParked.x,
-            y: COORDS.stepParked.y,
+            x: parked.x,
+            y: parked.y,
             r: 90,
-            dropX: COORDS.stepGapDrop.x,
-            dropY: COORDS.stepGapDrop.y,
-            dropR: COORDS.stepGapDrop.r,
+            dropX: gap.x,
+            dropY: gap.y,
+            dropR: gap.r,
             sticky: true
           }
         ];
@@ -285,20 +310,23 @@ function computeHotspots(state: GameState): Hotspot[] {
     case 'crankCheck':
       return [{ id: 'crank', kind: 'crank', x: COORDS.crankWheel.x, y: COORDS.crankWheel.y, r: COORDS.crankWheel.r }];
 
-    case 'restoreStep':
+    case 'restoreStep': {
+      const gap = stepGapSpot(state);
+      const parked = stepParkedFor(state.escalator);
       return [
         {
           id: 'stepReturn',
           kind: 'drag',
-          x: COORDS.stepParked.x,
-          y: COORDS.stepParked.y,
+          x: parked.x,
+          y: parked.y,
           r: 90,
-          dropX: COORDS.stepGapDrop.x,
-          dropY: COORDS.stepGapDrop.y,
-          dropR: COORDS.stepGapDrop.r,
+          dropX: gap.x,
+          dropY: gap.y,
+          dropR: gap.r,
           sticky: true
         }
       ];
+    }
 
     case 'closePlate':
       return [
@@ -306,9 +334,9 @@ function computeHotspots(state: GameState): Hotspot[] {
           id: 'plateHandleClose',
           kind: 'swipe',
           dir: 'down',
-          x: COORDS.plateHandleBottom.x,
-          y: COORDS.plateHandleBottom.y,
-          r: COORDS.plateHandleBottom.r
+          x: COORDS.plateHandle.x,
+          y: COORDS.plateHandle.y,
+          r: COORDS.plateHandle.r
         }
       ];
 
@@ -335,9 +363,9 @@ function primaryHintTarget(state: GameState): { x: number; y: number } | null {
     case 'safety':
       return nextSafetyTarget(state);
     case 'openPlate':
-      return COORDS.plateHandleBottom;
+      return COORDS.plateHandle;
     case 'removeStep':
-      return state.handleAttached ? model.pathPoint(COORDS.stepPullT) : COORDS.stepHandleSpot;
+      return state.handleAttached ? model.pathPoint(stepGapT(model)) : COORDS.stepHandleSpot;
     case 'inspect':
       return state.fault ? model.pathPoint(state.fault.anchorT) : null;
     case 'repair': {
@@ -347,9 +375,9 @@ function primaryHintTarget(state: GameState): { x: number; y: number } | null {
     case 'crankCheck':
       return state.mode === 'play' ? COORDS.crankWheel : null;
     case 'restoreStep':
-      return COORDS.stepGapDrop;
+      return stepGapSpot(state);
     case 'closePlate':
-      return COORDS.plateHandleBottom;
+      return COORDS.plateHandle;
     default:
       return null;
   }
@@ -483,13 +511,12 @@ function enterPhase(state: GameState, phase: GamePhase): void {
       break;
 
     case 'celebrate':
+      // 紙吹雪は effects.ts が bus 'celebrate' を自己購読して発火する(A6所有)。
+      // ここで直接 effects.burst() を呼ぶと二重発火するので emit のみ行う。
       celebrateEnterTime = state.time;
       bus.emit('sfx', { name: 'tada' });
       bus.emit('sfx', { name: 'fanfare' });
       bus.emit('celebrate', {});
-      effects.burst(0, -170, 'confetti');
-      effects.burst(-60, -150, 'confetti');
-      effects.burst(60, -150, 'confetti');
       break;
 
     case 'select':
@@ -567,11 +594,10 @@ function handleNotice(ev: HotspotEvent, state: GameState): void {
 }
 
 function handleSafety(ev: HotspotEvent, state: GameState): void {
-  if (ev.id === 'fence' && ev.type === 'released') {
-    if (dist(ev.x, ev.y, COORDS.fenceDrop.x, COORDS.fenceDrop.y) <= COORDS.fenceDrop.r) {
-      state.fencePlaced = true;
-      bus.emit('sfx', { name: 'magnet' });
-    }
+  // drag成功: input(A3)はdropから150px以内で 'activated' をdrop座標にスナップして発火する
+  // (magnet sfxもA3側で発火済みなのでここでは重複させない)。'released' は失敗(磁石範囲外)なので無視。
+  if (ev.id === 'fence' && ev.type === 'activated') {
+    state.fencePlaced = true;
     return;
   }
   if (ev.id === 'stopSwitch' && ev.type === 'activated') {
@@ -592,9 +618,11 @@ function handleSafety(ev: HotspotEvent, state: GameState): void {
 function handleOpenPlate(ev: HotspotEvent, state: GameState): void {
   if (ev.id === 'plateHandleOpen' && ev.type === 'activated' && plateAnim === null) {
     plateAnim = 'opening';
-    state.view = 'cutaway';
+    // view はまだ 'exterior' のまま(=drawInspectionPlateの暖色グロー演出込みで蓋が開く
+    // 「パカッ」の瞬間を見せる)。輪全体を見せる cutaway への切り替えは
+    // updatePlateAnim が plateOpen の進行に応じて行う(A7統合修正)。
     bus.emit('sfx', { name: 'paka' });
-    effects.burst(COORDS.plateHandleBottom.x, COORDS.plateHandleBottom.y, 'shine');
+    effects.burst(COORDS.plateHandle.x, COORDS.plateHandle.y, 'shine');
     input.setHotspots([]);
   }
 }
@@ -613,12 +641,10 @@ function handleRemoveStep(ev: HotspotEvent, state: GameState): void {
     input.setHotspots([]);
     return;
   }
-  if (ev.id === 'stepReturn' && ev.type === 'released' && stepAnim === null) {
-    if (dist(ev.x, ev.y, COORDS.stepGapDrop.x, COORDS.stepGapDrop.y) <= COORDS.stepGapDrop.r) {
-      stepAnim = 'restoring';
-      bus.emit('sfx', { name: 'kachi' });
-      input.setHotspots([]);
-    }
+  if (ev.id === 'stepReturn' && ev.type === 'activated' && stepAnim === null) {
+    stepAnim = 'restoring';
+    bus.emit('sfx', { name: 'kachi' });
+    input.setHotspots([]);
   }
 }
 
@@ -654,17 +680,21 @@ function handleCrankCheck(ev: HotspotEvent, state: GameState): void {
   if (state.mode === 'play' && state.crankTotal >= Math.PI * 2) {
     bus.emit('sfx', { name: 'sparkle' });
     bus.emit('sfx', { name: 'tada' });
+    // 手を離した後もクランクの慣性(crankSpeed)がloopTを回し続けるため、そのまま
+    // restoreStepへ進むと「隙間の位置」が抜けた瞬間のホットスポット計算値から
+    // ズレ続けてしまう(A7統合修正)。crank(0)で慣性を明示的に0にし、隙間の
+    // 位置を今この瞬間で確定させる。EscalatorModel には他に慣性を止める公開APIが
+    // 無いため、delta=0 の crank() 呼び出し(dLoopT=0 → crankSpeed=0)を流用する。
+    state.escalator.crank(0);
     setPhase(state, 'restoreStep');
   }
 }
 
 function handleRestoreStep(ev: HotspotEvent, state: GameState): void {
-  if (ev.id === 'stepReturn' && ev.type === 'released' && stepAnim === null) {
-    if (dist(ev.x, ev.y, COORDS.stepGapDrop.x, COORDS.stepGapDrop.y) <= COORDS.stepGapDrop.r) {
-      stepAnim = 'restoring';
-      bus.emit('sfx', { name: 'kachi' });
-      input.setHotspots([]);
-    }
+  if (ev.id === 'stepReturn' && ev.type === 'activated' && stepAnim === null) {
+    stepAnim = 'restoring';
+    bus.emit('sfx', { name: 'kachi' });
+    input.setHotspots([]);
   }
 }
 
@@ -730,15 +760,26 @@ function onHotspotEvent(ev: HotspotEvent, state: GameState): void {
 // ---------------------------------------------------------------------------
 // 毎フレーム update: アニメーションタイマー、idle/ヒント、カメラ再計算
 // ---------------------------------------------------------------------------
+// 蓋が開き切る前(暖色グローが見えている exterior 表示)から、輪全体が見える
+// cutaway 表示へ切り替えるしきい値。「パカッ→中から光+輪」の順で見せるための
+// ビート分割(A7統合修正、品質基準: 開けた瞬間に秘密の場所が見えること)。
+const PLATE_VIEW_SWITCH_T = 0.4;
+
 function updatePlateAnim(dt: number, state: GameState): void {
   if (plateAnim === 'opening') {
     state.plateOpen = Math.min(1, state.plateOpen + dt * COORDS.plateAnimSpeed);
+    if (state.view === 'exterior' && state.plateOpen >= PLATE_VIEW_SWITCH_T) {
+      state.view = 'cutaway';
+    }
     if (state.plateOpen >= 1) {
       plateAnim = null;
       setPhase(state, 'removeStep');
     }
   } else if (plateAnim === 'closing') {
     state.plateOpen = Math.max(0, state.plateOpen - dt * COORDS.plateAnimSpeed);
+    if (state.view === 'cutaway' && state.plateOpen <= PLATE_VIEW_SWITCH_T) {
+      state.view = 'exterior';
+    }
     if (state.plateOpen <= 0) {
       plateAnim = null;
       state.view = 'exterior';

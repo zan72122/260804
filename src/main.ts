@@ -47,6 +47,10 @@ function boot() {
 
   flow.start(state);
 
+  // 統合(A7)検証用フック: 実座標→スクリーン座標変換をテストスクリプトから使えるようにする。
+  // 本番挙動には一切影響しない(window直付けの読み取り専用ユーティリティ)。
+  (window as unknown as { __layoutDebug?: unknown }).__layoutDebug = layout;
+
   let lastTime = performance.now();
 
   function frame(now: number) {

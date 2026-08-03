@@ -28,11 +28,10 @@ function effectiveView(state: GameState): ViewMode {
 // ワールド座標一覧 (A5 flow が安全柵/スイッチ/鍵/床板取っ手/クランクのホットスポットを
 // 配置する際に使うべき座標。CONTRACT外の追加公開だが scene.ts の所有者(A2)として提供)
 // ---------------------------------------------------------------------------
-// 注意: src/game/coords.ts (A5所有) と座標系を極力揃えてある(A5のCOORDSと
-// 同じ値: fenceDrop/switchPos/keyholePos/crankCenter)。ただし plateHandle は
-// CONTRACT.md が明記する「上端床の点検床板」に従って上端に置いている
-// (A5の COORDS.plateHandleBottom は下端(15,-55)にあり、これは CONTRACT との
-// 不一致。レポートで要調整として報告済み)。
+// 注意: src/game/coords.ts (A5所有) はこの WORLD を import して座標を一元化している
+// (fenceDrop/switchPos/keyholePos/crankCenter/plateHandle は WORLD が一次情報源)。
+// plateHandle は CONTRACT.md が明記する「上端床の点検床板」に従って上端に置く
+// (A7統合裁定: 2026-08-03 で coords.ts 側を上端に統一済み)。
 export const WORLD = {
   // 大きな手回しホイールの中心(断面図下部、下部歯車Cbotのすぐそば = 同軸のイメージ)
   // A5 coords.ts の COORDS.crankWheel と同値。

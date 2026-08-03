@@ -18,7 +18,8 @@ import type {
   LoopName
 } from '../core/types';
 import { bus } from '../core/events';
-import { COORDS } from '../game/coords';
+import { COORDS, stepGapT, stepParkedFor } from '../game/coords';
+import { input } from '../input/gestures';
 
 export const FAULT_KINDS: FaultKind[] = ['roller', 'chainGuide', 'handrail', 'sensor'];
 
@@ -147,34 +148,28 @@ class FaultInstanceImpl implements FaultInstance {
     }
   }
 
-  onHotspot(ev: HotspotEvent, state: GameState): void {
+  onHotspot(ev: HotspotEvent, _state: GameState): void {
     if (this.fixed) return;
-    const model = state.escalator;
-    const p = this.anchorPoint(model);
 
     switch (this.kind) {
       case 'roller': {
-        if (ev.id === 'fault:rollerOld' && ev.type === 'released') {
-          if (dist(ev.x, ev.y, COORDS.removedRollerBin.x, COORDS.removedRollerBin.y) <= COORDS.removedRollerBin.r) {
-            this.progress = 0.5;
-            bus.emit('sfx', { name: 'pop' });
-          }
-        } else if (ev.id === 'fault:rollerNew' && ev.type === 'released') {
-          if (dist(ev.x, ev.y, p.x, p.y) <= 90) {
-            this.progress = 1;
-            this.fixed = true;
-            bus.emit('sfx', { name: 'snap' });
-          }
+        // drag成功: input(A3)はdropから150px以内で 'activated' をdrop座標にスナップして発火する。
+        // 'released' はドロップ失敗(磁石範囲外)なので何もしない = 誤操作で詰まらない。
+        if (ev.id === 'fault:rollerOld' && ev.type === 'activated') {
+          this.progress = 0.5;
+          bus.emit('sfx', { name: 'pop' });
+        } else if (ev.id === 'fault:rollerNew' && ev.type === 'activated') {
+          this.progress = 1;
+          this.fixed = true;
+          bus.emit('sfx', { name: 'snap' });
         }
         break;
       }
       case 'chainGuide': {
-        if (ev.id === 'fault:chainGuide' && ev.type === 'released') {
-          if (dist(ev.x, ev.y, p.x, p.y) <= 85) {
-            this.progress = 1;
-            this.fixed = true;
-            bus.emit('sfx', { name: 'kachi' });
-          }
+        if (ev.id === 'fault:chainGuide' && ev.type === 'activated') {
+          this.progress = 1;
+          this.fixed = true;
+          bus.emit('sfx', { name: 'kachi' });
         }
         break;
       }
@@ -368,6 +363,16 @@ class FaultInstanceImpl implements FaultInstance {
       ctx.restore();
     }
 
+    // ローラー交換の目印: 外す前は捨て場(removedRollerBin)を点線で、外した後は
+    // 新品置き場(toolboxNewRoller)にピカピカのローラーを表示(ドラッグの取っ掛かり)。
+    if (phase === 'repair' && this.kind === 'roller' && !this.fixed) {
+      if (this.progress < 0.5) {
+        this.drawDashedTarget(ctx, COORDS.removedRollerBin.x, COORDS.removedRollerBin.y, 30, '#9aa3af');
+      } else {
+        this.drawRoundIcon(ctx, COORDS.toolboxNewRoller.x, COORDS.toolboxNewRoller.y, 17, '#7fd8ff');
+      }
+    }
+
     // 柵: safety フェーズおよびそれ以降(closePlateまでロボが回収する想定)は設置済み位置に表示
     if (state.fencePlaced && (phase === 'safety' || phase === 'openPlate' || phase === 'removeStep' || phase === 'inspect' || phase === 'repair' || phase === 'crankCheck' || phase === 'restoreStep')) {
       ctx.save();
@@ -407,7 +412,7 @@ class FaultInstanceImpl implements FaultInstance {
 
     // 床板の取っ手: openPlate / closePlate で表示
     if (phase === 'openPlate' || phase === 'closePlate') {
-      this.drawRoundIcon(ctx, COORDS.plateHandleBottom.x, COORDS.plateHandleBottom.y, 20, '#8ecae6');
+      this.drawRoundIcon(ctx, COORDS.plateHandle.x, COORDS.plateHandle.y, 20, '#8ecae6');
     }
 
     // ステップハンドル: removeStep でまだ未装着なら表示
@@ -416,12 +421,14 @@ class FaultInstanceImpl implements FaultInstance {
     }
 
     // 抜いたステップ: removedStep が設定されている間、画面端に描く
+    // (crankCheckで回した分だけ隙間もループ上を移動するため、stepGapT で現在位置を追跡する)
     if (state.escalator.removedStep !== null || state.stepRemoved > 0.02) {
       const easeT = this.easeOvershoot(state.stepRemoved);
       const model = state.escalator;
-      const from = model.pathPoint(COORDS.stepPullT);
-      const x = from.x + (COORDS.stepParked.x - from.x) * easeT;
-      const y = from.y + (COORDS.stepParked.y - from.y) * easeT;
+      const from = model.pathPoint(stepGapT(model));
+      const parked = stepParkedFor(model);
+      const x = from.x + (parked.x - from.x) * easeT;
+      const y = from.y + (parked.y - from.y) * easeT;
       ctx.save();
       ctx.translate(x, y);
       ctx.fillStyle = '#b8c0cc';
@@ -454,6 +461,92 @@ class FaultInstanceImpl implements FaultInstance {
       }
       ctx.restore();
     }
+
+    this.renderDragGhost(ctx);
+  }
+
+  // ドラッグ中のオブジェクトが指(ポインタ)に追従して見えるように、input(A3)の
+  // dragVisual()(磁石吸着の補間込み座標)を絶対ワールド座標でそのまま描く。
+  // これが無いとドラッグ中は何も動いて見えず、4歳児には「掴めているか」分からない。
+  private renderDragGhost(ctx: CanvasRenderingContext2D): void {
+    const dv = input.dragVisual();
+    if (!dv) return;
+    ctx.save();
+    ctx.translate(dv.x, dv.y);
+    ctx.globalAlpha = 0.92;
+    switch (dv.id) {
+      case 'fence':
+        ctx.strokeStyle = '#ff8fb3';
+        ctx.lineWidth = 7;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(-34, 4);
+        ctx.lineTo(34, 4);
+        ctx.moveTo(-34, -26);
+        ctx.lineTo(-34, 4);
+        ctx.moveTo(34, -26);
+        ctx.lineTo(34, 4);
+        ctx.stroke();
+        break;
+      case 'fault:rollerOld': {
+        const g = ctx.createRadialGradient(-4, -4, 2, 0, 0, 18);
+        g.addColorStop(0, '#e7ebef');
+        g.addColorStop(1, '#8892a0');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(0, 0, 18, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#525a66';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        break;
+      }
+      case 'fault:rollerNew': {
+        const g = ctx.createRadialGradient(-4, -4, 2, 0, 0, 18);
+        g.addColorStop(0, '#ffffff');
+        g.addColorStop(1, '#7fd8ff');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(0, 0, 18, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#2f9fc9';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        break;
+      }
+      case 'fault:chainGuide':
+        ctx.fillStyle = '#c98a3f';
+        ctx.strokeStyle = '#5a5f68';
+        ctx.lineWidth = 2;
+        ctx.fillRect(-18, -6, 36, 12);
+        ctx.strokeRect(-18, -6, 36, 12);
+        break;
+      case 'stepReturn':
+        ctx.fillStyle = '#dfe4ea';
+        ctx.strokeStyle = '#6b7280';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.roundRect(-34, -10, 68, 20, 6);
+        ctx.fill();
+        ctx.stroke();
+        break;
+      default:
+        break;
+    }
+    ctx.restore();
+  }
+
+  private drawDashedTarget(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, color: string): void {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.setLineDash([6, 7]);
+    ctx.globalAlpha = 0.65;
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
   }
 
   private drawRoundIcon(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, color: string): void {

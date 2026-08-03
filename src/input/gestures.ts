@@ -351,3 +351,10 @@ export const input: {
     return { id: eg.hotspot.id, x: eg.visualX, y: eg.visualY };
   }
 };
+
+// 統合(A7)検証用フック: 現在のホットスポット一覧/進行中ジェスチャーを読み取り専用で覗く。
+// CONTRACT の input API は変更しない(window直付けの追加デバッグ専用)。
+(window as unknown as { __inputDebug?: unknown }).__inputDebug = {
+  hotspots: () => hotspots,
+  active: () => active
+};
