@@ -4,7 +4,7 @@
 // ============================================================================
 import type { MachineState } from '../../core/types';
 import { ELEVATOR } from '../../core/geometry';
-import { cachedRadial, roundRectPath } from './util';
+import { cachedLinear, cachedRadial, roundRectPath } from './util';
 import type { Accent } from './decoration';
 
 const POCKETS = 7;
@@ -81,11 +81,9 @@ export function drawElevator(
     ctx.rotate(a);
     ctx.translate(r - 6, 0);
     ctx.rotate(Math.PI / 2);
-    const pg = ctx.createLinearGradient(-24, 0, 24, 0);
-    pg.addColorStop(0, '#dfe4ea');
-    pg.addColorStop(0.5, '#aeb6c2');
-    pg.addColorStop(1, '#6b7481');
-    ctx.fillStyle = pg;
+    ctx.fillStyle = cachedLinear(ctx, 'elevator-pocket', -24, 0, 24, 0, [
+      [0, '#dfe4ea'], [0.5, '#aeb6c2'], [1, '#6b7481'],
+    ]);
     roundRectPath(ctx, -24, -6, 48, 34, 8);
     ctx.fill();
     ctx.strokeStyle = 'rgba(0,0,0,0.35)';

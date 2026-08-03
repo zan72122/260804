@@ -11,19 +11,44 @@ import type { Accent } from './decoration';
 const ROW_OF_SLOT = [0, 0, 0, 0, 1, 1, 1, 2, 2, 3];
 const ROW_SCALE = [1, 0.9, 0.8, 0.7];
 
+// slots配列から実際の外接矩形を求める(RACK.x/y/w/hは大まかな目安値でしかなく、
+// 最奥列がその範囲をはみ出るため、確実にスロットを包む枠をここで再計算する)
+function slotBounds(): { x: number; y: number; w: number; h: number } {
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const [sx, sy] of RACK.slots) {
+    minX = Math.min(minX, sx);
+    maxX = Math.max(maxX, sx);
+    minY = Math.min(minY, sy);
+    maxY = Math.max(maxY, sy);
+  }
+  const pad = 56;
+  return { x: minX - pad, y: minY - pad, w: maxX - minX + pad * 2, h: maxY - minY + pad * 1.6 };
+}
+
 export function drawRackShell(ctx: CanvasRenderingContext2D): void {
-  const { x, y, w, h } = RACK;
+  const { x, y, w, h } = slotBounds();
   ctx.save();
   const back = cachedLinear(ctx, 'rack-back', x, y, x, y + h, [
     [0, '#333c4a'], [1, '#1b212b'],
   ]);
   ctx.fillStyle = back;
-  roundRectPath(ctx, x, y - 20, w, h + 40, 18);
+  roundRectPath(ctx, x, y, w, h, 18);
   ctx.fill();
   ctx.strokeStyle = '#151a22';
   ctx.lineWidth = 6;
-  roundRectPath(ctx, x, y - 20, w, h + 40, 18);
+  roundRectPath(ctx, x, y, w, h, 18);
   ctx.stroke();
+
+  // 奥行きを感じさせる棚板(段ごとの水平ライン)
+  ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+  ctx.lineWidth = 3;
+  const rows = [400, 348, 300, 256];
+  for (const ry of rows) {
+    ctx.beginPath();
+    ctx.moveTo(x + 14, ry + 24);
+    ctx.lineTo(x + w - 14, ry + 24);
+    ctx.stroke();
+  }
   ctx.restore();
 }
 
@@ -72,10 +97,9 @@ export function drawRackSlots(
     const openAngle = -gateOpen * (Math.PI * 0.55);
     ctx.translate(0, 22);
     ctx.rotate(openAngle);
-    const gg = ctx.createLinearGradient(0, -30, 0, 0);
-    gg.addColorStop(0, '#cfd6df');
-    gg.addColorStop(1, '#7a8492');
-    ctx.fillStyle = gg;
+    ctx.fillStyle = cachedLinear(ctx, 'rack-gate', 0, -30, 0, 0, [
+      [0, '#cfd6df'], [1, '#7a8492'],
+    ]);
     roundRectPath(ctx, -30, -30, 60, 16, 5);
     ctx.fill();
     ctx.strokeStyle = isStuck ? '#5c6570' : '#333a44';

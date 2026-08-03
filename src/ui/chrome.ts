@@ -145,6 +145,21 @@ export function drawCircleButton(
   ctx.stroke();
 
   b.icon(ctx, cx, cy, r * 1.35, time);
+
+  if (b.caption) {
+    const fontSize = b.hero ? Math.max(16, r * 0.24) : Math.max(11, r * 0.34);
+    const above = b.captionPos === 'above';
+    const ty = above ? cy - r - fontSize * 0.7 : cy + r + fontSize * 0.95;
+    ctx.font = `800 ${fontSize}px ${FONT_STACK}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = fontSize * 0.22;
+    ctx.strokeStyle = PALETTE.ink;
+    ctx.strokeText(b.caption, cx, ty);
+    ctx.fillStyle = b.hero ? PALETTE.white : 'rgba(255,255,255,0.92)';
+    ctx.fillText(b.caption, cx, ty);
+  }
   ctx.restore();
 }
 

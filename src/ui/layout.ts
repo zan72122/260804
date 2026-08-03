@@ -21,6 +21,8 @@ export interface ButtonSpec {
   icon: (ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number, time: number) => void;
   /** trueなら特に目立たせる（replay-same等）。 */
   hero?: boolean;
+  /** circleボタンの添え字キャプションを円の上/下どちらに出すか（画面端での食み出し防止）。既定 'below'。 */
+  captionPos?: 'above' | 'below';
 }
 
 const MIN_HIT = 60;
@@ -81,9 +83,10 @@ export function getButtons(mode: UIMode, layout: Layout, state: UIState): Button
     const d = Math.max(150, Math.min(portrait ? u.w * 0.62 : u.h * 0.62, 250));
     const cx = u.x + u.w / 2;
     const cy = portrait ? u.y + u.h * 0.66 : u.y + u.h * 0.58;
+    const captionReserve = 44; // 「はじめる」添え字ぶんの下マージン
     out.push({
       id: 'start', shape: 'circle', order: 0, caption: 'はじめる', hero: true,
-      x: cx, y: Math.min(cy, u.y + u.h - d / 2), w: d, h: d,
+      x: cx, y: Math.min(cy, u.y + u.h - d / 2 - captionReserve), w: d, h: d,
       accent: PALETTE.pink,
       icon: (ctx, ccx, ccy, size, time) => {
         drawPinIcon(ctx, ccx - size * 0.06, ccy + size * 0.02, size * 0.78, { ring: PALETTE.pink });
@@ -147,13 +150,13 @@ export function getButtons(mode: UIMode, layout: Layout, state: UIState): Button
       icon: (ctx, cx, cy, size) => drawRibbon(ctx, cx, cy, size * 0.66, DECOR_COLORS[state.decorIdx % DECOR_COLORS.length]),
     });
     out.push({
-      id: 'exit-free', shape: 'circle', order: 2, caption: 'もどる',
+      id: 'exit-free', shape: 'circle', order: 2, caption: 'もどる', captionPos: 'above',
       x: u.x + half, y: u.y + u.h - half, w: r, h: r,
       accent: 'rgba(30,24,46,0.5)',
       icon: (ctx, cx, cy, size) => drawHome(ctx, cx, cy, size * 0.62),
     });
     out.push({
-      id: 'cycle-speed', shape: 'circle', order: 3, caption: 'はやさ',
+      id: 'cycle-speed', shape: 'circle', order: 3, caption: 'はやさ', captionPos: 'above',
       x: u.x + u.w - half, y: u.y + u.h - half, w: r, h: r,
       accent: 'rgba(30,24,46,0.5)',
       icon: (ctx, cx, cy, size) => drawSpeedGauge(ctx, cx, cy, size * 0.8, state.speedLevel),

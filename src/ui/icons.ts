@@ -160,7 +160,7 @@ export function drawPinCluster(ctx: CanvasRenderingContext2D, cx: number, cy: nu
 
 // ── ボウリングボール ────────────────────────────────────────────────
 export function drawBallIcon(
-  ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, color = PALETTE.lavenderDeep,
+  ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, color: string = PALETTE.lavenderDeep,
 ): void {
   withSoftShadow(ctx, r * 0.35, r * 0.18, 0.3, () => {
     const grad = ctx.createRadialGradient(cx - r * 0.35, cy - r * 0.4, r * 0.1, cx, cy, r * 1.05);
@@ -194,7 +194,7 @@ export function drawBallIcon(
 
 // ── リプレイ矢印（円環矢印） ─────────────────────────────────────────
 export function drawReplayArrow(
-  ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number, color = PALETTE.skyDeep,
+  ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number, color: string = PALETTE.skyDeep,
 ): void {
   const r = size * 0.42;
   ctx.save();
@@ -411,7 +411,7 @@ export function drawHome(ctx: CanvasRenderingContext2D, cx: number, cy: number, 
 }
 
 // ── リボン（装飾切替） ───────────────────────────────────────────────
-export function drawRibbon(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number, color = PALETTE.pink): void {
+export function drawRibbon(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number, color: string = PALETTE.pink): void {
   ctx.save();
   ctx.translate(cx, cy);
   withSoftShadow(ctx, size * 0.08, size * 0.04, 0.22, () => {
@@ -419,19 +419,18 @@ export function drawRibbon(ctx: CanvasRenderingContext2D, cx: number, cy: number
       ctx.save();
       ctx.scale(s, 1);
       smoothPath(ctx, [
-        [0.03, 0], [0.5, -0.32], [0.56, 0], [0.5, 0.32],
+        [0.03 * size, 0], [0.5 * size, -0.32 * size], [0.56 * size, 0], [0.5 * size, 0.32 * size],
       ], true);
       ctx.fillStyle = color;
       ctx.fill();
       ctx.restore();
     }
   });
-  ctx.scale(size, size);
   ctx.beginPath();
-  ctx.arc(0, 0, 0.14, 0, Math.PI * 2);
+  ctx.arc(0, 0, size * 0.14, 0, Math.PI * 2);
   ctx.fillStyle = PALETTE.white;
   ctx.fill();
-  ctx.lineWidth = 0.03;
+  ctx.lineWidth = size * 0.03;
   ctx.strokeStyle = color;
   ctx.stroke();
   ctx.restore();
@@ -562,7 +561,7 @@ export function drawGear(ctx: CanvasRenderingContext2D, cx: number, cy: number, 
 }
 
 // ── 再生三角 ───────────────────────────────────────────────────────
-export function drawPlayTriangle(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number, color = PALETTE.white): void {
+export function drawPlayTriangle(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number, color: string = PALETTE.white): void {
   ctx.save();
   ctx.translate(cx, cy);
   const r = size * 0.5;
