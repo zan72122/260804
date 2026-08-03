@@ -41,6 +41,16 @@ const CHAIN_GUIDE_OFFSET = { x: 26, y: -16 };
 const HANDRAIL_START_OFFSET = { x: -30, y: 34 };
 const HANDRAIL_END_OFFSET = { x: 34, y: -6 };
 
+// 柵(安全柵)の「描画専用」オフセット(A7統合修正)。
+// COORDS.fenceDrop(=(-55,-30))は磁石吸着の目標点・カメラ枠の基準として他モジュールが
+// 参照しているため座標定数自体は変更できないが、その位置は停止スイッチの操作盤
+// (switchPos=(-60,-95) を中心に幅48・高さ134の縦長パネル)とほぼ同じx帯にあり、
+// 柵の実寸(横幅~100前後)で描くと必ずパネルに重なってしまう。ドラッグの磁石吸着先・
+// カメラ枠は fenceDrop のまま据え置き、実際に絵を描く位置だけをこの分だけ左にずらして
+// パネルの外の空きスペースへ逃がす。ドロップ前のガイド(半透明シルエット)にも同じ
+// オフセットを使い、ガイドの位置と設置後の柵の位置が一致するようにする。
+const FENCE_RENDER_OFFSET = { x: -85, y: 0 };
+
 // ---------------------------------------------------------------------------
 // 共通の小さな描画ヘルパ(上質玩具ルック: 太い輪郭・角丸・グラデ+ハイライト)
 // ---------------------------------------------------------------------------
@@ -634,22 +644,20 @@ class FaultInstanceImpl implements FaultInstance {
     }
 
     // 柵: safety フェーズおよびそれ以降(closePlateまでロボが回収する想定)は設置済み位置に表示
+    // (A7統合修正: 見た目の寸法・位置は FENCE_RENDER_OFFSET 分だけ描画専用にずらしてある。
+    // COORDS.fenceDrop 自体は磁石吸着・カメラ枠の基準点として変えていない。理由は
+    // drawFenceInstalled 直前のコメント参照)
     if (state.fencePlaced && (phase === 'safety' || phase === 'openPlate' || phase === 'removeStep' || phase === 'inspect' || phase === 'repair' || phase === 'crankCheck' || phase === 'restoreStep')) {
-      this.drawFenceInstalled(ctx, COORDS.fenceDrop.x, COORDS.fenceDrop.y);
+      this.drawFenceInstalled(ctx, COORDS.fenceDrop.x + FENCE_RENDER_OFFSET.x, COORDS.fenceDrop.y + FENCE_RENDER_OFFSET.y);
     } else if (phase === 'safety' && !state.fencePlaced) {
       this.drawFenceParked(ctx, COORDS.fenceParked.x, COORDS.fenceParked.y);
       this.drawFenceDropGuide(ctx, state.time);
     }
 
-    // 停止スイッチ/鍵: safety フェーズで対象になっているものだけ強調
-    if (phase === 'safety') {
-      if (!state.stopped) {
-        this.drawRoundIcon(ctx, COORDS.stopSwitch.x, COORDS.stopSwitch.y, 26, '#e5484d');
-      }
-      if (state.stopped && !state.locked) {
-        this.drawRoundIcon(ctx, COORDS.lockIcon.x, COORDS.lockIcon.y, 22, '#f2b705');
-      }
-    }
+    // 停止スイッチ/鍵: scene.ts の drawSafetyControls(A2所有)が既に stopped/locked に応じた
+    // 見た目(赤ボタンのグラデ+未停止時の脈動リング、ロック時の鍵穴グロー)を描画済みのため、
+    // ここで同じ位置にべた塗りの大きい円を重ねる必要はない(A7統合修正: 二重描画がその
+    // グラデ/グローを覆い隠し、しかも柵と衝突して見える一因になっていたため削除)。
 
     // 床板の取っ手: openPlate / closePlate で表示
     if (phase === 'openPlate' || phase === 'closePlate') {
@@ -950,6 +958,7 @@ class FaultInstanceImpl implements FaultInstance {
   }
 
   // ピンクのかわいい安全柵: 丸い頭の縦棒+旗付き(設置済み・大きめ)
+  // 呼び出し側で FENCE_RENDER_OFFSET 分ずらした座標を渡す(停止スイッチの操作盤を避けるため)。
   private drawFenceInstalled(ctx: CanvasRenderingContext2D, x: number, y: number): void {
     ctx.save();
     ctx.translate(x, y);
@@ -1057,7 +1066,9 @@ class FaultInstanceImpl implements FaultInstance {
   }
 
   private drawFenceDropGuide(ctx: CanvasRenderingContext2D, time: number): void {
-    drawDropGuide(ctx, 'fence', COORDS.fenceDrop.x, COORDS.fenceDrop.y, time);
+    // 設置後の drawFenceInstalled と同じ見た目の位置にガイドを出す(FENCE_RENDER_OFFSET を適用)。
+    // 磁石吸着の判定自体は入力側が COORDS.fenceDrop(生の値)を見ているので影響しない。
+    drawDropGuide(ctx, 'fence', COORDS.fenceDrop.x + FENCE_RENDER_OFFSET.x, COORDS.fenceDrop.y + FENCE_RENDER_OFFSET.y, time);
   }
 
   // 抜いたステップの駐機台(かわいい台車+毛布)。ステップが上に乗る場所を

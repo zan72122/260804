@@ -2,7 +2,7 @@
 // 所有: A6 (character/ui) — 整備ロボット「レンチちゃん」
 // 丸くて親しみやすいホバー型ロボ。歩行なし(浮遊)。CONTRACT の mechanic API を実装する。
 
-import type { GameState } from '../core/types';
+import type { EscalatorModel, GameState } from '../core/types';
 import { bus } from '../core/events';
 import { layout } from '../core/layout';
 
@@ -104,10 +104,18 @@ function sizeFractionFor(state: GameState): number {
 // ロボの世界座標上の描画スケール。可視矩形の高さ(ワールド単位)の 1/4〜1/3 が
 // 画面上の高さになるよう、カメラの scale に反比例させる(どれだけズームしても
 // 画面上の見かけサイズは一定割合を保つ)。
+// 注意(A7統合修正): 可視矩形の「高さ」だけを基準にすると、カメラのフレーミング対象が
+// 横長(例: exterior の notice/celebrate 額装は幅648×高さ300程度)なのに画面が縦長
+// (iPhone縦: 390×844)の場合、幅で律速されたカメラscaleのせいで可視矩形の高さが
+// 極端に間延びし(例: 1688相当)、その割合でロボが不自然に巨大化してエスカレーター本体を
+// 覆ってしまう(統括レビュー: 「notice/celebrateでロボがエスカレーターと重なる」)。
+// 縦横どちらか短い方を基準にすることで、アスペクト比の不一致による暴走を防ぐ。
 function computeDrawScale(state: GameState, rect: Rect): number {
+  const worldRectW = rect.maxX - rect.minX;
   const worldRectH = rect.maxY - rect.minY;
+  const worldRectBasis = Math.min(worldRectW, worldRectH);
   const fraction = sizeFractionFor(state);
-  const targetWorldHeight = worldRectH * fraction;
+  const targetWorldHeight = worldRectBasis * fraction;
   return Math.max(0.2, targetWorldHeight / NOMINAL_HEIGHT);
 }
 
@@ -132,14 +140,26 @@ function clampToVisible(p: Vec, rect: Rect, drawScale: number): Vec {
   return { x, y };
 }
 
+// exterior(外観)フェーズ用の「床に立つ」立ち位置。
+// 注意(A7統合修正): offsetSide(bottom, -N) のようにインクライン接線への垂直オフセットで
+// 立ち位置を決めると、縦画面など可視矩形のアスペクト比が偏るケースで clampToVisible が
+// x/y を軸ごとに独立して切り詰めてしまい、垂直オフセットの前提(常にインクラインから
+// 一定の法線距離を保つ)が崩れてエスカレーター本体(トラス外周の太い帯)とロボが重なって
+// 見えることがあった(統括レビュー: 「新しい外観カメラでロボがエスカレーター本体と重なる」)。
+// 床レベル(y を大きめの一定値にする=画面下寄り)に固定してしまえば、トラス帯は
+// 乗り口(A0)から右上へ登っていく一方なので、床レベルにいる限りどの視口でも
+// 手前の空きスペースに収まる。
+function frontFloorStand(model: EscalatorModel, xOffset: number, floorY: number): Vec {
+  const bottom = model.pathPoint(0.02);
+  return { x: bottom.x + xOffset, y: floorY };
+}
+
 // フェーズに応じた立ち位置(演出の要: 駆けつけ/覗き込み/作業対象の横 など)
 function stagePos(state: GameState): Vec {
   if (state.phase === 'title') {
     return { x: -420, y: 70 }; // 舞台袖で待機(notice で駆けつけてくる演出の起点)
   }
   const model = state.escalator;
-  const bottom = model.pathPoint(0.02);
-  const bottomStand = offsetSide(bottom, -95);
 
   switch (state.phase) {
     case 'inspect':
@@ -148,15 +168,13 @@ function stagePos(state: GameState): Vec {
       const p = model.pathPoint(t);
       return offsetSide(p, -78); // 作業対象の横
     }
-    case 'testRun': {
-      const p = model.pathPoint(0.42);
-      return offsetSide(p, -160); // 少し離れて見守る
-    }
+    case 'testRun':
+      return frontFloorStand(model, -170, 130); // 少し離れて床から見守る
     case 'celebrate':
     case 'select':
-      return offsetSide(bottom, -70);
+      return frontFloorStand(model, -30, 120); // お祝い: 乗り口手前の床でお出迎え
     default:
-      return bottomStand;
+      return frontFloorStand(model, -90, 130); // notice/safety等: 乗り口手前左の床の空きへ
   }
 }
 

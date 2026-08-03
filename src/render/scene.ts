@@ -799,7 +799,7 @@ function drawInspectionPlate(ctx: CanvasRenderingContext2D, state: GameState): v
 }
 
 function drawSafetyControls(ctx: CanvasRenderingContext2D, state: GameState): void {
-  const { switchPos, keyholePos, fenceDrop } = WORLD;
+  const { switchPos, keyholePos } = WORLD;
 
   // 操作盤ポスト(大きめ)
   ctx.save();
@@ -865,30 +865,10 @@ function drawSafetyControls(ctx: CanvasRenderingContext2D, state: GameState): vo
   ctx.stroke();
   ctx.restore();
 
-  // 安全柵(太く、目立つピンク)
-  if (state.fencePlaced) {
-    ctx.save();
-    ctx.translate(fenceDrop.x, fenceDrop.y);
-    ctx.fillStyle = HANDRAIL_PINK;
-    roundRectPath(ctx, -50, -62, 100, 14, 7);
-    ctx.fill();
-    ctx.strokeStyle = HANDRAIL_PINK_DARK;
-    ctx.lineWidth = 2.4;
-    ctx.stroke();
-    for (let i = -3; i <= 3; i++) {
-      ctx.beginPath();
-      ctx.moveTo(i * 14, -52);
-      ctx.lineTo(i * 14, 0);
-      ctx.strokeStyle = HANDRAIL_PINK_DARK;
-      ctx.lineWidth = 6;
-      ctx.lineCap = 'round';
-      ctx.stroke();
-    }
-    ctx.fillStyle = metalFill(ctx, -54, -6, 54, 6);
-    roundRectPath(ctx, -54, -6, 108, 9, 4);
-    ctx.fill();
-    ctx.restore();
-  }
+  // 安全柵: 描画は sim/faults.ts (A5所有, renderProps/drawFenceInstalled) に一本化。
+  // (A7統合修正: ここで独立に描いていた旧デザインの柵が、faults.ts の新デザインの柵と
+  // 二重描画になり、しかもどちらも停止スイッチの操作盤に重なって表示される不具合の原因に
+  // なっていたため削除。設置有無の判定・磁石吸着ロジックは従来通り COORDS.fenceDrop を使う。)
 }
 
 function drawExterior(ctx: CanvasRenderingContext2D, state: GameState, loc: 0 | 1 | 2): void {
