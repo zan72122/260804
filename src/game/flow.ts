@@ -24,6 +24,7 @@ import { input } from '../input/gestures';
 import { effects } from '../render/effects';
 import { createFault, FAULT_KINDS } from '../sim/faults';
 import { COORDS, stepGapT, stepParkedFor } from './coords';
+import { WORLD } from '../render/scene';
 
 // ---------------------------------------------------------------------------
 // モジュール内トランジェント状態(GameState には持たない演出専用の一時変数。
@@ -90,6 +91,25 @@ function loopSamplePoints(state: GameState): { x: number; y: number }[] {
   return pts;
 }
 
+// view==='exterior' の間、scene.ts が実際に描くのは輪全体ではなく
+// 「乗り口(A0)〜降り口(A1)+点検床板」の帯だけ(裏側のreturn/turnaroundは見えない)。
+// カメラ枠をループ全体(loopSamplePoints)で組むと、外観では絶対に映らない
+// 裏側の分まで余白として抱えてしまい、縦画面で対象がひどく小さくなる
+// (統括レビュー: 「縦画面exteriorのカメラが引きすぎ」)。ここでは外観で実際に
+// 見える範囲だけを額装する専用の点集合を使う。
+function exteriorFramePoints(state: GameState): { x: number; y: number }[] {
+  const plateRight = { x: WORLD.plateCenter.x + WORLD.plateSize.w / 2 + 12, y: WORLD.plateCenter.y };
+  const pts = [WORLD.bottomBoard, WORLD.topBoard, plateRight];
+  if (state.phase === 'notice') pts.push(COORDS.noticeAlert);
+  return pts;
+}
+
+function wideExterior(state: GameState): Cam {
+  const portrait = layout.portrait;
+  const pad = portrait ? COORDS.cameraPad.exteriorPortrait : COORDS.cameraPad.exteriorLandscape;
+  return framePoints(exteriorFramePoints(state), pad.x, pad.y);
+}
+
 function nextSafetyTarget(state: GameState): { x: number; y: number } {
   if (!state.fencePlaced) return COORDS.fenceDrop;
   if (!state.stopped) return COORDS.stopSwitch;
@@ -148,7 +168,7 @@ function computeCameraTarget(state: GameState): Cam {
   switch (state.phase) {
     case 'title':
     case 'notice':
-      return wideLoop();
+      return wideExterior(state);
 
     case 'safety':
       return portrait
@@ -213,6 +233,8 @@ function computeCameraTarget(state: GameState): Cam {
     case 'testRun':
     case 'celebrate':
     case 'select':
+      return wideExterior(state);
+
     default:
       return wideLoop();
   }

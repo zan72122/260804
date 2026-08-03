@@ -36,12 +36,12 @@ const N = { x: -U.y, y: U.x };
 const ANGLE_U = Math.atan2(U.y, U.x); // インクライン進行角
 const ANGLE_N = Math.atan2(N.y, N.x);
 
-interface Vec2 {
+export interface Vec2 {
   x: number;
   y: number;
 }
 
-function addScaled(p: Vec2, dir: Vec2, len: number): Vec2 {
+export function addScaled(p: Vec2, dir: Vec2, len: number): Vec2 {
   return { x: p.x + dir.x * len, y: p.y + dir.y * len };
 }
 
@@ -60,7 +60,8 @@ export interface LoopGeometry {
 }
 
 // origin (=A0) を基準に、指定した半径・水平助走長でスタジアム状の輪ジオメトリを構築する。
-function buildLoopGeometry(origin: Vec2, radius: number, runin: number): LoopGeometry {
+// scene.ts が外周トラス枠(concentricに拡大したスタジアム形状)を組み立てるのに再利用する。
+export function buildLoopGeometry(origin: Vec2, radius: number, runin: number): LoopGeometry {
   const thickness = radius * 2;
   const A0 = origin;
   const A1 = addScaled(A0, U, INCLINE_LEN);
@@ -113,7 +114,7 @@ export const ESC_GEOM = {
   handrail: HANDRAIL_GEOM
 };
 
-function rawPointOnGeometry(tIn: number, geom: LoopGeometry): PathPoint {
+export function rawPointOnGeometry(tIn: number, geom: LoopGeometry): PathPoint {
   let t = tIn % 1;
   if (t < 0) t += 1;
   const { A0, A1, B1, C1, D0, E0, Ctop, Cbot } = geom.points;

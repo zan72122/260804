@@ -95,7 +95,12 @@ export const COORDS = {
     tightPortrait: { x: 150, y: 175 },
     tightLandscape: { x: 170, y: 195 },
     widePortrait: { x: 110, y: 130 },
-    wideLandscape: { x: 130, y: 150 }
+    wideLandscape: { x: 130, y: 150 },
+    // exterior(外観)専用: ループ全体ではなく「実際に描かれる外観の範囲」
+    // (乗り口〜降り口+点検床板)だけを額装するための余白。縦は迫力重視で狭め、
+    // 横は全景重視でやや広め(A7統合レビュー: 外観カメラが引きすぎ問題の是正)。
+    exteriorPortrait: { x: 66, y: 90 },
+    exteriorLandscape: { x: 150, y: 170 }
   },
   cameraScaleMin: 0.35,
   cameraScaleMax: 2.6

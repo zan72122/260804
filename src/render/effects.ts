@@ -4,6 +4,7 @@
 
 import type { GameState } from '../core/types';
 import { bus } from '../core/events';
+import { layout } from '../core/layout';
 
 type BurstKind = 'spark' | 'star' | 'confetti' | 'dust' | 'shine';
 
@@ -148,6 +149,76 @@ interface Glow {
 let glow: Glow | null = null;
 const GLOW_DURATION = 3.2; // mechanic の pointAt 解除タイミングと合わせる
 
+// ---------------------------------------------------------------------------
+// スクリーン空間の紙吹雪レイヤー(celebrate専用)。
+// ワールド座標のプールとは別に、画面全体(カメラ変換の影響を受けない座標系)に
+// 降らせるための独立プール。render() 側で ctx.setTransform をリセットして描画する。
+// ---------------------------------------------------------------------------
+interface ScreenConfetti {
+  active: boolean;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  rot: number;
+  vrot: number;
+  w: number;
+  h: number;
+  color: string;
+  life: number;
+  maxLife: number;
+  sway: number;
+}
+
+const SCREEN_POOL_SIZE = 260;
+
+function makeScreenConfetti(): ScreenConfetti {
+  return {
+    active: false,
+    x: 0,
+    y: 0,
+    vx: 0,
+    vy: 0,
+    rot: 0,
+    vrot: 0,
+    w: 8,
+    h: 5,
+    color: '#fff',
+    life: 0,
+    maxLife: 1,
+    sway: 0
+  };
+}
+
+const screenPool: ScreenConfetti[] = Array.from({ length: SCREEN_POOL_SIZE }, makeScreenConfetti);
+let screenCursor = 0;
+
+function spawnScreenConfettiPiece(reduced: boolean) {
+  const p = screenPool[screenCursor];
+  screenCursor = (screenCursor + 1) % SCREEN_POOL_SIZE;
+  const w = layout.w || 390;
+  p.active = true;
+  p.x = rand(-20, w + 20);
+  p.y = rand(-460, -10);
+  p.vx = rand(-42, 42);
+  p.vy = rand(110, 210) * (reduced ? 0.55 : 1);
+  p.rot = rand(0, Math.PI * 2);
+  p.vrot = rand(-6, 6) * (reduced ? 0.35 : 1);
+  p.w = rand(6, 13);
+  p.h = p.w * rand(0.4, 0.7);
+  p.color = pick(CONFETTI_COLORS);
+  p.sway = rand(0, Math.PI * 2);
+  p.life = p.maxLife = rand(2.4, 4.0);
+}
+
+let celebrateWavesLeft = 0;
+let celebrateWaveTimer = 0;
+
+function spawnCelebrateWave() {
+  const count = reducedMotionCached ? 22 : 85;
+  for (let i = 0; i < count; i++) spawnScreenConfettiPiece(reducedMotionCached);
+}
+
 function doBurst(x: number, y: number, kind: BurstKind) {
   const base = BURST_COUNTS[kind];
   const count = Math.max(1, Math.round(base * (reducedMotionCached ? 0.25 : 1)));
@@ -171,10 +242,17 @@ bus.on('hint', (e) => {
 });
 
 // celebrate: 紙吹雪を自動発火(A5 との二重発火を避けるため bus 経由のみ)
+// ワールド空間のキラキラ+スクリーン空間の紙吹雪(画面全体)を組み合わせて豪華に。
 bus.on('celebrate', () => {
   doBurst(-60, -260, 'confetti');
   doBurst(60, -260, 'confetti');
   doBurst(0, -300, 'confetti');
+  doBurst(-40, -280, 'star');
+  doBurst(40, -280, 'star');
+  doBurst(0, -260, 'shine');
+
+  celebrateWavesLeft = reducedMotionCached ? 2 : 5;
+  celebrateWaveTimer = 0;
 });
 
 export const effects: {
@@ -202,6 +280,29 @@ export const effects: {
       p.vx *= 1 - Math.min(1, dt * 1.2);
     }
 
+    // 画面全体の紙吹雪(celebrate): 複数波に分けて降らせ続けることで豪華に見せる
+    if (celebrateWavesLeft > 0) {
+      celebrateWaveTimer -= dt;
+      if (celebrateWaveTimer <= 0) {
+        spawnCelebrateWave();
+        celebrateWavesLeft--;
+        celebrateWaveTimer = 0.3;
+      }
+    }
+    const screenH = layout.h || 844;
+    for (const p of screenPool) {
+      if (!p.active) continue;
+      p.life -= dt;
+      if (p.life <= 0 || p.y > screenH + 60) {
+        p.active = false;
+        continue;
+      }
+      p.vy += 140 * dt;
+      p.x += p.vx * dt + Math.sin(p.sway + p.life * 4) * 26 * dt;
+      p.y += p.vy * dt;
+      p.rot += p.vrot * dt;
+    }
+
     if (glow) {
       glow.timer -= dt;
       if (glow.timer <= 0) glow = null;
@@ -210,18 +311,46 @@ export const effects: {
 
   render(ctx: CanvasRenderingContext2D, state: GameState) {
     reducedMotionCached = state.settings.reducedMotion;
+    const camScale = layout.camera.scale || 1;
 
     if (glow) {
       ctx.save();
-      const pulse = reducedMotionCached ? 0.55 : 0.35 + Math.sin(state.time * 6) * 0.25;
-      const r = 46;
+      // タッチターゲット級(画面上で常に一定の大きさ)になるようカメラscaleの逆数で世界半径を決める
+      const screenR = reducedMotionCached ? 54 : 66;
+      const r = screenR / camScale;
+      const pulse = reducedMotionCached ? 0.55 : 0.4 + Math.sin(state.time * 5.5) * 0.3;
       const grad = ctx.createRadialGradient(glow.x, glow.y, 0, glow.x, glow.y, r);
-      grad.addColorStop(0, `rgba(255,143,171,${0.55 * pulse + 0.15})`);
+      grad.addColorStop(0, `rgba(255,143,171,${0.55 * pulse + 0.18})`);
+      grad.addColorStop(0.65, `rgba(255,143,171,${0.22 * pulse})`);
       grad.addColorStop(1, 'rgba(255,143,171,0)');
       ctx.fillStyle = grad;
       ctx.beginPath();
       ctx.arc(glow.x, glow.y, r, 0, Math.PI * 2);
       ctx.fill();
+
+      // 外向き矢印パルス: 中心から外側へ点滅しながら流れる(視認性強化)
+      if (!reducedMotionCached) {
+        const arrowCount = 6;
+        for (let i = 0; i < arrowCount; i++) {
+          const phase = (state.time * 0.9 + i / arrowCount) % 1;
+          const ang = (i / arrowCount) * Math.PI * 2;
+          const rr = r * (0.45 + phase * 0.85);
+          const alpha = (1 - phase) * 0.8;
+          const s = 8 / camScale;
+          ctx.save();
+          ctx.translate(glow.x + Math.cos(ang) * rr, glow.y + Math.sin(ang) * rr);
+          ctx.rotate(ang);
+          ctx.globalAlpha = alpha;
+          ctx.fillStyle = '#ff6fa5';
+          ctx.beginPath();
+          ctx.moveTo(s, 0);
+          ctx.lineTo(-s * 0.6, s * 0.72);
+          ctx.lineTo(-s * 0.6, -s * 0.72);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
+      }
       ctx.restore();
     }
 
@@ -234,6 +363,25 @@ export const effects: {
       drawParticle(ctx, p, t);
       ctx.restore();
     }
+
+    // ---- スクリーン空間レイヤー: celebrate の紙吹雪を画面全体に降らせる ----
+    // カメラ変換をリセットして描画し、終わったら scene.ts が次フレームでまた
+    // setTransform するので元へ戻す必要はないが、念のため save/restore で囲む。
+    ctx.save();
+    ctx.setTransform(layout.dpr, 0, 0, layout.dpr, 0, 0);
+    for (const p of screenPool) {
+      if (!p.active) continue;
+      const t = Math.max(0, Math.min(1, p.life / p.maxLife));
+      const alpha = t < 0.2 ? t / 0.2 : 1;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      ctx.restore();
+    }
+    ctx.restore();
   },
 
   burst(x: number, y: number, kind: BurstKind) {

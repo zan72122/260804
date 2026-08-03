@@ -4,6 +4,7 @@
 
 import type { GameState } from '../core/types';
 import { bus } from '../core/events';
+import { layout } from '../core/layout';
 
 interface Vec {
   x: number;
@@ -19,8 +20,23 @@ const BODY_TOP = -44;
 const ARM_LEN = 30;
 const POINT_ARM_LEN = 46;
 
-const MOVE_RATE = 3.0; // 立ち位置追従の速さ
+// ---- 画面内クランプ用の(スケール1における)ロボの概算バウンディング ----
+// 原点(translate 基準点、ホバー光輪の高さ)からの上下左右の張り出し。
+// 指差し・万歳・工具振り等、最大まで腕が伸びた状態でも収まるよう余裕を持たせてある。
+const NOMINAL_HALF_W = 80;
+const NOMINAL_TOP_EXT = 105; // アンテナ+頭 上端
+const NOMINAL_BOTTOM_EXT = 42; // 胴体下端+ホバー光輪
+const NOMINAL_HEIGHT = NOMINAL_TOP_EXT + NOMINAL_BOTTOM_EXT;
+
+// ロボの画面上サイズ(可視ワールド矩形の高さに対する割合)。フェーズごとに微調整:
+// 作業系フェーズはやや小さめ(操作対象を隠しすぎない)、celebrateは豪華に大きく。
+const SIZE_FRACTION_DEFAULT = 0.3;
+const SIZE_FRACTION_WORK = 0.24;
+const SIZE_FRACTION_CELEBRATE = 0.34;
+
+const MOVE_RATE = 4.5; // 立ち位置追従の速さ(フェーズ切替直後もすぐ画面内へ追いつくよう高め)
 const LOOK_RATE = 9; // 視線の滑らかさ
+const TURN_RATE = 8; // 体の向き(bodyTurn)の滑らかさ
 const POINT_DURATION = 3; // pointAt の持続秒数(CONTRACT: 3秒で解除)
 
 // ---- 内部状態(ロボは常に1体なのでモジュール単一インスタンス) ----
@@ -34,6 +50,8 @@ let pointTarget: Vec | null = null;
 let pointTimer = 0;
 let lookX = 0;
 let lookY = 0;
+let faceAngle = 0; // 視線先への角度(atan2)。repair時の工具指向・体の向きに使う
+let bodyTurn = 0; // 体を目標方向へ向ける回転量(平滑化済み)
 
 function setPointTarget(x: number, y: number) {
   pointTarget = { x, y };
@@ -47,6 +65,71 @@ function offsetSide(p: { x: number; y: number; angle: number }, dist: number): V
   const nx = Math.cos(p.angle + Math.PI / 2);
   const ny = Math.sin(p.angle + Math.PI / 2);
   return { x: p.x + nx * dist, y: p.y + ny * dist };
+}
+
+// ---- 可視ワールド矩形(layout.camera から毎フレーム導出) ----
+interface Rect {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+}
+
+function visibleWorldRect(): Rect {
+  const { w, h, camera } = layout;
+  const halfW = w / 2 / camera.scale;
+  const halfH = h / 2 / camera.scale;
+  return {
+    minX: camera.cx - halfW,
+    maxX: camera.cx + halfW,
+    minY: camera.cy - halfH,
+    maxY: camera.cy + halfH
+  };
+}
+
+function sizeFractionFor(state: GameState): number {
+  switch (state.phase) {
+    case 'celebrate':
+      return SIZE_FRACTION_CELEBRATE;
+    case 'inspect':
+    case 'repair':
+    case 'crankCheck':
+    case 'restoreStep':
+      return SIZE_FRACTION_WORK;
+    default:
+      return SIZE_FRACTION_DEFAULT;
+  }
+}
+
+// ロボの世界座標上の描画スケール。可視矩形の高さ(ワールド単位)の 1/4〜1/3 が
+// 画面上の高さになるよう、カメラの scale に反比例させる(どれだけズームしても
+// 画面上の見かけサイズは一定割合を保つ)。
+function computeDrawScale(state: GameState, rect: Rect): number {
+  const worldRectH = rect.maxY - rect.minY;
+  const fraction = sizeFractionFor(state);
+  const targetWorldHeight = worldRectH * fraction;
+  return Math.max(0.2, targetWorldHeight / NOMINAL_HEIGHT);
+}
+
+// 立ち位置を「必ず可視矩形内」へクランプする(ロボの見かけ上のバウンディングボックス分の余白を確保)
+function clampToVisible(p: Vec, rect: Rect, drawScale: number): Vec {
+  const halfW = NOMINAL_HALF_W * drawScale;
+  const topExt = NOMINAL_TOP_EXT * drawScale;
+  const botExt = NOMINAL_BOTTOM_EXT * drawScale;
+
+  let minX = rect.minX + halfW;
+  let maxX = rect.maxX - halfW;
+  let x = p.x;
+  if (minX <= maxX) x = Math.max(minX, Math.min(maxX, x));
+  else x = (rect.minX + rect.maxX) / 2;
+
+  let minY = rect.minY + topExt;
+  let maxY = rect.maxY - botExt;
+  let y = p.y;
+  if (minY <= maxY) y = Math.max(minY, Math.min(maxY, y));
+  else y = (rect.minY + rect.maxY) / 2;
+
+  return { x, y };
 }
 
 // フェーズに応じた立ち位置(演出の要: 駆けつけ/覗き込み/作業対象の横 など)
@@ -143,6 +226,8 @@ function drawArm(
   return { x: ex, y: ey };
 }
 
+type EyeMode = 'normal' | 'happy' | 'surprised';
+
 function drawEye(
   ctx: CanvasRenderingContext2D,
   ex: number,
@@ -150,9 +235,9 @@ function drawEye(
   r: number,
   px: number,
   py: number,
-  happy: boolean
+  mode: EyeMode
 ) {
-  if (happy) {
+  if (mode === 'happy') {
     // celebrate: にこにこ(＞▽＜)な弧目
     ctx.beginPath();
     ctx.moveTo(ex - r, ey + r * 0.2);
@@ -163,15 +248,17 @@ function drawEye(
     ctx.stroke();
     return;
   }
+  const surprised = mode === 'surprised';
+  const rr = surprised ? r * 1.3 : r;
   ctx.fillStyle = '#ffffff';
   ctx.beginPath();
-  ctx.ellipse(ex, ey, r, r * 1.08, 0, 0, Math.PI * 2);
+  ctx.ellipse(ex, ey, rr, rr * (surprised ? 1.2 : 1.08), 0, 0, Math.PI * 2);
   ctx.fill();
-  ctx.strokeStyle = 'rgba(0,0,0,0.08)';
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = surprised ? 'rgba(0,0,0,0.14)' : 'rgba(0,0,0,0.08)';
+  ctx.lineWidth = surprised ? 1.4 : 1;
   ctx.stroke();
-  const pr = r * 0.52;
-  const clampR = r * 0.38;
+  const pr = rr * (surprised ? 0.58 : 0.52);
+  const clampR = rr * 0.38;
   const dist = Math.min(clampR, Math.hypot(px, py));
   const a = Math.atan2(py, px);
   const pxC = Math.cos(a) * dist;
@@ -194,7 +281,10 @@ export const mechanic: {
 } = {
   update(dt: number, state: GameState) {
     const reduced = state.settings.reducedMotion;
-    const target = stagePos(state);
+    const rect = visibleWorldRect();
+    const drawScale = computeDrawScale(state, rect);
+    const desired = stagePos(state);
+    const target = clampToVisible(desired, rect, drawScale);
     const k = 1 - Math.exp(-MOVE_RATE * dt);
     const nx = pos.x + (target.x - pos.x) * k;
     const ny = pos.y + (target.y - pos.y) * k;
@@ -245,6 +335,17 @@ export const mechanic: {
     const lookK = 1 - Math.exp(-LOOK_RATE * dt);
     lookX += (nlx - lookX) * lookK;
     lookY += (nly - lookY) * lookK;
+
+    // 体の向き: 指差し中、または repair 中は対象方向へ体ごと傾ける(要件6)
+    faceAngle = Math.atan2(desiredY, desiredX);
+    let turnTarget = 0;
+    if (pointTarget) {
+      turnTarget = Math.max(-0.4, Math.min(0.4, (desiredX / dlen) * 0.4));
+    } else if (state.phase === 'repair' && state.fault) {
+      turnTarget = Math.max(-0.32, Math.min(0.32, (desiredX / dlen) * 0.32));
+    }
+    const turnK = 1 - Math.exp(-TURN_RATE * dt);
+    bodyTurn += (turnTarget - bodyTurn) * turnK;
   },
 
   render(ctx: CanvasRenderingContext2D, state: GameState) {
@@ -254,8 +355,18 @@ export const mechanic: {
     const isPointing = pointTimer > 0 && pointTarget !== null;
     const isCelebrate = state.phase === 'celebrate';
     const isSafety = state.phase === 'safety';
-    const isCheer = state.phase === 'repair' || state.phase === 'inspect';
+    const isInspect = state.phase === 'inspect';
+    const isRepair = state.phase === 'repair';
+    const isCrankCheck = state.phase === 'crankCheck';
+    const isTestRun = state.phase === 'testRun';
+    const isCheer = isInspect; // 故障を見つけて応援するポーズ(repairはコンコン作業モーションへ分離)
     const isPeek = state.phase === 'openPlate' || state.phase === 'removeStep';
+
+    // ---- 画面内クランプ(常にこの位置で描画。update()の追従目標も同じ矩形を
+    // 参照しているため通常は一致するが、フェーズ切替直後の一瞬もこれで保証する) ----
+    const rect = visibleWorldRect();
+    const drawScale = computeDrawScale(state, rect);
+    const renderPos = clampToVisible(pos, rect, drawScale);
 
     const bobAmp = reduced ? 3 : 7;
     const bobSpeed = reduced ? 1.3 : 2.3;
@@ -265,13 +376,21 @@ export const mechanic: {
     const jumpAmp = isCelebrate ? (reduced ? 7 : 24) : 0;
     const jumpY = isCelebrate ? -Math.abs(Math.sin(state.time * jumpSpeed)) * jumpAmp : 0;
 
+    // crankCheck: 「ぐるん」に合わせて体が左右に揺れる(loopTの位相に連動)
+    const crankWobble = isCrankCheck
+      ? Math.sin(state.escalator.loopT * Math.PI * 8) * (reduced ? 0.05 : 0.16)
+      : 0;
+
     const bankRaw = Math.max(-1, Math.min(1, velX * 0.0016));
     const bank = isPointing ? 0 : bankRaw * (reduced ? 0.3 : 1);
     const peekLean = isPeek ? 0.22 : 0;
+    const turnApplied = reduced ? bodyTurn * 0.4 : bodyTurn;
 
     ctx.save();
-    ctx.translate(pos.x, pos.y + bobY + jumpY);
-    ctx.rotate(bank * 0.5);
+    ctx.translate(renderPos.x, renderPos.y);
+    ctx.rotate(bank * 0.5 + turnApplied + crankWobble);
+    ctx.scale(drawScale, drawScale);
+    ctx.translate(0, bobY + jumpY);
 
     // ホバーの光輪(足の代わり)
     const hoverPulse = reduced ? 0.5 : 0.45 + Math.sin(state.time * 3) * 0.15;
@@ -306,6 +425,18 @@ export const mechanic: {
       const pump = Math.sin(state.time * (reduced ? 1.6 : 3.4)) * 0.18;
       leftAngle = -Math.PI / 2 - 0.35 + pump;
       rightAngle = -Math.PI / 2 + 0.35 - pump;
+    } else if (isRepair) {
+      // 工具を持ってコンコン作業(対象へ向いた方向へ腕を振る)
+      const knockRate = reduced ? 3.2 : 6.5;
+      const knock = Math.max(0, Math.sin(state.time * knockRate));
+      leftAngle = Math.PI / 2 + 0.3;
+      rightAngle = faceAngle;
+      rightLen = ARM_LEN + knock * (reduced ? 5 : 15);
+    } else if (isTestRun) {
+      // 敬礼ポーズで試運転を見守る
+      leftAngle = Math.PI / 2 + 0.35;
+      rightAngle = -Math.PI / 2 - 0.3 + Math.sin(state.time * 1.6) * 0.04;
+      rightLen = ARM_LEN * 0.78;
     }
 
     if (isPointing && pointTarget) {
@@ -317,7 +448,7 @@ export const mechanic: {
     const rightAnchor = { x: BODY_W / 2 + 2, y: BODY_TOP + 18 };
     drawArm(ctx, leftAnchor.x, leftAnchor.y, leftAngle, ARM_LEN, '#f7a8c9');
     const rightEnd = drawArm(ctx, rightAnchor.x, rightAnchor.y, rightAngle, rightLen, '#f7a8c9');
-    drawWrench(ctx, rightEnd.x, rightEnd.y, rightAngle, isPointing ? 1.05 : 0.9);
+    drawWrench(ctx, rightEnd.x, rightEnd.y, rightAngle, isPointing || isRepair ? 1.05 : 0.9);
 
     // ---- 胴体(つなぎ: ピンク→ラベンダー グラデ + 星ワッペン) ----
     const bodyGrad = ctx.createLinearGradient(-BODY_W / 2, BODY_TOP, BODY_W / 2, BODY_TOP + BODY_H);
@@ -369,25 +500,30 @@ export const mechanic: {
     ctx.ellipse(HEAD_R * 0.62, HEAD_R * 0.28, 5.5, 3.6, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // 目(視線が動く+瞬き)
+    // 目(視線が動く+瞬き+フェーズ連動の表情差分: 通常/にこ/びっくり)
+    const eyeMode: EyeMode = isCelebrate
+      ? 'happy'
+      : state.phase === 'notice' || state.phase === 'openPlate'
+        ? 'surprised'
+        : 'normal';
     const eyeR = HEAD_R * 0.34;
     const eyeY = -HEAD_R * 0.05;
     const eyeSpacing = HEAD_R * 0.5;
     const eyeCloseT = blinking ? Math.max(0, 1 - blinkT / 0.12) : 1;
-    if (!isCelebrate) {
+    if (eyeMode !== 'happy') {
       ctx.save();
       ctx.translate(-eyeSpacing, eyeY);
       ctx.scale(1, Math.max(0.06, eyeCloseT));
-      drawEye(ctx, 0, 0, eyeR, lookX, lookY, false);
+      drawEye(ctx, 0, 0, eyeR, lookX, lookY, eyeMode);
       ctx.restore();
       ctx.save();
       ctx.translate(eyeSpacing, eyeY);
       ctx.scale(1, Math.max(0.06, eyeCloseT));
-      drawEye(ctx, 0, 0, eyeR, lookX, lookY, false);
+      drawEye(ctx, 0, 0, eyeR, lookX, lookY, eyeMode);
       ctx.restore();
     } else {
-      drawEye(ctx, -eyeSpacing, eyeY, eyeR, 0, 0, true);
-      drawEye(ctx, eyeSpacing, eyeY, eyeR, 0, 0, true);
+      drawEye(ctx, -eyeSpacing, eyeY, eyeR, 0, 0, 'happy');
+      drawEye(ctx, eyeSpacing, eyeY, eyeR, 0, 0, 'happy');
     }
 
     // 口
