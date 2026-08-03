@@ -914,7 +914,7 @@ let state = ST.INTRO;
 let elapsed = 0;
 
 const mintT = { u: 0, v: 0, bounce: 0, roll: 0, rattling: false, kataWordCooldown: 0 };
-const grinderT = { u: 0.5, lateral: 1.35, y: 0, driving: false, puttTimer: 0 };
+const grinderT = { u: 0.5, lateral: 1.35, y: 0, dip: 0, driving: false, puttTimer: 0 };
 const U_GARAGE = 0.5;
 let stonePairsDown = [false, false, false];
 let deployHintTime = 0;
@@ -1063,7 +1063,8 @@ const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -RAIL_TOP);
 const _ndc = new THREE.Vector2(), _hit = new THREE.Vector3();
 let pointerDown = false;
 let pointerScreen = { x: 0, y: 0 };
-let dragStone = null; // {pairIndex, startY}
+let dragStone = null; // {pairIndex, startY, id}
+const activePointers = new Map(); // 小さい手のマルチタッチに耐える
 
 function screenToTrackU(x, y, windowU0 = null, windowLen = null) {
   _ndc.set((x / innerWidth) * 2 - 1, -(y / innerHeight) * 2 + 1);
@@ -1104,33 +1105,44 @@ function raycastStones(x, y) {
 canvas.addEventListener('pointerdown', (e) => {
   e.preventDefault();
   SND.resume();
+  activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   pointerDown = true;
-  pointerScreen = { x: e.clientX, y: e.clientY };
-  onTapDown(e.clientX, e.clientY);
+  if (activePointers.size === 1) {
+    pointerScreen = { x: e.clientX, y: e.clientY };
+    onTapDown(e.clientX, e.clientY, e.pointerId);
+  }
 });
 canvas.addEventListener('pointermove', (e) => {
-  if (!pointerDown) return;
-  pointerScreen = { x: e.clientX, y: e.clientY };
-  if (state === ST.DEPLOY && dragStone) {
+  if (!activePointers.has(e.pointerId)) return;
+  activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  const first = activePointers.keys().next().value;
+  if (e.pointerId === first) pointerScreen = { x: e.clientX, y: e.clientY };
+  if (state === ST.DEPLOY && dragStone && e.pointerId === dragStone.id) {
     const dy = e.clientY - dragStone.startY;
     if (dy > 30) { lowerStonePair(dragStone.pairIndex); dragStone = null; }
   }
 });
 const endPointer = (e) => {
-  if (!pointerDown) return;
-  pointerDown = false;
-  if (state === ST.DEPLOY && dragStone) {
+  if (!activePointers.has(e.pointerId)) return;
+  activePointers.delete(e.pointerId);
+  if (state === ST.DEPLOY && dragStone && e.pointerId === dragStone.id) {
     // 小さいタップでもOK（4歳にやさしく）
     lowerStonePair(dragStone.pairIndex);
     dragStone = null;
   }
-  grindHold.active = false;
+  if (activePointers.size === 0) {
+    pointerDown = false;
+    grindHold.active = false;
+  } else {
+    const p = activePointers.values().next().value;
+    pointerScreen = { x: p.x, y: p.y };
+  }
 };
 canvas.addEventListener('pointerup', endPointer);
 canvas.addEventListener('pointercancel', endPointer);
 document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
 
-function onTapDown(x, y) {
+function onTapDown(x, y, pointerId) {
   switch (state) {
     case ST.FIND: {
       const t = screenToTrackU(x, y);
@@ -1150,7 +1162,7 @@ function onTapDown(x, y) {
     case ST.DEPLOY: {
       const s = raycastStones(x, y);
       if (s && !stonePairsDown[s.pairIndex]) {
-        dragStone = { pairIndex: s.pairIndex, startY: y };
+        dragStone = { pairIndex: s.pairIndex, startY: y, id: pointerId };
       } else {
         SND.boop();
       }
@@ -1233,6 +1245,7 @@ function lowerStonePair(k) {
   SND.gakon(k);
   thump = 0.12;
   shake = Math.max(shake, 0.05);
+  grinderT.dip = 0.07; // 車体がドスンと沈む
   const s = stones.find((s) => s.pairIndex === k);
   const wp = new THREE.Vector3(); s.group.getWorldPosition(wp);
   showWord('ガコン', wp.add(new THREE.Vector3(0, 0.9, 0)), { size: stonePairsDown.filter(Boolean).length === 1 ? 9 : 7, color: '#e8833a' });
@@ -1552,7 +1565,8 @@ function updateGrinder(dt) {
   }
 
   if (state !== ST.GRIND) for (const g of contactGlows) g.material.opacity *= Math.exp(-dt * 10);
-  placeOnTrack(grinder, grinderT.u, 0.6, grinderT.lateral, grinderT.y, 0, 0);
+  grinderT.dip *= Math.exp(-dt * 9);
+  placeOnTrack(grinder, grinderT.u, 0.6, grinderT.lateral, grinderT.y - grinderT.dip, 0, 0);
 }
 updateGrinder.speed = 0;
 updateGrinder.lastMove = 0;
