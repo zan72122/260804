@@ -94,6 +94,8 @@ export function createPool(): Pin[] {
 export interface PinExtra {
   /** ベルト/エレベーター/上部搬送の速度ゆらぎ */
   speedJitter: number;
+  /** 選別機での向き直しが完了済みか（周回ごとにリセットされる） */
+  orientedDone: boolean;
   /** 位置をイージングで滑らかに遷移させる簡易トゥイーン */
   tween: null | {
     fromX: number; fromY: number; fromRot: number;
@@ -104,7 +106,26 @@ export interface PinExtra {
 }
 
 export function makeExtra(): PinExtra {
-  return { speedJitter: randRange(0.88, 1.15), tween: null };
+  return { speedJitter: randRange(0.88, 1.15), orientedDone: false, tween: null };
+}
+
+/** 点から折れ線への最短距離（なぞり系インタラクションの当たり判定に使用） */
+export function distanceToPath(
+  path: ReadonlyArray<readonly [number, number]>, x: number, y: number,
+): number {
+  let best = Infinity;
+  for (let i = 1; i < path.length; i++) {
+    const [x1, y1] = path[i - 1];
+    const [x2, y2] = path[i];
+    const dx = x2 - x1, dy = y2 - y1;
+    const len2 = dx * dx + dy * dy;
+    let k = len2 === 0 ? 0 : ((x - x1) * dx + (y - y1) * dy) / len2;
+    k = clamp(k, 0, 1);
+    const px = x1 + dx * k, py = y1 + dy * k;
+    const d = Math.hypot(x - px, y - py);
+    if (d < best) best = d;
+  }
+  return best;
 }
 
 /** トゥイーンを設定 */

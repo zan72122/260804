@@ -5,6 +5,11 @@
 // ============================================================================
 import type { Layout } from '../core/types';
 import type { UIAction, UIMode, UIState } from './actions';
+import {
+  drawPinIcon, drawBallIcon, drawJammedReplay, drawWrench, drawQuestionGlow,
+  drawHand, drawPinCluster, drawNote, drawHome, drawRibbon, drawSpeedGauge,
+  drawXrayIcon, PALETTE,
+} from './icons';
 
 export type ButtonShape = 'card' | 'circle';
 
@@ -53,13 +58,6 @@ function usableArea(layout: Layout, margin: number): Usable {
     h: layout.h - layout.safe.top - layout.safe.bottom - margin * 2,
   };
 }
-
-// icons を遅延importせず直接importすると layout.ts が icons.ts に依存するだけなので問題ない
-import {
-  drawPinIcon, drawBallIcon, drawJammedReplay, drawWrench, drawQuestionGlow,
-  drawHand, drawPinCluster, drawNote, drawHome, drawRibbon, drawSpeedGauge,
-  drawXrayIcon, PALETTE,
-} from './icons';
 
 const DECOR_COLORS = [PALETTE.metal, PALETTE.pink, PALETTE.sun, PALETTE.lavender];
 
