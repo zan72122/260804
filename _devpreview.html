@@ -17,7 +17,7 @@
   <canvas id="game"></canvas>
   <div id="hud"></div>
 </div>
-<pre id="err" style="position:absolute;z-index:9999;color:red;background:#fff;font-size:10px;max-width:100%;white-space:pre-wrap;"></pre>
+<pre id="err" style="position:absolute;top:0;left:0;z-index:9999;color:red;background:rgba(255,255,255,0.8);font-size:10px;max-width:100%;white-space:pre-wrap;"></pre>
 <script>
   window.addEventListener('error', (e) => { document.getElementById('err').textContent += 'ERR: ' + e.message + '\n'; });
   window.addEventListener('unhandledrejection', (e) => { document.getElementById('err').textContent += 'REJ: ' + e.reason + '\n'; });
@@ -49,6 +49,19 @@
   }
   resize();
 
+  // ループ全体+周辺(ロボの立ち位置分の余白)が収まるようにカメラを自動フィット
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (let i = 0; i <= 64; i++) {
+    const p = state.escalator.pathPoint(i / 64);
+    minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+    minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+  }
+  const margin = 160;
+  minX -= margin; maxX += margin; minY -= margin; maxY += margin;
+  const camCx = (minX + maxX) / 2;
+  const camCy = (minY + maxY) / 2;
+  const camScale = Math.min(canvas.width / (maxX - minX), canvas.height / (maxY - minY));
+
   hud.init(state);
 
   if (params.get('hint') === '1') {
@@ -59,6 +72,16 @@
   }
   if (params.get('burst')) {
     effects.burst(0, -150, params.get('burst'));
+  }
+
+  // headless では requestAnimationFrame が連続で走らないことがあるため、
+  // 見た目確認用に先に十分な時間分の update を同期実行してウォームアップする。
+  const warmupSeconds = Number(params.get('warmup') || '2.5');
+  for (let i = 0; i < Math.round(warmupSeconds * 60); i++) {
+    const dt = 1 / 60;
+    state.time += dt;
+    mechanic.update(dt, state);
+    effects.update(dt);
   }
 
   let last = performance.now();
@@ -72,9 +95,8 @@
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = '#ffe9de';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.translate(canvas.width / 2, canvas.height / 2 - 60);
-    ctx.scale(1, 1);
-    ctx.translate(0, 150);
+    ctx.translate(canvas.width / 2 - camCx * camScale, canvas.height / 2 - camCy * camScale);
+    ctx.scale(camScale, camScale);
 
     const model = state.escalator;
     ctx.save();
@@ -89,14 +111,10 @@
     ctx.stroke();
     ctx.restore();
 
-    ctx.fillStyle = 'red';
-    ctx.fillRect(-5, -5, 10, 10);
-
     mechanic.render(ctx, state);
     effects.render(ctx, state);
 
     hud.sync(state);
-    document.getElementById('err').textContent = 'time=' + state.time.toFixed(2) + ' phase=' + state.phase;
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
