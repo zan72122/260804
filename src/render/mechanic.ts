@@ -33,6 +33,7 @@ const NOMINAL_HEIGHT = NOMINAL_TOP_EXT + NOMINAL_BOTTOM_EXT;
 const SIZE_FRACTION_DEFAULT = 0.3;
 const SIZE_FRACTION_WORK = 0.24;
 const SIZE_FRACTION_CELEBRATE = 0.34;
+const SIZE_FRACTION_WIDE_LOOP = 0.15;
 
 const MOVE_RATE = 4.5; // 立ち位置追従の速さ(フェーズ切替直後もすぐ画面内へ追いつくよう高め)
 const LOOK_RATE = 9; // 視線の滑らかさ
@@ -88,6 +89,14 @@ function visibleWorldRect(): Rect {
 }
 
 function sizeFractionFor(state: GameState): number {
+  // openPlate/closePlate が cutaway(輪全体表示)になっている間は、可視矩形が
+  // 輪全体を額装する広いカメラ(wideLoop)になり、下部ターンアラウンドの歯車
+  // クラスタが乗り口のすぐ近くまで張り出している。通常サイズのままだと
+  // clampToVisible の余白計算(NOMINAL_*×drawScale)がこの歯車と衝突するため、
+  // この構図の時だけ小さめに描く(A7統合修正)。
+  if ((state.phase === 'openPlate' || state.phase === 'closePlate') && state.view === 'cutaway') {
+    return SIZE_FRACTION_WIDE_LOOP;
+  }
   switch (state.phase) {
     case 'celebrate':
       return SIZE_FRACTION_CELEBRATE;
@@ -172,9 +181,21 @@ function stagePos(state: GameState): Vec {
       return frontFloorStand(model, -170, 130); // 少し離れて床から見守る
     case 'celebrate':
     case 'select':
-      return frontFloorStand(model, -30, 120); // お祝い: 乗り口手前の床でお出迎え
+      return frontFloorStand(model, -100, 130); // お祝い: 乗り口手前の床でお出迎え(安全パネルの脇を避ける)
+    case 'openPlate':
+    case 'closePlate':
+      if (state.view === 'cutaway') {
+        // 輪全体表示(wideLoop)の間は下部ターンアラウンドの歯車クラスタが
+        // すぐ近くに来るため、通常のexterior時より大きく離れて立つ
+        // (A7統合修正・SIZE_FRACTION_WIDE_LOOPと連動)。
+        return frontFloorStand(model, -110, 340);
+      }
+      return frontFloorStand(model, -90, 150);
     default:
-      return frontFloorStand(model, -90, 130); // notice/safety等: 乗り口手前左の床の空きへ
+      // notice/safety: 乗り口手前左の床の空きへ。
+      // exterior表示中は可視矩形が狭くクランプされてほぼ同じ位置に収まるため
+      // この値でエスカレーター本体(トラス帯)とは重ならない(A7統合修正)。
+      return frontFloorStand(model, -100, 165);
   }
 }
 

@@ -210,8 +210,10 @@ async function driveToRepair(page, kind) {
   await waitPhase(page, 'safety');
   await dragWorld(page, W.fenceParked, W.fenceDrop, { steps: 6 });
   await waitFn(page, () => window.__flowDebug.state.fencePlaced === true);
+  await waitCameraSettled(page);
   await tapWorld(page, W.stopSwitch.x, W.stopSwitch.y);
-  await waitFn(page, () => window.__flowDebug.state.stopped === true);
+  await waitFn(page, () => window.__flowDebug.state.stopped === true, 9000);
+  await waitCameraSettled(page);
   await tapWorld(page, W.lockIcon.x, W.lockIcon.y);
   await waitPhase(page, 'openPlate');
   await swipeWorld(page, W.plateHandle, 0, -170, { steps: 8, stepMs: 20 });
@@ -275,8 +277,10 @@ async function runViewport(browser, vp) {
   await waitPhase(page, 'safety');
   await dragWorld(page, W.fenceParked, W.fenceDrop, { steps: 8 });
   await waitFn(page, () => window.__flowDebug.state.fencePlaced === true);
+  await waitCameraSettled(page);
   await tapWorld(page, W.stopSwitch.x, W.stopSwitch.y);
-  await waitFn(page, () => window.__flowDebug.state.stopped === true);
+  await waitFn(page, () => window.__flowDebug.state.stopped === true, 9000);
+  await waitCameraSettled(page);
   await tapWorld(page, W.lockIcon.x, W.lockIcon.y);
   await waitPhase(page, 'openPlate');
   await sleep(300);
@@ -371,14 +375,23 @@ async function runViewport(browser, vp) {
   await waitFn(page, () => window.__flowDebug.state.mode === 'play' && window.__flowDebug.state.phase === 'select');
   await sleep(900);
 
-  // panorama cutaway (debug composite: full loop cross-section)
-  await page.evaluate(() => { window.__flowDebug.state.view = 'cutaway'; });
-  await sleep(250);
+  // panorama cutaway (debug composite: full loop cross-section)。
+  // 'closePlate'+plateOpen=1+view=cutaway だとカメラが computeCameraTarget の
+  // wideLoop() (輪全体を額装する本来のカメラ) を返すため、'select' を無理やり
+  // cutaway表示するより実際に到達しうるカメラ状態に近い(ロボの立ち位置も
+  // closePlateのdefaultケースが使われ、クランクホイールと重ならない)。
+  await page.evaluate(() => {
+    const st = window.__flowDebug.state;
+    st.plateOpen = 1;
+    window.__flowDebug.forcePhase('closePlate');
+    st.view = 'cutaway';
+  });
+  await sleep(900);
   await shot(page, vp.name, '16-panorama-cutaway');
-  await page.evaluate(() => { window.__flowDebug.state.view = 'exterior'; });
+  await page.evaluate(() => { window.__flowDebug.forcePhase('select'); });
 
-  // remaining 3 fault kinds' repair shots (chainGuide/handrail/sensor)
-  for (const kind of ['chainGuide', 'handrail', 'sensor']) {
+  // remaining 3 fault kinds' repair shots (whichever kind1 wasn't)
+  for (const kind of ['roller', 'chainGuide', 'handrail', 'sensor'].filter((k) => k !== kind1)) {
     await driveToRepair(page, kind);
     await sleep(200);
     await shot(page, vp.name, `08-repair-${kind}`);

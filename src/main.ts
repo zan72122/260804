@@ -9,6 +9,7 @@ import { audio } from './audio/engine';
 import { scene } from './render/scene';
 import { flow } from './game/flow';
 import { effects } from './render/effects';
+import { mechanic } from './render/mechanic';
 
 const DT_MAX = 0.05;
 
@@ -71,6 +72,13 @@ function boot() {
     effects.update(dt);
     audio.update(dt, state);
     layout.update(dt);
+    // A7統合修正: mechanic.update(dt, state) がどこからも呼ばれておらず、ロボの
+    // 立ち位置(stagePos追従)が初期値(-420,70)にクランプをかけただけの状態で
+    // 固まっていた(=stagePosの意図した立ち位置が一切反映されず、可視矩形の
+    // 左端に強制的に張り付いていた)。これが「ロボがエスカレーター本体と重なる」
+    // 不具合の実際の原因だったため、カメラ更新(layout.update)の直後・描画の
+    // 直前にここで呼ぶ。
+    mechanic.update(dt, state);
 
     // render順
     scene.render(ctx, state);
