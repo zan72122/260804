@@ -35,7 +35,11 @@ export class FiberSim {
   }
 
   pour(tx, ty, col) {
-    for (let i = 0; i < POUR_N; i++) {
+    // taps always succeed, but the vat saturates: past ~2.5x the needed
+    // pulp, each pour only adds a pinch (keeps particle count sane when a
+    // child hammers the bowls)
+    const n = this.poured >= this.need * 2.5 ? 8 : POUR_N;
+    for (let i = 0; i < n; i++) {
       const a = Math.random() * TAU, r = Math.random() * 0.10;
       this.fibers.push({
         x: clamp(tx + Math.cos(a) * r, 0.03, 0.97),
@@ -48,7 +52,7 @@ export class FiberSim {
         col, st: 0, tg: -1, ph: Math.random() * TAU,
       });
     }
-    this.poured += POUR_N;
+    this.poured += n;
   }
 
   // (dx,dy) = finger velocity in tank units per second
