@@ -46,17 +46,21 @@ export function tankLay(L, free = false) {
     const availH = H - topPad - csH - H * 0.045;
     tank = fitRect((W - zw) / 2, topPad + availH / 2, (W - zw) * 0.92, availH, ASP);
     cs = { x: tank.x, y: tank.y + tank.h + 6, w: tank.w, h: csH };
+    // bowls live in the free margin left of the tank; the right zone is
+    // reserved for the lever alone (they must never share a touch region)
     const br = clamp(zw * 0.24, 22, 38);
+    const cols = nb > 3 ? 2 : 1;
+    const rows = Math.ceil(nb / cols);
+    const rowH = br * 2.2;
     for (let i = 0; i < nb; i++) {
-      const colI = nb > 3 ? i % 2 : 0;
-      const rowI = nb > 3 ? (i / 2) | 0 : i;
+      const colI = i % cols, rowI = (i / cols) | 0;
       bowls.push({
-        x: zx + zw * (nb > 3 ? 0.30 + colI * 0.42 : 0.5),
-        y: H * 0.06 + br + rowI * (br * 2.25), r: br,
+        x: tank.x / 2 + (colI - (cols - 1) / 2) * br * 2.3,
+        y: H * 0.5 - (rows - 1) * rowH / 2 + rowI * rowH, r: br,
         ...(free ? FREE_BOWLS[i] : PULP_BOWLS[i]),
       });
     }
-    lever = { track: { x: zx + zw * 0.5 - 13, y: H * 0.56, w: 26, h: H * 0.33 }, r: clamp(zw * 0.19, 26, 38) };
+    lever = { track: { x: zx + zw * 0.5 - 13, y: H * 0.30, w: 26, h: H * 0.52 }, r: clamp(zw * 0.19, 26, 38) };
   }
   const inner = { x: tank.x + tank.w * 0.045, y: tank.y + tank.h * 0.055, w: tank.w * 0.91, h: tank.h * 0.89 };
   const paperR = {
@@ -269,6 +273,16 @@ function makeTankScene(free) {
     down(p) {
       const L = G.L, la = tankLay(L, free);
       const s = this.sim();
+      // lever first: its grab region must win over generous bowl hit areas
+      if (this.unlocked() || (free ? s.draining : G.flags.latched)) {
+        const lt = la.lever.track;
+        const lhy = lt.y + this.leverProg * lt.h;
+        if (dist(p.x, p.y, lt.x + lt.w / 2, lhy) < la.lever.r + 44) {
+          this.leverGrab = { y: p.y, la };
+          sfx.tap();
+          return;
+        }
+      }
       // bowls
       const canPour = free ? !s.draining || s.level > 0.5 : !G.flags.latched;
       if (canPour) {

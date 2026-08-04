@@ -132,6 +132,21 @@ export class FiberSim {
     const full = this.allFull();
     const grainW = CAP_TOTAL / Math.max(1, this.need) * 1.45; // grains per settled fiber
 
+    // excluded volume: fibers in an overcrowded cell push each other apart
+    // (flocs break up), so the slurry relaxes toward an even cloud and can
+    // never compact into corner balls
+    let cnt = null, cxs = null, cys = null;
+    if (!this.draining && this.level > 0.05) {
+      cnt = new Float32Array(GX * GY);
+      cxs = new Float32Array(GX * GY);
+      cys = new Float32Array(GX * GY);
+      for (const f of this.fibers) {
+        if (f.st) continue;
+        const c = clamp((f.y * GY) | 0, 0, GY - 1) * GX + clamp((f.x * GX) | 0, 0, GX - 1);
+        cnt[c]++; cxs[c] += f.x; cys[c] += f.y;
+      }
+    }
+
     for (const f of this.fibers) {
       if (f.st) continue;
       const [gvx, gvy] = this.gridAt(f.x, f.y);
@@ -161,6 +176,18 @@ export class FiberSim {
       if (!drain && this.level > 0.05) {
         f.vx += -(f.y - 0.5) * 0.03 * dt;
         f.vy += (f.x - 0.5) * 0.03 * dt;
+      }
+      if (cnt) {
+        const c = clamp((f.y * GY) | 0, 0, GY - 1) * GX + clamp((f.x * GX) | 0, 0, GX - 1);
+        const n = cnt[c];
+        if (n > 5) {
+          let dx = f.x - cxs[c] / n, dy = f.y - cys[c] / n;
+          let d = Math.hypot(dx, dy);
+          if (d < 1e-4) { const a = Math.random() * TAU; dx = Math.cos(a); dy = Math.sin(a); d = 1; }
+          const a = Math.min(1.2, (n - 5) * 0.06);
+          f.vx += (dx / d) * a * dt;
+          f.vy += (dy / d) * a * dt;
+        }
       }
 
       if (drain > 0 && this.paper) {
