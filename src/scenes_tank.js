@@ -400,7 +400,11 @@ function makeTankScene(free) {
           if (this.leverGrab && this.unlocked() && this.leverProg > 0.02) {
             s.preview = this.leverProg;
           }
-          if (s.preview > 0.02) setSuck(s.preview * 0.35, s.level);
+          if (s.preview > 0.02) {
+            setSuck(s.preview * 0.35, s.level);
+            // a half-open valve already lets a little water through
+            s.level = Math.max(0.85, s.level - dt * 0.012 * s.preview);
+          }
         }
         if (G.flags.latched && !G.flags.cast) {
           s.drainT += dt;

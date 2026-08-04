@@ -245,7 +245,11 @@ export class FiberSim {
           if (drain > 0 && d < ((this.level <= 0.12 || this.drainT > 5) ? 0.10 : 0.06) && k.s.got < k.s.cap) {
             k.s.got += grainW;
             k.s.d.got += grainW;
-            const [u, v] = tankToUv(f.x, f.y);
+            // the through-flow drags the fiber the last stretch onto the
+            // deficit itself: stamp near the sink, not on the intact artwork
+            const [u, v] = tankToUv(
+              f.x + (k.x - f.x) * 0.75,
+              f.y + (k.y - f.y) * 0.75);
             this.paper.addDeposit(clamp(u, 0, 1), clamp(v, 0, 1), f.col);
             f.st = 1; this.settledN++;
             continue;
