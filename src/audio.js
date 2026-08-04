@@ -1,6 +1,7 @@
 // All sound is synthesized (no assets). Created lazily on first user gesture.
 let AC = null, master = null, noiseBuf = null;
-let waterGain = null, suckGain = null;
+let waterGain = null, suckGain = null, suckBp = null;
+const c01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
 export function unlock() {
   if (AC) { if (AC.state === 'suspended') AC.resume(); return; }
@@ -20,12 +21,19 @@ export function unlock() {
   // suction loop
   const sn = AC.createBufferSource(); sn.buffer = noiseBuf; sn.loop = true;
   const bp = AC.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 260; bp.Q.value = 1.1;
+  suckBp = bp;
   suckGain = AC.createGain(); suckGain.gain.value = 0;
   sn.connect(bp); bp.connect(suckGain); suckGain.connect(master); sn.start();
 }
 
 export function setWater(v) { if (waterGain) waterGain.gain.setTargetAtTime(v * 0.10, AC.currentTime, 0.25); }
-export function setSuck(v) { if (suckGain) suckGain.gain.setTargetAtTime(v * 0.18, AC.currentTime, 0.15); }
+// gain follows suction strength; pitch climbs as the water thins so the
+// ear tracks the water level too
+export function setSuck(v, level = 1) {
+  if (!suckGain) return;
+  suckGain.gain.setTargetAtTime(v * 0.18, AC.currentTime, 0.12);
+  if (suckBp) suckBp.frequency.setTargetAtTime(200 + (1 - c01(level)) * 430, AC.currentTime, 0.15);
+}
 
 function tone(f, dur, delay = 0, type = 'sine', g = 0.16, glide = 0) {
   if (!AC) return;
@@ -67,4 +75,8 @@ export const sfx = {
   flip() { whoosh(0.45, 500, 1500, 0.10); },
   press() { whoosh(0.9, 300, 80, 0.16); },
   wob() { tone(230, 0.25, 0, 'sine', 0.06, 180); },
+  // tiny deposition grain — pitch rises with fill so filling is audible
+  grain(fill) { tone(380 + c01(fill) * 520, 0.07, 0, 'sine', 0.045); },
+  // the last film of water slipping through the sheet
+  sip() { whoosh(0.55, 700, 120, 0.15); },
 };

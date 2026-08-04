@@ -150,4 +150,15 @@ window.__qa = {
     const s = cur();
     return s.qa ? s.qa(L) : {};
   },
+  // read-only fiber snapshot for motion analysis (positions in tank space)
+  fibers() {
+    const sim = G.scene === 'free' ? G.freeSim : G.sim;
+    if (!sim) return [];
+    return sim.fibers.map((f, i) => ({ i, x: +f.x.toFixed(4), y: +f.y.toFixed(4), st: f.st }));
+  },
+  sinks() {
+    const sim = G.scene === 'free' ? G.freeSim : G.sim;
+    if (!sim || !sim.sinks) return [];
+    return sim.sinks.map(k => ({ x: +k.x.toFixed(4), y: +k.y.toFixed(4), cap: +k.s.cap.toFixed(2), got: +k.s.got.toFixed(2) }));
+  },
 };

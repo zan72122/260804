@@ -190,10 +190,11 @@ function drawCrossSection(ctx, lay, sim, paper, time) {
   ctx.setLineDash([5, 4]);
   ctx.beginPath(); ctx.moveTo(cs.x, meshY); ctx.lineTo(cs.x + cs.w, meshY); ctx.stroke();
   ctx.setLineDash([]);
-  // droplets falling through deficits while draining
+  // droplets falling through deficits while draining — each stream stops
+  // as its deficit seals (the paper now blocks the water there)
   if (sim.draining && sim.level > 0.01) {
     ctx.fillStyle = 'rgba(120,175,190,0.9)';
-    const spots = paper ? paper.damages.map(d => paperR.x + d.cx * paperR.w)
+    const spots = paper ? paper.damages.filter(d => !d.done).map(d => paperR.x + d.cx * paperR.w)
       : [cs.x + cs.w * 0.25, cs.x + cs.w * 0.5, cs.x + cs.w * 0.75];
     spots.forEach((x, i) => {
       for (let k = 0; k < 3; k++) {
@@ -233,14 +234,18 @@ function makeTankScene(free) {
     leverProg: 0,
     stroking: false,
     pitaT: 0,
+    filmT: 0,
+    grainN: 0,
+    lastGrain: 0,
     doneT: 0,
-    sparkles: [],
+    sparkles: null,
 
     sim() { return free ? G.freeSim : G.sim; },
 
     enter() {
       this.pours = []; this.ripples = []; this.leverGrab = null;
-      this.stroking = false; this.pitaT = 0; this.doneT = 0; this.sparkles = [];
+      this.stroking = false; this.pitaT = 0; this.doneT = 0; this.sparkles = null;
+      this.filmT = 0; this.grainN = 0; this.lastGrain = 0;
       if (free) {
         G.freeSim = new FiberSim(null);
         G.freeSheet = mk(440, 580);
@@ -333,6 +338,7 @@ function makeTankScene(free) {
         if (this.leverProg > 0.62 && !latched && this.unlocked()) {
           if (free) { s.draining = true; s.drainT = 0; }
           else { G.flags.latched = true; s.draining = true; s.drainT = 0; }
+          s.drainJitter = 0.88 + Math.random() * 0.24; // every drain slightly different
           sfx.press();
         }
         return;
@@ -388,14 +394,46 @@ function makeTankScene(free) {
           G.flags.dispersed = true;
           sfx.chime();
         }
+        // partial lever pull (before latch) already tugs at the water —
+        // cause and effect connect the instant the finger moves the lever
+        if (!G.flags.latched) {
+          if (this.leverGrab && this.unlocked() && this.leverProg > 0.02) {
+            s.preview = this.leverProg;
+          }
+          if (s.preview > 0.02) setSuck(s.preview * 0.35, s.level);
+        }
         if (G.flags.latched && !G.flags.cast) {
           s.drainT += dt;
-          s.strength = Math.min(1, s.drainT / 1.6);
-          const minL = s.allFull() ? -0.02 : 0.045;
-          if (s.drainT > 0.5) s.level = Math.max(minL, s.level - dt * 0.085 * s.strength);
-          this.leverProg = Math.max(this.leverProg, Math.min(1, 0.62 + s.drainT * 0.2));
-          setSuck(s.strength * (s.level > 0 ? 1 : 0.35));
+          s.strength = Math.min(1, s.drainT / 0.7);
+          const full = s.allFull();
+          // fast at first, easing off as the water thins — staged, not linear
+          if (s.drainT > 0.12 && s.level > 0.045) {
+            s.level = Math.max(0.045,
+              s.level - dt * 0.55 * s.strength * (0.25 + 0.75 * s.level) * (s.drainJitter || 1));
+          }
+          if (full && s.level <= 0.05) {
+            // the last film of water: one quiet beat (すっ…) before ぴたり
+            if (this.filmT === 0) sfx.sip();
+            this.filmT += dt;
+            s.level = Math.max(0, 0.045 * (1 - this.filmT / 0.7));
+            if (this.filmT >= 0.7) {
+              G.flags.cast = true;
+              this.pitaT = 0;
+              sfx.pita();
+              setSuck(0, 0);
+            }
+          }
+          this.leverProg = Math.max(this.leverProg, Math.min(1, 0.62 + s.drainT * 0.5));
+          setSuck(s.strength * (s.level > 0 ? 1 : 0.35), s.level);
           setWater(0.2 + 0.15 * s.strength);
+          // each deposition is audible; pitch climbs as the deficit fills
+          if (s.settledN > this.grainN) {
+            this.grainN = s.settledN;
+            if (G.time - this.lastGrain > 0.07) {
+              this.lastGrain = G.time;
+              sfx.grain(G.paper.fillRatio());
+            }
+          }
           for (const d of G.paper.damages) {
             if (!d.done && d.cap > 0 && d.got >= d.cap * 0.97) {
               d.done = true;
@@ -404,14 +442,8 @@ function makeTankScene(free) {
             }
           }
           // safety: never strand the child — trickle in more pulp if we ran dry
-          if (!s.allFull() && s.activeCount() === 0 && s.drainT > 3) {
+          if (!s.allFull() && s.activeCount() === 0 && s.drainT > 2.5) {
             s.pour(0.2 + Math.random() * 0.6, 0.15, PULP_BOWLS[0].fib);
-          }
-          if (s.level <= 0 && s.allFull()) {
-            G.flags.cast = true;
-            this.pitaT = 0;
-            sfx.pita();
-            setSuck(0);
           }
         }
         if (G.flags.cast) {
@@ -421,8 +453,8 @@ function makeTankScene(free) {
       } else {
         if (s.draining) {
           s.drainT += dt;
-          s.strength = Math.min(1, s.drainT / 1.4);
-          if (s.drainT > 0.4) s.level = Math.max(0, s.level - dt * 0.11 * s.strength);
+          s.strength = Math.min(1, s.drainT / 0.8);
+          if (s.drainT > 0.15) s.level = Math.max(0, s.level - dt * 0.30 * s.strength * (0.3 + 0.7 * s.level));
           setSuck(s.strength * (s.level > 0 ? 1 : 0.2));
           if (s.level <= 0 && s.activeCount() === 0 && this.doneT === 0) {
             this.doneT = 0.001;
@@ -513,23 +545,40 @@ function makeTankScene(free) {
         ctx.lineWidth = 2;
         ctx.beginPath(); ctx.arc(x, y, 6 + rp.t * 34, 0, TAU); ctx.stroke();
       }
-      // vortices over unfilled deficits while draining
-      if (s.draining && s.level > 0.02 && !free && G.paper) {
+      // vortices + converging water threads over unfilled deficits — the
+      // flow is visibly strong at the holes and absent over intact paper.
+      // Present (weakly) already during the partial lever pull.
+      const flow = s.draining ? (s.strength ?? 0) : (s.preview ?? 0) * 0.6;
+      if (flow > 0.04 && s.level > 0.02 && !free && G.paper) {
         for (const d of G.paper.damages) {
           if (d.done) continue;
           const x = la.paperR.x + d.cx * la.paperR.w, y = la.paperR.y + d.cy * la.paperR.h;
           const rad = Math.max(16, d.r * la.paperR.w * 1.6);
-          ctx.strokeStyle = 'rgba(240,250,252,0.5)';
+          ctx.strokeStyle = `rgba(240,250,252,${0.55 * flow})`;
           ctx.lineWidth = 2;
           for (let k = 0; k < 3; k++) {
             const p0 = ((G.time * 0.55 + k / 3) % 1);
-            const a0 = G.time * 3 + k * (TAU / 3);
+            const a0 = G.time * (2 + flow * 2.5) + k * (TAU / 3);
             ctx.beginPath();
             ctx.arc(x, y, rad * (1 - p0 * 0.75), a0, a0 + 2.1);
             ctx.stroke();
           }
+          // water threads sliding inward from the surroundings
+          ctx.lineWidth = 2;
+          for (let k = 0; k < 6; k++) {
+            const a = k / 6 * TAU + d.cx * 7;
+            const p = (G.time * (1.1 + flow * 0.6) + k * 0.37 + d.cy * 5) % 1;
+            const rr2 = (2.6 - p * 2.0) * rad;
+            const px = x + Math.cos(a) * rr2, py = y + Math.sin(a) * rr2;
+            const len = 8 + 7 * (1 - p);
+            ctx.strokeStyle = `rgba(225,242,246,${0.34 * flow * (1 - p)})`;
+            ctx.beginPath();
+            ctx.moveTo(px, py);
+            ctx.lineTo(px + Math.cos(a) * len, py + Math.sin(a) * len);
+            ctx.stroke();
+          }
           // tiny bubbles
-          ctx.fillStyle = 'rgba(245,252,254,0.6)';
+          ctx.fillStyle = `rgba(245,252,254,${0.6 * flow})`;
           for (let k = 0; k < 2; k++) {
             const p0 = ((G.time * 0.8 + k * 0.5) % 1);
             ctx.beginPath();
@@ -538,7 +587,7 @@ function makeTankScene(free) {
           }
         }
       }
-      // pita! outline glow when the sheet completes
+      // pita! outline glow + a small sparkle breath when the sheet completes
       if (!free && G.flags.cast) {
         const a = 0.75 * Math.max(0, 1 - Math.abs(this.pitaT - 0.5) / 0.9);
         if (a > 0) {
@@ -547,6 +596,21 @@ function makeTankScene(free) {
           ctx.shadowBlur = 16;
           G.paper.strokeDamages(ctx, la.paperR, `rgba(255,240,190,${a})`, 3);
           ctx.restore();
+        }
+        if (this.pitaT < 1.0) {
+          for (const d of G.paper.damages) {
+            const x = la.paperR.x + d.cx * la.paperR.w, y = la.paperR.y + d.cy * la.paperR.h;
+            const rad = Math.max(14, d.r * la.paperR.w * 1.3);
+            for (let k = 0; k < 6; k++) {
+              const a2 = k / 6 * TAU + d.cx * 9;
+              const p = Math.min(1, this.pitaT / 0.8);
+              const rr3 = rad * (0.4 + p * 1.1);
+              ctx.fillStyle = `rgba(255,246,205,${0.7 * (1 - p)})`;
+              ctx.beginPath();
+              ctx.arc(x + Math.cos(a2) * rr3, y + Math.sin(a2) * rr3, 2.2 * (1 - p * 0.6), 0, TAU);
+              ctx.fill();
+            }
+          }
         }
       }
       ctx.restore(); // basin clip

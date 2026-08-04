@@ -26,6 +26,8 @@ export class FiberSim {
     this.gv = new Float32Array(GX * GY * 2);
     this.poured = 0;
     this.settledN = 0;
+    this.preview = 0;     // partial lever pull before latch → gentle pre-suction
+    this.drainJitter = 1; // per-run variation so no two drains feel identical
     this.t = 0;
     this.freeSettle = null; // callback for free-play mode
     this.sinks = paper
@@ -50,6 +52,7 @@ export class FiberSim {
         va: (Math.random() - 0.5) * 2,
         len: 0.013 + Math.random() * 0.012,
         col, st: 0, tg: -1, ph: Math.random() * TAU,
+        hand: Math.random() < 0.5 ? -1 : 1, // swirl handedness → varied spirals
       });
     }
     this.poured += n;
@@ -117,6 +120,7 @@ export class FiberSim {
     this.t += dt;
     if (!this.draining && this.poured > 0) this.slurryT = (this.slurryT || 0) + dt;
     const drain = this.draining ? this.strength : 0;
+    if (!this.draining) this.preview *= Math.pow(0.1, dt); // fades when the lever is released
     const dec = Math.pow(0.35, dt); // stirring current keeps flowing briefly after release
     for (let i = 0; i < this.gv.length; i++) this.gv[i] *= dec;
     // a real vat has walls: kill wall-normal current in boundary cells so
@@ -194,7 +198,8 @@ export class FiberSim {
         }
       }
 
-      if (drain > 0 && this.paper) {
+      const pre = (!this.draining && this.preview > 0.02) ? this.preview : 0;
+      if ((drain > 0 || pre > 0) && this.paper) {
         if (f.tg < 0 || f.tg >= this.sinks.length ||
           this.sinks[f.tg].s.got >= this.sinks[f.tg].s.cap || Math.random() < dt * 0.4) {
           f.tg = this.pickSink(f);
@@ -206,11 +211,21 @@ export class FiberSim {
           dx /= d; dy /= d;
           const [uu, vv] = tankToUv(f.x, f.y);
           const perm = this.paper.permAt(clamp(uu, 0, 1), clamp(vv, 0, 1));
-          const pull = drain * (0.10 + 0.16 * Math.min(d * 3, 1)) * (0.40 + perm * 0.9);
-          const sw = 0.05 * Math.sin(this.t * 2 + f.ph) * drain * Math.min(1, d * 8);
-          f.vx += (dx * pull - dy * sw) * dt * 2.4;
-          f.vy += (dy * pull + dx * sw) * dt * 2.4;
-          if (d < 0.034 && k.s.got < k.s.cap) {
+          // suction spreads outward from the deficits: nearby fibers feel it
+          // first, distant ones join as the wave reaches them (遅れて参加)
+          const act = drain > 0 ? clamp((this.drainT - d * 1.15) / 0.35, 0, 1) : 0;
+          // strong contrast between deficits (perm≈1) and intact paper
+          const base = (0.10 + 0.16 * Math.min(d * 3, 1)) * (0.25 + perm * 1.15);
+          const pull = drain * act * base + pre * 0.10 * base;
+          // handed swirl that fades on approach → readable inward spiral
+          const sw = pull * 0.55 * f.hand * clamp(d * 5, 0, 1);
+          f.vx += (dx * pull - dy * sw) * dt * 4.5;
+          f.vy += (dy * pull + dx * sw) * dt * 4.5;
+          if (pre > 0) { // surface trembles under the partial pull
+            f.vx += (Math.random() - 0.5) * pre * 0.16 * dt;
+            f.vy += (Math.random() - 0.5) * pre * 0.16 * dt;
+          }
+          if (drain > 0 && d < 0.05 && k.s.got < k.s.cap) {
             k.s.got += grainW;
             k.s.d.got += grainW;
             const [u, v] = tankToUv(f.x, f.y);
@@ -234,7 +249,7 @@ export class FiberSim {
 
       const dp = Math.pow(this.level > 0.03 ? 0.28 : 0.02, dt);
       f.vx *= dp; f.vy *= dp;
-      const sp = Math.hypot(f.vx, f.vy), mx = 0.55;
+      const sp = Math.hypot(f.vx, f.vy), mx = drain > 0 ? 0.85 : 0.55;
       if (sp > mx) { f.vx *= mx / sp; f.vy *= mx / sp; }
       f.x += f.vx * dt; f.y += f.vy * dt;
       f.an += f.va * dt * (0.3 + sp * 3);

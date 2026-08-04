@@ -161,7 +161,7 @@ for (const cfg of CONFIGS) {
       await drag(t.lever.x, t.lever.y, t.leverEnd.x, t.leverEnd.y + 30, 10, 24);
       s = await state();
       check(s.flags.latched, 'lever latched → draining');
-      await page.waitForTimeout(2500);
+      await page.waitForTimeout(900);
       const mid = await state();
       check(mid.level > 0 && mid.level < 1, `water drains gradually (level=${mid.level?.toFixed(2)})`);
       check(mid.fill > 0.02 && mid.fill < 0.98, `holes fill gradually (fill=${mid.fill?.toFixed(2)})`);
