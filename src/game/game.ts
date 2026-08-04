@@ -221,10 +221,16 @@ export class Game {
     }
   }
 
-  /** Screen-space rects for the two unit sockets under the car (one per rail). */
+  /**
+   * Screen-space rects for the two unit sockets (one per rail).
+   * Portrait shows them on the car's visible rear-face lower corners so the
+   * magnetic snap is never hidden behind the body.
+   */
   socketRect(i: number, proj?: Projection): Rect {
-    const lateral = i === 0 ? -0.75 : 0.75;
-    const p = (proj ?? this.projection()).toScreen(this.carPos + UNIT_OFFSETS[i], 0.55, lateral);
+    const pr = proj ?? this.projection();
+    const p = pr.portrait
+      ? pr.toScreen(this.carPos - CAR_LENGTH + 0.3, 0.55, i === 0 ? -0.95 : 0.95)
+      : pr.toScreen(this.carPos + UNIT_OFFSETS[i], 0.55, i === 0 ? -0.75 : 0.75);
     const size = 88;
     return { x: p.x - size / 2, y: p.y - size / 2, w: size, h: size };
   }
@@ -339,8 +345,8 @@ export class Game {
     const target = this.leverStage >= 3 ? 1 : this.leverStage === 2 ? 0.92 : this.leverStage === 1 ? 0.55 : this.leverProgress * 0.4;
     this.unitDrop += (target - this.unitDrop) * Math.min(1, dt * 8);
     if (this.dragMode !== 'lever' && !this.locked && this.leverProgress > 0) {
-      // released early: spring back unless nearly locked
-      if (this.leverProgress >= 0.8) {
+      // released early: past the stage-2 clunk counts as intent → auto-complete
+      if (this.leverProgress >= 0.62) {
         this.setLeverProgress(Math.min(1, this.leverProgress + dt * 2.2));
       } else {
         this.leverProgress = Math.max(0, this.leverProgress - dt * 1.6);
@@ -358,12 +364,15 @@ export class Game {
 
   private grindIntensity(): number {
     if (!this.locked || this.spin < 0.8) return 0;
+    // sample the untouched rail just AHEAD of the leading stone — the stones
+    // flatten everything under them, so sampling there would always read 0
     const rough = Math.max(
-      Math.abs(this.rail.heightAt(this.carPos + UNIT_OFFSETS[0])),
-      Math.abs(this.rail.heightAt(this.carPos + UNIT_OFFSETS[1]))
+      Math.abs(this.rail.heightAt(this.carPos - 1.4)),
+      Math.abs(this.rail.heightAt(this.carPos - 1.05)),
+      Math.abs(this.rail.heightAt(this.carPos - 0.7))
     );
     const speedF = Math.min(1, this.carSpeed / 2.6);
-    return speedF > 0.02 ? speedF * (0.4 + 0.6 * Math.min(1, rough / 1.1)) : 0;
+    return speedF > 0.02 ? speedF * (0.35 + 0.65 * Math.min(1, rough / 1.1)) : 0;
   }
 
   private updateGrind(dt: number): void {
@@ -454,7 +463,9 @@ export class Game {
       if (inRect(L.toggleLight, x, y, 10)) this.toggleSetting('softLight');
       else if (inRect(L.toggleMotion, x, y, 10)) this.toggleSetting('softMotion');
       else if (inRect(L.toggleSound, x, y, 10)) this.toggleSetting('softSound');
-      else if (inRect(L.closeSettings, x, y, 14)) this.settingsOpen = false;
+      else if (inRect(L.closeSettings, x, y, 14) || inRect(L.gear, x, y, 6)) {
+        this.settingsOpen = false; // the gear closes it too
+      }
       return;
     }
     if (inRect(L.gear, x, y, 6)) {
@@ -543,8 +554,9 @@ export class Game {
         const proj = this.projection();
         const i = this.dragUnitIndex;
         if (i >= 0) {
-          const c = rectCenter(this.socketRect(i, proj));
-          if (Math.hypot(x - c.x, y - c.y) < 85) this.dockUnit(i);
+          // dock only when the finger actually reaches the socket (still a
+          // generous ~112px square) — proximity alone snapped from too far
+          if (inRect(this.socketRect(i, proj), x, y, 12)) this.dockUnit(i);
         }
         break;
       }

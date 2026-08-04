@@ -76,7 +76,6 @@ export function attachTestApi(game: Game, errors: string[]): void {
           spots.lever = L.lever;
           break;
         case 'grind':
-          spots.lever = L.lever;
           spots.mist = L.mist;
           break;
         case 'testRun':

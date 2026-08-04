@@ -172,6 +172,8 @@ describe('full play loop (headless, real gestures)', () => {
     const zone = g.rail.zone;
     const aheadBefore = g.rail.rmsInSpan(zone.end - 2, zone.end);
     let sawSparks = false;
+    let minIntensity = Infinity;
+    let maxIntensity = 0;
     let x = 200;
     g.pointerDown(x, 200);
     runUntil(
@@ -187,10 +189,16 @@ describe('full play loop (headless, real gestures)', () => {
         }
         g.pointerMove(x, 200);
         if (g.sparkCount() > 0) sawSparks = true;
+        if (g.carSpeed > 1) {
+          minIntensity = Math.min(minIntensity, g.audio.grindIntensity);
+          maxIntensity = Math.max(maxIntensity, g.audio.grindIntensity);
+        }
       }
     );
     g.pointerUp(x, 200);
     expect(sawSparks).toBe(true);
+    // sparks answer the rail: intensity bursts on bumps vs smooth stretches
+    expect(maxIntensity - minIntensity).toBeGreaterThan(0.15);
     // ground start of zone is smoother, un-reached end of zone unchanged
     expect(g.rail.rmsInSpan(zone.start, zone.start + 2)).toBeLessThan(0.3);
     expect(g.rail.rmsInSpan(zone.end - 2, zone.end)).toBeCloseTo(aheadBefore, 4);
@@ -209,7 +217,7 @@ describe('full play loop (headless, real gestures)', () => {
     expect(g.carPos).toBeGreaterThanOrEqual(start - 1e-9);
   });
 
-  it('lever released at 85% completes via intent inference; below springs back', () => {
+  it('lever released past the stage-2 clunk completes via intent inference; below springs back', () => {
     playToPhase(g, 'lower');
     const lever = g.layout().lever;
     const cx = lever.x + lever.w / 2;
@@ -222,13 +230,13 @@ describe('full play loop (headless, real gestures)', () => {
     run(g, 2);
     expect(g.locked).toBe(false);
     expect(g.leverProgress).toBeLessThan(0.1);
-    // release at ~85% → auto-completes with the GAKON
+    // release at ~70% (just past the heavy clunk) → auto-completes with the GAKON
     g.pointerDown(cx, top);
     for (let k = 0; k <= 20; k++) {
-      g.pointerMove(cx, top + (travel * 0.86 * k) / 20);
+      g.pointerMove(cx, top + (travel * 0.7 * k) / 20);
       g.update(DT);
     }
-    g.pointerUp(cx, top + travel * 0.86);
+    g.pointerUp(cx, top + travel * 0.7);
     run(g, 2);
     expect(g.locked).toBe(true);
   });

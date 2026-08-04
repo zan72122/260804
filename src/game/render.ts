@@ -800,8 +800,10 @@ function drawCarPersp(
   if (rearS < proj.camS + 2.2) return; // behind or inside the camera
   const p = proj.toScreen(rearS, 0, 0);
   const k = p.scale;
-  const bw = 3.0 * k;
-  const bh = 2.7 * k;
+  // slightly narrower than the real 3 m so the spark shower spills out past
+  // the body sides instead of hiding behind it
+  const bw = 2.6 * k;
+  const bh = 2.6 * k;
   const x = p.x - bw / 2;
   const y = p.y - bh - 0.3 * k;
 
@@ -925,19 +927,21 @@ function drawParticlesPersp(
   proj: Projection,
   glow: number
 ): void {
-  const anchorS = game.carPos + UNIT_OFFSETS[1];
+  // anchored at the car's visible rear underside so the shower sprays out
+  // from under the body toward the viewer, spreading past the body sides
+  const anchorS = game.carPos - CAR_LENGTH + 0.4;
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   game.sparkSystem.sparks.forEach((p) => {
     const s = anchorS - p.dx;
     if (s < proj.camS + 1.8) return;
-    const sp = proj.toScreen(s, p.dy, p.lat);
+    const sp = proj.toScreen(s, p.dy, p.lat * 2.2);
     const lifeK = p.life / p.maxLife;
     const heat = p.heat;
     const r = 255;
     const g = Math.round(140 + heat * 110);
     const b = Math.round(40 + heat * 180);
-    const sz = Math.max(1, p.size * sp.scale * 0.02);
+    const sz = Math.max(1.4, p.size * sp.scale * 0.032);
     ctx.fillStyle = `rgba(${r},${g},${b},${lifeK * 0.9 * glow})`;
     ctx.beginPath();
     ctx.arc(sp.x, sp.y, sz, 0, Math.PI * 2);
@@ -947,7 +951,7 @@ function drawParticlesPersp(
   game.sparkSystem.mist.forEach((p) => {
     const s = anchorS - p.dx;
     if (s < proj.camS + 1.8) return;
-    const sp = proj.toScreen(s, p.dy, p.lat);
+    const sp = proj.toScreen(s, p.dy, p.lat * 2.2);
     const lifeK = p.life / p.maxLife;
     ctx.fillStyle = `rgba(190,220,240,${lifeK * 0.14})`;
     ctx.beginPath();
@@ -967,9 +971,19 @@ function drawUI(ctx: CanvasRenderingContext2D, game: Game, L: Layout, glow: numb
   if ((phase === 'scanBefore' || phase === 'scanAfter') && !game.scanActive) {
     const done = phase === 'scanBefore' ? game.revealedBefore : game.afterScanDone;
     if (!done) {
+      // the first required action each round — keep it the brightest button
+      const c = rectCenter(L.scan);
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const halo = ctx.createRadialGradient(c.x, c.y, 4, c.x, c.y, L.scan.w * 0.95);
+      halo.addColorStop(0, `rgba(159,216,255,${0.28 + 0.1 * Math.sin(t * 2.2)})`);
+      halo.addColorStop(1, 'rgba(159,216,255,0)');
+      ctx.fillStyle = halo;
+      ctx.fillRect(c.x - L.scan.w, c.y - L.scan.w, L.scan.w * 2, L.scan.w * 2);
+      ctx.restore();
       pulseRing(ctx, L.scan, t, LASER);
-      drawRoundButton(ctx, L.scan, 'rgba(20,40,66,0.9)', LASER);
-      drawLaserIcon(ctx, rectCenter(L.scan), L.scan.w * 0.3);
+      drawRoundButton(ctx, L.scan, 'rgba(38,78,124,0.96)', '#c8ecff');
+      drawLaserIcon(ctx, c, L.scan.w * 0.3);
     }
   }
   if (phase === 'prepUnits') {
@@ -996,7 +1010,9 @@ function drawUI(ctx: CanvasRenderingContext2D, game: Game, L: Layout, glow: numb
       drawGrindUnit(ctx, cx, cy + 6, tray.w * 0.62, 0, t, glow, false);
     }
   }
-  if (phase === 'lower' || phase === 'grind') {
+  // the lever lives only in the lowering step — during grind it would occlude
+  // the spark show and invite the wrong (downward) gesture
+  if (phase === 'lower') {
     drawLever(ctx, game, L.lever, t);
   }
   if (phase === 'grind' && !game.grindDone) {
@@ -1160,7 +1176,7 @@ function drawReplayCard(ctx: CanvasRenderingContext2D, r: Rect, t: number, same:
 }
 
 function drawSettings(ctx: CanvasRenderingContext2D, game: Game, L: Layout, t: number): void {
-  ctx.fillStyle = 'rgba(4,7,16,0.78)';
+  ctx.fillStyle = 'rgba(4,7,16,0.9)';
   ctx.fillRect(0, 0, game.viewW, game.viewH);
   const s = game.settings;
   drawToggle(ctx, L.toggleLight, !s.softLight, t, (c, cx, cy, r) => {

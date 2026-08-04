@@ -32,4 +32,6 @@
 
 ## 独立検証(game-feel-verifier)
 
-- 実施済み。指摘と対応は docs/PLAYTEST_LOG.md の該当節へ記録。
+- 2026-08-04 実施(新規コンテキスト・実マウスジェスチャ・4寸法×2周)。
+- P0: 0件 / P1: 3件 / P2: 6件 → 全件修正し、unit+E2E 全通過で再検証済み。
+- 詳細と対応は docs/PLAYTEST_LOG.md、証拠は artifacts/playtest/verifier/。
