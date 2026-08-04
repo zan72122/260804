@@ -33,6 +33,11 @@ window.addEventListener('orientationchange', () => setTimeout(resize, 60));
 resize();
 
 newGame('first');
+// dev/QA shortcut: ?scene=menu|free — only scenes that need no prior state
+{
+  const q = new URLSearchParams(location.search).get('scene');
+  if (q === 'menu' || q === 'free') G.scene = q;
+}
 
 // ---- scene switching with fade (model state survives; only visuals fade)
 let fade = 0, fadeDir = 0, pending = null;

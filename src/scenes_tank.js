@@ -32,11 +32,15 @@ export function tankLay(L, free = false) {
     const availH = zy - csH - topPad - 10;
     tank = fitRect(W / 2, topPad + availH / 2, W * 0.92, availH, ASP);
     cs = { x: tank.x, y: tank.y + tank.h + 6, w: tank.w, h: csH };
-    const br = clamp(zh * 0.28, 24, 42);
+    const br = clamp(zh * 0.28, 24, 42) * (nb > 3 ? 0.8 : 1);
+    const leverX = W * 0.87 - 13;
+    const bx0 = W * 0.05 + br;
+    const bx1 = leverX - br - 30; // never under the lever
+    const spacing = nb > 1 ? Math.min(br * 2.35, (bx1 - bx0) / (nb - 1)) : 0;
     for (let i = 0; i < nb; i++) {
-      bowls.push({ x: W * 0.075 + br + i * (br * (nb > 3 ? 2.05 : 2.35)), y: zy + zh * 0.45, r: br, ...( free ? FREE_BOWLS[i] : PULP_BOWLS[i]) });
+      bowls.push({ x: bx0 + i * spacing, y: zy + zh * 0.45, r: br, ...( free ? FREE_BOWLS[i] : PULP_BOWLS[i]) });
     }
-    lever = { track: { x: W * 0.87 - 13, y: zy + 14, w: 26, h: zh - 36 }, r: clamp(zh * 0.21, 28, 38) };
+    lever = { track: { x: leverX, y: zy + 14, w: 26, h: zh - 36 }, r: clamp(zh * 0.21, 28, 38) };
   } else {
     const zw = clamp(W * 0.16, 120, 190);
     const zx = W - zw - 8;
