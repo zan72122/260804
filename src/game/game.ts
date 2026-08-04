@@ -215,7 +215,7 @@ export class Game {
       case 'grind':
         return this.carPos - 3;
       case 'testRun':
-        return this.train.launched ? this.train.pos + 2 : 8;
+        return this.train.pos + 2; // keep the waiting train in view in both projections
       case 'replay':
         return this.camS;
     }
@@ -402,6 +402,8 @@ export class Game {
   }
 
   private updateTrain(dt: number): void {
+    // the grinder clears the possession before the test train runs
+    if (this.carPos < 85) this.carPos += 6 * dt;
     const t = this.train;
     if (!t.launched) {
       t.bob = Math.sin(this.phaseTime * 3) * 0.5;

@@ -203,6 +203,22 @@ function waveColor(mag: number): string {
   return `rgb(${r},${g},${b})`;
 }
 
+/**
+ * Local corrugation envelope: max |h| in a ±window around sample i.
+ * Colouring by envelope (not instantaneous |h|) keeps a still-broken section
+ * amber even at the sine's zero crossings.
+ */
+function envelopeAt(heights: Float32Array, i: number): number {
+  let m = 0;
+  const i0 = Math.max(0, i - 5);
+  const i1 = Math.min(SAMPLES - 1, i + 5);
+  for (let k = i0; k <= i1; k++) {
+    const a = Math.abs(heights[k]);
+    if (a > m) m = a;
+  }
+  return m;
+}
+
 function drawWaveOverlaySide(
   ctx: CanvasRenderingContext2D,
   game: Game,
@@ -236,7 +252,7 @@ function drawWaveOverlaySide(
     }
     const y = baseY - rail.heights[i] * amp;
     if (prev) {
-      const mag = Math.abs(rail.heights[i]);
+      const mag = envelopeAt(rail.heights, i);
       ctx.strokeStyle = waveColor(mag);
       ctx.shadowColor = waveColor(mag);
       ctx.globalAlpha = 0.85 * glow;
@@ -576,10 +592,11 @@ function drawParticlesSide(
     const g = Math.round(140 + heat * 110);
     const b = Math.round(40 + heat * 180);
     ctx.strokeStyle = `rgba(${r},${g},${b},${lifeK * 0.9 * glow})`;
-    ctx.lineWidth = p.size * 2;
+    ctx.lineWidth = p.size * 2.6;
+    ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.moveTo(x, y);
-    ctx.lineTo(x + p.vx * px * 0.045, y + p.vy * px * 0.045);
+    ctx.lineTo(x + p.vx * px * 0.06, y + p.vy * px * 0.06);
     ctx.stroke();
   });
   ctx.restore();
@@ -719,7 +736,7 @@ function drawHeightsPersp(
     const h = heights[i];
     const p = proj.toScreen(s, 0.4 + h * 0.55, lat);
     if (prev) {
-      const c = colorByMag ? waveColor(Math.abs(h)) : fixedColor;
+      const c = colorByMag ? waveColor(envelopeAt(heights, i)) : fixedColor;
       ctx.strokeStyle = c;
       ctx.shadowColor = c;
       ctx.lineWidth = Math.max(1.4, p.scale * 0.035);

@@ -98,7 +98,10 @@ test('full play loop with signature actions', async ({ page }, testInfo) => {
   await playTo(page, 'testRun', ctx);
 
   // ---- test run (スーッ): quiet whoosh, no bouncing plush (A8 post-state)
+  await ctx.shot('test-run-ready');
   await driveSwipe(page, false);
+  await page.waitForTimeout(900);
+  await ctx.shot('test-run-gliding');
   let maxWhoosh = 0;
   let maxBob = 0;
   for (let i = 0; i < 40 && (await phase(page)) === 'testRun'; i++) {
