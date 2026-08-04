@@ -210,7 +210,7 @@ export class FiberSim {
 
       const pre = (!this.draining && this.preview > 0.02) ? this.preview : 0;
       if ((drain > 0 || pre > 0) && this.paper) {
-        const closingMode = drain > 0 && this.level <= 0.12;
+        const closingMode = drain > 0 && (this.level <= 0.12 || this.drainT > 5);
         if (f.tg < 0 || f.tg >= this.sinks.length ||
           this.sinks[f.tg].s.got >= this.sinks[f.tg].s.cap ||
           Math.random() < dt * (closingMode ? 1.2 : 0.4)) {
@@ -232,7 +232,7 @@ export class FiberSim {
           const base = (0.14 + 0.18 * Math.min(d * 3, 1)) * (0.7 + perm * 0.5);
           // once only the last film remains, all suction concentrates on the
           // remaining deficits — the stragglers hurry in
-          const closing = drain > 0 && this.level <= 0.12 ? 2.0 : 1;
+          const closing = drain > 0 && (this.level <= 0.12 || this.drainT > 5) ? 2.0 : 1;
           const pull = drain * act * base * closing + pre * 0.10 * base;
           // handed swirl that fades on approach → readable inward spiral
           const sw = pull * 0.55 * f.hand * clamp(d * 5, 0, 1);
@@ -242,7 +242,7 @@ export class FiberSim {
             f.vx += (Math.random() - 0.5) * pre * 0.16 * dt;
             f.vy += (Math.random() - 0.5) * pre * 0.16 * dt;
           }
-          if (drain > 0 && d < (this.level <= 0.12 ? 0.10 : 0.06) && k.s.got < k.s.cap) {
+          if (drain > 0 && d < ((this.level <= 0.12 || this.drainT > 5) ? 0.10 : 0.06) && k.s.got < k.s.cap) {
             k.s.got += grainW;
             k.s.d.got += grainW;
             const [u, v] = tankToUv(f.x, f.y);

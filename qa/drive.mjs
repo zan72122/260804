@@ -169,7 +169,7 @@ for (const cfg of CONFIGS) {
     }
     await waitFor(async () => (await state()).flags.cast, 'sheet cast (すうっ complete)', 40000);
     s = await state();
-    check(s.fill >= 0.99, `deficits fully filled (${s.fill?.toFixed(2)})`);
+    check(s.damages.every(d => d.done), `all deficits sealed (${s.damages.map(d => d.fill.toFixed(2)).join('/')})`);
     await shot('09-cast');
     await waitScene('couch', 15000);
     await shot('10-couch');
