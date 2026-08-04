@@ -625,16 +625,19 @@ export const sceneReturn = {
         ctx.drawImage(G.paper.pageImg(0), 4, 0, la.slot.w, la.slot.h);
         ctx.restore();
       } else {
-        // page has turned to the left side, showing its back
+        // page has turned to the left side, showing its back: blank paper
+        // with only a faint mirrored bleed-through of the media (consistent
+        // with the dry-scene back face)
         ctx.save();
-        ctx.globalAlpha = 0.95;
         ctx.translate(la.spread.x + la.spread.w / 2, la.slot.y);
         ctx.scale(-1, 1);
-        ctx.drawImage(G.paper.pageImg(0), 8, 0, la.slot.w * 0.94, la.slot.h);
+        const bw = la.slot.w * 0.94;
+        ctx.fillStyle = '#e9dcbc';
+        ctx.fillRect(8, 0, bw, la.slot.h);
+        ctx.globalCompositeOperation = 'multiply';
+        ctx.globalAlpha = 0.25;
+        ctx.drawImage(G.paper.pageImg(0), 8, 0, bw, la.slot.h);
         ctx.restore();
-        ctx.fillStyle = 'rgba(233,223,194,0.75)';
-        rr(ctx, la.spread.x + 10, la.slot.y, la.spread.w / 2 - 18, la.slot.h, 6);
-        ctx.fill();
       }
       if (ph === 'turn' && hint.idle > 3) {
         hintGesture(ctx, 'swipe', la.slot.x + la.slot.w * 0.7, la.slot.y + la.slot.h / 2,

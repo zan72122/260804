@@ -261,7 +261,9 @@ export class Paper {
     const gx = clamp((u * PW / CELL) | 0, 0, GW - 1);
     const gy = clamp((v * PH / CELL) | 0, 0, GH - 1);
     const i = gy * GW + gx;
-    return clamp(1 - this.cellA[i] - this.cellDep[i] * 0.06, 0, 1);
+    // deposits genuinely close the water path: a filled sink cell (≈4 grains)
+    // drops its permeability to ~0, so inflow weakens as the deficit fills
+    return clamp(1 - this.cellA[i] - this.cellDep[i] * 0.25, 0, 1);
   }
 
   addDeposit(u, v, col, veil = false) {
@@ -288,8 +290,9 @@ export class Paper {
     this.dirty = true;
   }
 
-  // when one deficit reaches full, its thin membrane closes: a soft pulp
-  // fill clipped to the damage shape (still per-damage & gradual, not a swap)
+  // when one deficit reaches full (97% deposited grain by grain), its thin
+  // membrane closes: a translucent damage-local pulp wash — a disclosed
+  // finishing touch, never a swap to a finished image (docs/LEAFCASTING.md)
   sealDamage(d, col = '#ece2c8') {
     const c = this.deposit.getContext('2d');
     c.save();

@@ -111,9 +111,24 @@ export class FiberSim {
 
   update(dt) {
     this.t += dt;
+    if (!this.draining && this.poured > 0) this.slurryT = (this.slurryT || 0) + dt;
     const drain = this.draining ? this.strength : 0;
     const dec = Math.pow(0.35, dt); // stirring current keeps flowing briefly after release
     for (let i = 0; i < this.gv.length; i++) this.gv[i] *= dec;
+    // a real vat has walls: kill wall-normal current in boundary cells so
+    // stirring circulates along the walls instead of pinning fibers in corners
+    for (let gy = 0; gy < GY; gy++) {
+      let i = (gy * GX) * 2;
+      if (this.gv[i] < 0) this.gv[i] = 0;
+      i = (gy * GX + GX - 1) * 2;
+      if (this.gv[i] > 0) this.gv[i] = 0;
+    }
+    for (let gx = 0; gx < GX; gx++) {
+      let i = gx * 2 + 1;
+      if (this.gv[i] < 0) this.gv[i] = 0;
+      i = ((GY - 1) * GX + gx) * 2 + 1;
+      if (this.gv[i] > 0) this.gv[i] = 0;
+    }
     const full = this.allFull();
     const grainW = CAP_TOTAL / Math.max(1, this.need) * 1.45; // grains per settled fiber
 
@@ -127,11 +142,19 @@ export class FiberSim {
       f.vy += Math.sin(f.ph * 1.7 + this.t * (0.6 + f.ph * 0.07)) * 0.05 * dt;
       f.vx += (Math.random() - 0.5) * 0.10 * dt;
       f.vy += (Math.random() - 0.5) * 0.10 * dt;
-      // soft repulsion from tank walls keeps fibers over the sheet
-      if (f.x < 0.12) f.vx += (0.12 - f.x) * 1.6 * dt * 60 * 0.02;
-      if (f.x > 0.88) f.vx -= (f.x - 0.88) * 1.6 * dt * 60 * 0.02;
-      if (f.y < 0.11) f.vy += (0.11 - f.y) * 1.6 * dt * 60 * 0.02;
-      if (f.y > 0.89) f.vy -= (f.y - 0.89) * 1.6 * dt * 60 * 0.02;
+      // repulsion from tank walls keeps fibers over the sheet; also damp
+      // wall-ward velocity so fibers can't stay pinned against the glass
+      const WM = 0.12;
+      if (f.x < WM) { f.vx += (WM - f.x) * 5 * dt; if (f.vx < 0) f.vx *= Math.pow(0.03, dt); }
+      if (f.x > 1 - WM) { f.vx -= (f.x - (1 - WM)) * 5 * dt; if (f.vx > 0) f.vx *= Math.pow(0.03, dt); }
+      if (f.y < WM) { f.vy += (WM - f.y) * 5 * dt; if (f.vy < 0) f.vy *= Math.pow(0.03, dt); }
+      if (f.y > 1 - WM) { f.vy -= (f.y - (1 - WM)) * 5 * dt; if (f.vy > 0) f.vy *= Math.pow(0.03, dt); }
+      // gentle ambient circulation while the slurry rests — the water is
+      // alive, and clumps slowly loosen even without stirring
+      if (!drain && this.level > 0.05) {
+        f.vx += -(f.y - 0.5) * 0.10 * dt;
+        f.vy += (f.x - 0.5) * 0.10 * dt;
+      }
 
       if (drain > 0 && this.paper) {
         if (f.tg < 0 || f.tg >= this.sinks.length ||
@@ -145,7 +168,7 @@ export class FiberSim {
           dx /= d; dy /= d;
           const [uu, vv] = tankToUv(f.x, f.y);
           const perm = this.paper.permAt(clamp(uu, 0, 1), clamp(vv, 0, 1));
-          const pull = drain * (0.10 + 0.16 * Math.min(d * 3, 1)) * (0.55 + perm * 0.7);
+          const pull = drain * (0.10 + 0.16 * Math.min(d * 3, 1)) * (0.40 + perm * 0.9);
           const sw = 0.05 * Math.sin(this.t * 2 + f.ph) * drain * Math.min(1, d * 8);
           f.vx += (dx * pull - dy * sw) * dt * 2.4;
           f.vy += (dy * pull + dx * sw) * dt * 2.4;

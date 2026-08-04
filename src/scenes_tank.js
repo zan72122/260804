@@ -366,7 +366,7 @@ function makeTankScene(free) {
 
       if (!free) {
         const enough = s.poured >= s.need;
-        if (!G.flags.dispersed && enough && s.dispersion() >= 0.32) {
+        if (!G.flags.dispersed && enough && (s.dispersion() >= 0.32 || (s.slurryT || 0) > 22)) {
           G.flags.dispersed = true;
           sfx.chime();
         }

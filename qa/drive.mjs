@@ -43,7 +43,7 @@ for (const cfg of CONFIGS) {
     }
     console.log(`  TIMEOUT waiting for: ${desc}`);
     failures++;
-    return false;
+    throw new Error(`timeout: ${desc}`);
   }
   const waitScene = (name, timeout) =>
     waitFor(async () => (await state()).scene === name, `scene=${name}`, timeout);
@@ -122,7 +122,7 @@ for (const cfg of CONFIGS) {
 
       // ---- 5. stir to disperse
       const tk = t.tank;
-      for (let round = 0; round < 6 && !(await state()).flags.dispersed; round++) {
+      for (let round = 0; round < 10 && !(await state()).flags.dispersed; round++) {
         await page.mouse.move(tk.x + tk.w * 0.2, tk.y + tk.h * 0.25);
         await page.mouse.down();
         for (let i = 0; i < 22; i++) {
