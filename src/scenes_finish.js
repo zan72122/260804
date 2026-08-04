@@ -317,7 +317,7 @@ export const sceneDry = {
   move(p) {
     if (this.flipGrab) {
       const la = this.lay(G.L);
-      G.flags.flip = clamp((this.flipGrab.x - p.x) / (la.page.w * 0.85), 0, 1);
+      G.flags.flip = clamp((this.flipGrab.x - p.x) / (la.page.w * 0.6), 0, 1);
       if (G.flags.flip >= 1 && !G.flags.flipped) {
         G.flags.flipped = true;
         sfx.flip();
@@ -325,15 +325,18 @@ export const sceneDry = {
       return;
     }
     if (this.strokeGrab && !G.flags.dried) {
+      // thresholds relative to the sheet, so a stroke across the paper
+      // always raises a gust regardless of screen shape
+      const pw = this.lay(G.L).page.w;
       this.strokeGrab.travel += Math.abs(p.x - this.strokeGrab.x);
       this.strokeGrab.x = p.x;
-      if (this.strokeGrab.travel > G.L.W * 0.2 && !this.strokeGrab.gusted) {
+      if (this.strokeGrab.travel > pw * 0.55 && !this.strokeGrab.gusted) {
         this.strokeGrab.gusted = true;
         G.flags.wet = Math.max(0, G.flags.wet - 0.16);
         this.gustT = 1;
         sfx.pour();
       }
-      if (this.strokeGrab.gusted && this.strokeGrab.travel > G.L.W * 0.45) {
+      if (this.strokeGrab.gusted && this.strokeGrab.travel > pw * 1.3) {
         this.strokeGrab.gusted = false;
         this.strokeGrab.travel = 0;
       }

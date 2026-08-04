@@ -215,7 +215,7 @@ for (const cfg of CONFIGS) {
       await shot('14-dried');
       t = await targets();
       for (let i = 0; i < 4 && !(await state()).flags.flipped; i++) {
-        await drag(t.corner.x - 8, t.corner.y - 8, t.page.x + 10, t.corner.y - 40, 14, 18);
+        await drag(t.corner.x - 8, t.corner.y - 8, Math.max(10, t.page.x - 60), t.corner.y - 40, 14, 18);
       }
       check((await state()).flags.flipped, 'page flipped (ひらり)');
       await shot('15-flip');
