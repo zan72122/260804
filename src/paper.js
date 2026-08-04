@@ -293,7 +293,7 @@ export class Paper {
   // when one deficit reaches full (97% deposited grain by grain), its thin
   // membrane closes: a translucent damage-local pulp wash — a disclosed
   // finishing touch, never a swap to a finished image (docs/LEAFCASTING.md)
-  sealDamage(d, col = '#ece2c8') {
+  sealDamage(d, col = '#f2ead6') {
     const c = this.deposit.getContext('2d');
     c.save();
     c.clip(d.path);

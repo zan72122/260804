@@ -477,6 +477,21 @@ function makeTankScene(free) {
           ctx.stroke();
         }
       }
+      // receding tide: as the level drops, wet marks pull away from the walls
+      if (lvl < 0.98 && lvl > 0.02) {
+        const inset = (1 - lvl) * Math.min(la.inner.w, la.inner.h) * 0.045;
+        ctx.strokeStyle = `rgba(120,170,182,${0.35 + 0.25 * lvl})`;
+        ctx.lineWidth = 2.5;
+        rr(ctx, la.inner.x + inset, la.inner.y + inset, la.inner.w - inset * 2, la.inner.h - inset * 2, 10);
+        ctx.stroke();
+        // dark damp band left behind on the walls
+        ctx.strokeStyle = 'rgba(90,110,118,0.18)';
+        ctx.lineWidth = inset > 2 ? inset : 0;
+        if (inset > 2) {
+          rr(ctx, la.inner.x + inset / 2, la.inner.y + inset / 2, la.inner.w - inset, la.inner.h - inset, 10);
+          ctx.stroke();
+        }
+      }
       // last thin film clinging near deficits
       if (s.draining && s.level > 0 && s.level < 0.14 && !free && G.paper) {
         for (const d of G.paper.damages) {

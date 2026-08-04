@@ -32,8 +32,11 @@ function paintRoom(g, L, variant) {
   g.fillRect(0, 0, W, H);
 
   if (variant === 'window') {
-    // tall warm window, light rays
-    const wx = W * 0.62, wy = H * 0.06, ww = W * 0.30, wh = H * 0.42;
+    // tall warm window, light rays (higher & smaller in portrait so the
+    // drying sheet doesn't cut across it)
+    const portrait = H >= W;
+    const wx = W * (portrait ? 0.66 : 0.62), wy = H * (portrait ? 0.025 : 0.06);
+    const ww = W * (portrait ? 0.26 : 0.30), wh = H * (portrait ? 0.20 : 0.42);
     g.fillStyle = '#8a6f50';
     rr(g, wx - 8, wy - 8, ww + 16, wh + 16, 14); g.fill();
     const sky = g.createLinearGradient(0, wy, 0, wy + wh);

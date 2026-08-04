@@ -166,7 +166,7 @@ export class FiberSim {
       f.vy += (Math.random() - 0.5) * 0.10 * dt;
       // repulsion from tank walls keeps fibers over the sheet; also damp
       // wall-ward velocity so fibers can't stay pinned against the glass
-      const WM = 0.12;
+      const WM = 0.14;
       if (f.x < WM) { f.vx += (WM - f.x) * 5 * dt; if (f.vx < 0) f.vx *= Math.pow(0.03, dt); }
       if (f.x > 1 - WM) { f.vx -= (f.x - (1 - WM)) * 5 * dt; if (f.vx > 0) f.vx *= Math.pow(0.03, dt); }
       if (f.y < WM) { f.vy += (WM - f.y) * 5 * dt; if (f.vy < 0) f.vy *= Math.pow(0.03, dt); }

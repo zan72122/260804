@@ -298,7 +298,7 @@ export const sceneDry = {
   enter() { this.strokeGrab = null; this.gustT = 0; this.flipGrab = null; this.showT = 0; this.driedChime = false; },
   lay(L) {
     const { W, H, portrait } = L;
-    const page = fitRect(W * (portrait ? 0.5 : 0.42), portrait ? H * 0.5 : H * 0.52, W * (portrait ? 0.74 : 0.4), H * 0.5, 440 / 580);
+    const page = fitRect(W * (portrait ? 0.5 : 0.42), portrait ? H * 0.56 : H * 0.52, W * (portrait ? 0.74 : 0.4), H * 0.5, 440 / 580);
     return { page, corner: { x: page.x + page.w - 6, y: page.y + page.h - 6 } };
   },
   down(p) {
