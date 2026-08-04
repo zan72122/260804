@@ -1,0 +1,6447 @@
+[
+ {
+  "summary": {
+   "run": 0,
+   "size": "iphone-portrait",
+   "latchT": 0.3,
+   "castT": null,
+   "drainDur": null,
+   "levelStages": {
+    "l75": 1.23,
+    "l50": 1.75,
+    "l25": 2.63,
+    "l05": 3.53
+   },
+   "fillAtHalfLevel": 0.216,
+   "meanAngleDeg": 68.6,
+   "particNearT": 0.77,
+   "particFarT": 1.12,
+   "particN": 165
+  },
+  "timeline": [
+   {
+    "t": 0.3,
+    "level": 0.9936978427693923,
+    "fill": 0,
+    "active": 165,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0,
+     0,
+     0
+    ]
+   },
+   {
+    "t": 0.61,
+    "level": 0.9078246494901367,
+    "fill": 0,
+    "active": 165,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0,
+     0,
+     0
+    ]
+   },
+   {
+    "t": 0.93,
+    "level": 0.7598871855399296,
+    "fill": 0,
+    "active": 165,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0,
+     0,
+     0
+    ]
+   },
+   {
+    "t": 1.23,
+    "level": 0.6234164918989269,
+    "fill": 0.019,
+    "active": 163,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.02,
+     0.03,
+     0
+    ]
+   },
+   {
+    "t": 1.43,
+    "level": 0.5420376292724264,
+    "fill": 0.078,
+    "active": 157,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.14,
+     0.06,
+     0
+    ]
+   },
+   {
+    "t": 1.75,
+    "level": 0.4271303540430538,
+    "fill": 0.216,
+    "active": 142,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.43,
+     0.16,
+     0
+    ]
+   },
+   {
+    "t": 1.95,
+    "level": 0.36241608372664047,
+    "fill": 0.255,
+    "active": 138,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.48,
+     0.23,
+     0
+    ]
+   },
+   {
+    "t": 2.13,
+    "level": 0.30797995974709413,
+    "fill": 0.274,
+    "active": 136,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.5,
+     0.26,
+     0
+    ]
+   },
+   {
+    "t": 2.33,
+    "level": 0.2534313776603703,
+    "fill": 0.277,
+    "active": 135,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.52,
+     0.26,
+     0
+    ]
+   },
+   {
+    "t": 2.63,
+    "level": 0.18018340460192042,
+    "fill": 0.32,
+    "active": 130,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.59,
+     0.29,
+     0.03
+    ]
+   },
+   {
+    "t": 2.83,
+    "level": 0.1365048914106086,
+    "fill": 0.371,
+    "active": 124,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.67,
+     0.32,
+     0.1
+    ]
+   },
+   {
+    "t": 3.02,
+    "level": 0.0997442830286881,
+    "fill": 0.41,
+    "active": 120,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.74,
+     0.32,
+     0.13
+    ]
+   },
+   {
+    "t": 3.21,
+    "level": 0.06292540853780293,
+    "fill": 0.439,
+    "active": 117,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.74,
+     0.32,
+     0.23
+    ]
+   },
+   {
+    "t": 3.53,
+    "level": 0.045,
+    "fill": 0.571,
+    "active": 97,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.97,
+     0.58,
+     0.3
+    ]
+   },
+   {
+    "t": 3.73,
+    "level": 0.045,
+    "fill": 0.655,
+    "active": 85,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     0.77,
+     0.4
+    ]
+   },
+   {
+    "t": 3.91,
+    "level": 0.045,
+    "fill": 0.69,
+    "active": 80,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     0.81,
+     0.47
+    ]
+   },
+   {
+    "t": 4.11,
+    "level": 0.045,
+    "fill": 0.712,
+    "active": 77,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     0.84,
+     0.53
+    ]
+   },
+   {
+    "t": 4.29,
+    "level": 0.045,
+    "fill": 0.739,
+    "active": 74,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     0.87,
+     0.6
+    ]
+   },
+   {
+    "t": 4.49,
+    "level": 0.045,
+    "fill": 0.747,
+    "active": 73,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     0.9,
+     0.6
+    ]
+   },
+   {
+    "t": 4.68,
+    "level": 0.045,
+    "fill": 0.753,
+    "active": 72,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     0.9,
+     0.63
+    ]
+   },
+   {
+    "t": 5.01,
+    "level": 0.045,
+    "fill": 0.775,
+    "active": 69,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     0.94,
+     0.67
+    ]
+   },
+   {
+    "t": 5.2,
+    "level": 0.045,
+    "fill": 0.782,
+    "active": 68,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     0.97,
+     0.67
+    ]
+   },
+   {
+    "t": 5.39,
+    "level": 0.045,
+    "fill": 0.792,
+    "active": 66,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     0.97,
+     0.7
+    ]
+   },
+   {
+    "t": 5.58,
+    "level": 0.045,
+    "fill": 0.792,
+    "active": 66,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     0.97,
+     0.7
+    ]
+   },
+   {
+    "t": 5.77,
+    "level": 0.045,
+    "fill": 0.793,
+    "active": 65,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     0.97,
+     0.73
+    ]
+   },
+   {
+    "t": 5.96,
+    "level": 0.045,
+    "fill": 0.844,
+    "active": 57,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.8
+    ]
+   },
+   {
+    "t": 6.16,
+    "level": 0.045,
+    "fill": 0.844,
+    "active": 57,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.8
+    ]
+   },
+   {
+    "t": 6.34,
+    "level": 0.045,
+    "fill": 0.844,
+    "active": 57,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.8
+    ]
+   },
+   {
+    "t": 6.54,
+    "level": 0.045,
+    "fill": 0.849,
+    "active": 56,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.8
+    ]
+   },
+   {
+    "t": 6.86,
+    "level": 0.045,
+    "fill": 0.849,
+    "active": 56,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.8
+    ]
+   },
+   {
+    "t": 7.06,
+    "level": 0.045,
+    "fill": 0.849,
+    "active": 56,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.8
+    ]
+   },
+   {
+    "t": 7.24,
+    "level": 0.045,
+    "fill": 0.849,
+    "active": 56,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.8
+    ]
+   },
+   {
+    "t": 7.44,
+    "level": 0.045,
+    "fill": 0.849,
+    "active": 56,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.8
+    ]
+   },
+   {
+    "t": 7.63,
+    "level": 0.045,
+    "fill": 0.849,
+    "active": 56,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.8
+    ]
+   },
+   {
+    "t": 7.82,
+    "level": 0.045,
+    "fill": 0.849,
+    "active": 56,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.8
+    ]
+   },
+   {
+    "t": 8.01,
+    "level": 0.045,
+    "fill": 0.849,
+    "active": 56,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.8
+    ]
+   },
+   {
+    "t": 8.21,
+    "level": 0.045,
+    "fill": 0.849,
+    "active": 56,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.8
+    ]
+   },
+   {
+    "t": 8.39,
+    "level": 0.045,
+    "fill": 0.859,
+    "active": 55,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.83
+    ]
+   },
+   {
+    "t": 8.59,
+    "level": 0.045,
+    "fill": 0.859,
+    "active": 55,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.83
+    ]
+   },
+   {
+    "t": 8.78,
+    "level": 0.045,
+    "fill": 0.859,
+    "active": 55,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.83
+    ]
+   },
+   {
+    "t": 8.98,
+    "level": 0.045,
+    "fill": 0.859,
+    "active": 55,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.83
+    ]
+   },
+   {
+    "t": 9.16,
+    "level": 0.045,
+    "fill": 0.863,
+    "active": 54,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.83
+    ]
+   },
+   {
+    "t": 9.49,
+    "level": 0.045,
+    "fill": 0.872,
+    "active": 53,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.86
+    ]
+   },
+   {
+    "t": 9.68,
+    "level": 0.045,
+    "fill": 0.882,
+    "active": 51,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.9
+    ]
+   },
+   {
+    "t": 9.87,
+    "level": 0.045,
+    "fill": 0.885,
+    "active": 50,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.9
+    ]
+   },
+   {
+    "t": 10.06,
+    "level": 0.045,
+    "fill": 0.885,
+    "active": 50,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.9
+    ]
+   },
+   {
+    "t": 10.26,
+    "level": 0.045,
+    "fill": 0.889,
+    "active": 49,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.9
+    ]
+   },
+   {
+    "t": 10.44,
+    "level": 0.045,
+    "fill": 0.891,
+    "active": 48,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.93
+    ]
+   },
+   {
+    "t": 10.64,
+    "level": 0.045,
+    "fill": 0.892,
+    "active": 47,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 10.83,
+    "level": 0.045,
+    "fill": 0.898,
+    "active": 46,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 11.02,
+    "level": 0.045,
+    "fill": 0.904,
+    "active": 44,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 11.21,
+    "level": 0.045,
+    "fill": 0.904,
+    "active": 44,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 11.4,
+    "level": 0.045,
+    "fill": 0.91,
+    "active": 43,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 11.59,
+    "level": 0.045,
+    "fill": 0.91,
+    "active": 43,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 11.79,
+    "level": 0.045,
+    "fill": 0.91,
+    "active": 43,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 11.98,
+    "level": 0.045,
+    "fill": 0.92,
+    "active": 41,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 12.17,
+    "level": 0.045,
+    "fill": 0.92,
+    "active": 41,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 12.49,
+    "level": 0.045,
+    "fill": 0.927,
+    "active": 40,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 12.69,
+    "level": 0.045,
+    "fill": 0.935,
+    "active": 38,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 12.87,
+    "level": 0.045,
+    "fill": 0.935,
+    "active": 38,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 13.07,
+    "level": 0.045,
+    "fill": 0.935,
+    "active": 38,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 13.25,
+    "level": 0.045,
+    "fill": 0.935,
+    "active": 38,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 13.44,
+    "level": 0.045,
+    "fill": 0.937,
+    "active": 37,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 13.63,
+    "level": 0.045,
+    "fill": 0.937,
+    "active": 37,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 13.82,
+    "level": 0.045,
+    "fill": 0.937,
+    "active": 37,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 14,
+    "level": 0.045,
+    "fill": 0.937,
+    "active": 37,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 14.2,
+    "level": 0.045,
+    "fill": 0.937,
+    "active": 37,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 14.38,
+    "level": 0.045,
+    "fill": 0.937,
+    "active": 37,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 14.58,
+    "level": 0.045,
+    "fill": 0.937,
+    "active": 37,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 14.76,
+    "level": 0.045,
+    "fill": 0.937,
+    "active": 37,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 14.96,
+    "level": 0.045,
+    "fill": 0.946,
+    "active": 36,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 15.15,
+    "level": 0.045,
+    "fill": 0.948,
+    "active": 35,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 15.34,
+    "level": 0.045,
+    "fill": 0.948,
+    "active": 35,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 15.53,
+    "level": 0.045,
+    "fill": 0.948,
+    "active": 35,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 15.72,
+    "level": 0.045,
+    "fill": 0.948,
+    "active": 34,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 15.9,
+    "level": 0.045,
+    "fill": 0.948,
+    "active": 34,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 16.09,
+    "level": 0.045,
+    "fill": 0.948,
+    "active": 34,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 16.28,
+    "level": 0.045,
+    "fill": 0.948,
+    "active": 33,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 16.47,
+    "level": 0.045,
+    "fill": 0.948,
+    "active": 33,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 16.66,
+    "level": 0.045,
+    "fill": 0.948,
+    "active": 33,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 16.85,
+    "level": 0.045,
+    "fill": 0.949,
+    "active": 32,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 17.04,
+    "level": 0.045,
+    "fill": 0.949,
+    "active": 32,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 17.23,
+    "level": 0.045,
+    "fill": 0.953,
+    "active": 31,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 17.42,
+    "level": 0.045,
+    "fill": 0.953,
+    "active": 31,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 17.61,
+    "level": 0.045,
+    "fill": 0.953,
+    "active": 31,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 17.8,
+    "level": 0.045,
+    "fill": 0.953,
+    "active": 31,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 17.99,
+    "level": 0.045,
+    "fill": 0.966,
+    "active": 29,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 18.17,
+    "level": 0.045,
+    "fill": 0.966,
+    "active": 29,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 18.37,
+    "level": 0.045,
+    "fill": 0.966,
+    "active": 29,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 18.55,
+    "level": 0.045,
+    "fill": 0.966,
+    "active": 29,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 18.75,
+    "level": 0.045,
+    "fill": 0.968,
+    "active": 28,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 18.94,
+    "level": 0.045,
+    "fill": 0.968,
+    "active": 28,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 19.13,
+    "level": 0.045,
+    "fill": 0.968,
+    "active": 28,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 19.32,
+    "level": 0.045,
+    "fill": 0.968,
+    "active": 28,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 19.51,
+    "level": 0.045,
+    "fill": 0.968,
+    "active": 28,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 19.7,
+    "level": 0.045,
+    "fill": 0.968,
+    "active": 28,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 19.89,
+    "level": 0.045,
+    "fill": 0.968,
+    "active": 28,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 20.08,
+    "level": 0.045,
+    "fill": 0.968,
+    "active": 28,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 20.27,
+    "level": 0.045,
+    "fill": 0.968,
+    "active": 28,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 20.45,
+    "level": 0.045,
+    "fill": 0.979,
+    "active": 26,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 20.65,
+    "level": 0.045,
+    "fill": 0.979,
+    "active": 26,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 20.83,
+    "level": 0.045,
+    "fill": 0.979,
+    "active": 26,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 21.03,
+    "level": 0.045,
+    "fill": 0.979,
+    "active": 26,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 21.21,
+    "level": 0.045,
+    "fill": 0.979,
+    "active": 26,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 21.4,
+    "level": 0.045,
+    "fill": 0.979,
+    "active": 26,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 21.59,
+    "level": 0.045,
+    "fill": 0.979,
+    "active": 26,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 21.79,
+    "level": 0.045,
+    "fill": 0.979,
+    "active": 26,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 21.97,
+    "level": 0.045,
+    "fill": 0.979,
+    "active": 26,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 22.17,
+    "level": 0.045,
+    "fill": 0.98,
+    "active": 25,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 22.36,
+    "level": 0.045,
+    "fill": 0.98,
+    "active": 25,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 22.55,
+    "level": 0.045,
+    "fill": 0.98,
+    "active": 25,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 22.75,
+    "level": 0.045,
+    "fill": 0.98,
+    "active": 25,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 22.94,
+    "level": 0.045,
+    "fill": 0.98,
+    "active": 25,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 23.13,
+    "level": 0.045,
+    "fill": 0.984,
+    "active": 24,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 23.32,
+    "level": 0.045,
+    "fill": 0.986,
+    "active": 23,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 23.5,
+    "level": 0.045,
+    "fill": 0.986,
+    "active": 23,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 23.7,
+    "level": 0.045,
+    "fill": 0.986,
+    "active": 23,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 23.88,
+    "level": 0.045,
+    "fill": 0.986,
+    "active": 23,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 24.08,
+    "level": 0.045,
+    "fill": 0.987,
+    "active": 22,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 24.26,
+    "level": 0.045,
+    "fill": 0.987,
+    "active": 22,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 24.46,
+    "level": 0.045,
+    "fill": 0.987,
+    "active": 22,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 24.65,
+    "level": 0.045,
+    "fill": 0.987,
+    "active": 22,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 24.84,
+    "level": 0.045,
+    "fill": 0.987,
+    "active": 22,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 25.03,
+    "level": 0.045,
+    "fill": 0.987,
+    "active": 22,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 25.22,
+    "level": 0.045,
+    "fill": 0.987,
+    "active": 22,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 25.4,
+    "level": 0.045,
+    "fill": 0.987,
+    "active": 22,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 25.6,
+    "level": 0.045,
+    "fill": 0.987,
+    "active": 22,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 25.79,
+    "level": 0.045,
+    "fill": 0.987,
+    "active": 22,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 25.99,
+    "level": 0.045,
+    "fill": 0.987,
+    "active": 22,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   }
+  ]
+ },
+ {
+  "summary": {
+   "run": 1,
+   "size": "iphone-landscape",
+   "latchT": 0.29,
+   "castT": null,
+   "drainDur": null,
+   "levelStages": {
+    "l75": 1.03,
+    "l50": 1.92,
+    "l25": 2.67,
+    "l05": 3.61
+   },
+   "fillAtHalfLevel": 0.187,
+   "meanAngleDeg": 69.2,
+   "particNearT": 0.76,
+   "particFarT": 1.02,
+   "particN": 164
+  },
+  "timeline": [
+   {
+    "t": 0.29,
+    "level": 0.9963660284157022,
+    "fill": 0.01,
+    "active": 164,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.02,
+     0,
+     0
+    ]
+   },
+   {
+    "t": 0.66,
+    "level": 0.9097320517657135,
+    "fill": 0.01,
+    "active": 164,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.02,
+     0,
+     0
+    ]
+   },
+   {
+    "t": 1.03,
+    "level": 0.7424191889309111,
+    "fill": 0.019,
+    "active": 163,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.02,
+     0.03,
+     0
+    ]
+   },
+   {
+    "t": 1.38,
+    "level": 0.6003195180849586,
+    "fill": 0.058,
+    "active": 159,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.1,
+     0.06,
+     0
+    ]
+   },
+   {
+    "t": 1.58,
+    "level": 0.5276943038920586,
+    "fill": 0.129,
+    "active": 151,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.19,
+     0.16,
+     0.03
+    ]
+   },
+   {
+    "t": 1.92,
+    "level": 0.418967313613264,
+    "fill": 0.187,
+    "active": 145,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.33,
+     0.16,
+     0.03
+    ]
+   },
+   {
+    "t": 2.12,
+    "level": 0.36044878130242197,
+    "fill": 0.197,
+    "active": 144,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.33,
+     0.16,
+     0.07
+    ]
+   },
+   {
+    "t": 2.3,
+    "level": 0.31082308627177774,
+    "fill": 0.206,
+    "active": 143,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.33,
+     0.16,
+     0.1
+    ]
+   },
+   {
+    "t": 2.67,
+    "level": 0.21822473488432084,
+    "fill": 0.277,
+    "active": 135,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.43,
+     0.23,
+     0.17
+    ]
+   },
+   {
+    "t": 2.86,
+    "level": 0.17877221611620592,
+    "fill": 0.316,
+    "active": 131,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.52,
+     0.23,
+     0.17
+    ]
+   },
+   {
+    "t": 3.05,
+    "level": 0.14214170448385385,
+    "fill": 0.36,
+    "active": 124,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.55,
+     0.35,
+     0.23
+    ]
+   },
+   {
+    "t": 3.24,
+    "level": 0.10811341041518457,
+    "fill": 0.441,
+    "active": 115,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.71,
+     0.42,
+     0.23
+    ]
+   },
+   {
+    "t": 3.61,
+    "level": 0.045,
+    "fill": 0.526,
+    "active": 103,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.81,
+     0.61,
+     0.3
+    ]
+   },
+   {
+    "t": 3.8,
+    "level": 0.045,
+    "fill": 0.563,
+    "active": 97,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.86,
+     0.68,
+     0.37
+    ]
+   },
+   {
+    "t": 4,
+    "level": 0.045,
+    "fill": 0.615,
+    "active": 90,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.9,
+     0.77,
+     0.43
+    ]
+   },
+   {
+    "t": 4.18,
+    "level": 0.045,
+    "fill": 0.634,
+    "active": 87,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.95,
+     0.81,
+     0.43
+    ]
+   },
+   {
+    "t": 4.38,
+    "level": 0.045,
+    "fill": 0.653,
+    "active": 84,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     0.81,
+     0.47
+    ]
+   },
+   {
+    "t": 4.56,
+    "level": 0.045,
+    "fill": 0.672,
+    "active": 82,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     0.84,
+     0.47
+    ]
+   },
+   {
+    "t": 4.93,
+    "level": 0.045,
+    "fill": 0.714,
+    "active": 76,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     0.9,
+     0.5
+    ]
+   },
+   {
+    "t": 5.12,
+    "level": 0.045,
+    "fill": 0.718,
+    "active": 75,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     0.9,
+     0.5
+    ]
+   },
+   {
+    "t": 5.32,
+    "level": 0.045,
+    "fill": 0.735,
+    "active": 72,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.5
+    ]
+   },
+   {
+    "t": 5.5,
+    "level": 0.045,
+    "fill": 0.754,
+    "active": 70,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.57
+    ]
+   },
+   {
+    "t": 5.7,
+    "level": 0.045,
+    "fill": 0.754,
+    "active": 70,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.57
+    ]
+   },
+   {
+    "t": 5.88,
+    "level": 0.045,
+    "fill": 0.764,
+    "active": 69,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.6
+    ]
+   },
+   {
+    "t": 6.07,
+    "level": 0.045,
+    "fill": 0.766,
+    "active": 68,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.63
+    ]
+   },
+   {
+    "t": 6.26,
+    "level": 0.045,
+    "fill": 0.775,
+    "active": 67,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.67
+    ]
+   },
+   {
+    "t": 6.45,
+    "level": 0.045,
+    "fill": 0.781,
+    "active": 66,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.67
+    ]
+   },
+   {
+    "t": 6.64,
+    "level": 0.045,
+    "fill": 0.8,
+    "active": 64,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.73
+    ]
+   },
+   {
+    "t": 7.01,
+    "level": 0.045,
+    "fill": 0.811,
+    "active": 62,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.8
+    ]
+   },
+   {
+    "t": 7.19,
+    "level": 0.045,
+    "fill": 0.811,
+    "active": 62,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.8
+    ]
+   },
+   {
+    "t": 7.39,
+    "level": 0.045,
+    "fill": 0.831,
+    "active": 60,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.86
+    ]
+   },
+   {
+    "t": 7.58,
+    "level": 0.045,
+    "fill": 0.841,
+    "active": 58,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.93
+    ]
+   },
+   {
+    "t": 7.77,
+    "level": 0.045,
+    "fill": 0.841,
+    "active": 58,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.93
+    ]
+   },
+   {
+    "t": 7.96,
+    "level": 0.045,
+    "fill": 0.841,
+    "active": 57,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.93
+    ]
+   },
+   {
+    "t": 8.15,
+    "level": 0.045,
+    "fill": 0.846,
+    "active": 56,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 8.34,
+    "level": 0.045,
+    "fill": 0.846,
+    "active": 56,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 8.54,
+    "level": 0.045,
+    "fill": 0.846,
+    "active": 56,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 8.72,
+    "level": 0.045,
+    "fill": 0.846,
+    "active": 56,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 8.91,
+    "level": 0.045,
+    "fill": 0.846,
+    "active": 56,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 9.09,
+    "level": 0.045,
+    "fill": 0.856,
+    "active": 55,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 9.46,
+    "level": 0.045,
+    "fill": 0.881,
+    "active": 51,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 9.64,
+    "level": 0.045,
+    "fill": 0.886,
+    "active": 50,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 9.84,
+    "level": 0.045,
+    "fill": 0.886,
+    "active": 50,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 10.02,
+    "level": 0.045,
+    "fill": 0.886,
+    "active": 50,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 10.21,
+    "level": 0.045,
+    "fill": 0.89,
+    "active": 49,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 10.4,
+    "level": 0.045,
+    "fill": 0.895,
+    "active": 48,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 10.59,
+    "level": 0.045,
+    "fill": 0.899,
+    "active": 47,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 10.78,
+    "level": 0.045,
+    "fill": 0.899,
+    "active": 47,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 10.97,
+    "level": 0.045,
+    "fill": 0.899,
+    "active": 47,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 11.15,
+    "level": 0.045,
+    "fill": 0.899,
+    "active": 47,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 11.35,
+    "level": 0.045,
+    "fill": 0.899,
+    "active": 47,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 11.53,
+    "level": 0.045,
+    "fill": 0.914,
+    "active": 44,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 11.72,
+    "level": 0.045,
+    "fill": 0.917,
+    "active": 43,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 11.91,
+    "level": 0.045,
+    "fill": 0.917,
+    "active": 43,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 12.1,
+    "level": 0.045,
+    "fill": 0.917,
+    "active": 43,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 12.46,
+    "level": 0.045,
+    "fill": 0.932,
+    "active": 41,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 12.65,
+    "level": 0.045,
+    "fill": 0.932,
+    "active": 41,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 12.83,
+    "level": 0.045,
+    "fill": 0.936,
+    "active": 40,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 13.03,
+    "level": 0.045,
+    "fill": 0.936,
+    "active": 40,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 13.21,
+    "level": 0.045,
+    "fill": 0.94,
+    "active": 39,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 13.41,
+    "level": 0.045,
+    "fill": 0.941,
+    "active": 38,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 13.6,
+    "level": 0.045,
+    "fill": 0.941,
+    "active": 38,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 13.79,
+    "level": 0.045,
+    "fill": 0.943,
+    "active": 37,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 13.98,
+    "level": 0.045,
+    "fill": 0.943,
+    "active": 37,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 14.17,
+    "level": 0.045,
+    "fill": 0.943,
+    "active": 37,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 14.35,
+    "level": 0.045,
+    "fill": 0.943,
+    "active": 37,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 14.55,
+    "level": 0.045,
+    "fill": 0.943,
+    "active": 37,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 14.74,
+    "level": 0.045,
+    "fill": 0.943,
+    "active": 37,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 14.94,
+    "level": 0.045,
+    "fill": 0.944,
+    "active": 36,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 15.12,
+    "level": 0.045,
+    "fill": 0.944,
+    "active": 36,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 15.31,
+    "level": 0.045,
+    "fill": 0.944,
+    "active": 36,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 15.5,
+    "level": 0.045,
+    "fill": 0.944,
+    "active": 36,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 15.69,
+    "level": 0.045,
+    "fill": 0.947,
+    "active": 35,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 15.88,
+    "level": 0.045,
+    "fill": 0.955,
+    "active": 34,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 16.07,
+    "level": 0.045,
+    "fill": 0.955,
+    "active": 34,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 16.25,
+    "level": 0.045,
+    "fill": 0.955,
+    "active": 34,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 16.45,
+    "level": 0.045,
+    "fill": 0.955,
+    "active": 34,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 16.64,
+    "level": 0.045,
+    "fill": 0.955,
+    "active": 34,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 16.84,
+    "level": 0.045,
+    "fill": 0.955,
+    "active": 34,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 17.02,
+    "level": 0.045,
+    "fill": 0.955,
+    "active": 34,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 17.22,
+    "level": 0.045,
+    "fill": 0.955,
+    "active": 34,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 17.4,
+    "level": 0.045,
+    "fill": 0.955,
+    "active": 34,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 17.6,
+    "level": 0.045,
+    "fill": 0.957,
+    "active": 32,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 17.79,
+    "level": 0.045,
+    "fill": 0.957,
+    "active": 32,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 17.98,
+    "level": 0.045,
+    "fill": 0.957,
+    "active": 32,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 18.16,
+    "level": 0.045,
+    "fill": 0.958,
+    "active": 31,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 18.36,
+    "level": 0.045,
+    "fill": 0.958,
+    "active": 31,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 18.54,
+    "level": 0.045,
+    "fill": 0.958,
+    "active": 31,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 18.73,
+    "level": 0.045,
+    "fill": 0.958,
+    "active": 31,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 18.92,
+    "level": 0.045,
+    "fill": 0.958,
+    "active": 31,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 19.12,
+    "level": 0.045,
+    "fill": 0.958,
+    "active": 31,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 19.3,
+    "level": 0.045,
+    "fill": 0.958,
+    "active": 31,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 19.49,
+    "level": 0.045,
+    "fill": 0.958,
+    "active": 31,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 19.68,
+    "level": 0.045,
+    "fill": 0.958,
+    "active": 31,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 19.87,
+    "level": 0.045,
+    "fill": 0.958,
+    "active": 31,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 20.05,
+    "level": 0.045,
+    "fill": 0.958,
+    "active": 31,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 20.25,
+    "level": 0.045,
+    "fill": 0.958,
+    "active": 31,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 20.43,
+    "level": 0.045,
+    "fill": 0.958,
+    "active": 31,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 20.63,
+    "level": 0.045,
+    "fill": 0.958,
+    "active": 31,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 20.81,
+    "level": 0.045,
+    "fill": 0.958,
+    "active": 31,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 21,
+    "level": 0.045,
+    "fill": 0.958,
+    "active": 31,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 21.19,
+    "level": 0.045,
+    "fill": 0.962,
+    "active": 30,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 21.39,
+    "level": 0.045,
+    "fill": 0.962,
+    "active": 30,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 21.57,
+    "level": 0.045,
+    "fill": 0.962,
+    "active": 30,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 21.77,
+    "level": 0.045,
+    "fill": 0.962,
+    "active": 30,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 21.95,
+    "level": 0.045,
+    "fill": 0.962,
+    "active": 30,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 22.14,
+    "level": 0.045,
+    "fill": 0.962,
+    "active": 30,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 22.32,
+    "level": 0.045,
+    "fill": 0.962,
+    "active": 30,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 22.52,
+    "level": 0.045,
+    "fill": 0.962,
+    "active": 30,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 22.7,
+    "level": 0.045,
+    "fill": 0.962,
+    "active": 30,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 22.89,
+    "level": 0.045,
+    "fill": 0.962,
+    "active": 30,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 23.08,
+    "level": 0.045,
+    "fill": 0.962,
+    "active": 30,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 23.27,
+    "level": 0.045,
+    "fill": 0.962,
+    "active": 30,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 23.46,
+    "level": 0.045,
+    "fill": 0.962,
+    "active": 30,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 23.65,
+    "level": 0.045,
+    "fill": 0.962,
+    "active": 30,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 23.84,
+    "level": 0.045,
+    "fill": 0.962,
+    "active": 30,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 24.03,
+    "level": 0.045,
+    "fill": 0.962,
+    "active": 30,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 24.21,
+    "level": 0.045,
+    "fill": 0.962,
+    "active": 30,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 24.41,
+    "level": 0.045,
+    "fill": 0.962,
+    "active": 30,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 24.59,
+    "level": 0.045,
+    "fill": 0.964,
+    "active": 29,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 24.79,
+    "level": 0.045,
+    "fill": 0.964,
+    "active": 29,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 24.97,
+    "level": 0.045,
+    "fill": 0.964,
+    "active": 29,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 25.16,
+    "level": 0.045,
+    "fill": 0.964,
+    "active": 29,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 25.35,
+    "level": 0.045,
+    "fill": 0.964,
+    "active": 29,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 25.54,
+    "level": 0.045,
+    "fill": 0.964,
+    "active": 29,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 25.73,
+    "level": 0.045,
+    "fill": 0.964,
+    "active": 29,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 25.92,
+    "level": 0.045,
+    "fill": 0.964,
+    "active": 29,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   }
+  ]
+ },
+ {
+  "summary": {
+   "run": 2,
+   "size": "ipad-portrait",
+   "latchT": 0.41,
+   "castT": null,
+   "drainDur": null,
+   "levelStages": {
+    "l75": 1.3,
+    "l50": 2.18,
+    "l25": 2.8,
+    "l05": 3.95
+   },
+   "fillAtHalfLevel": 0.308,
+   "meanAngleDeg": 69,
+   "particNearT": 1.13,
+   "particFarT": 1.39,
+   "particN": 163
+  },
+  "timeline": [
+   {
+    "t": 0.41,
+    "level": 0.9894491109632907,
+    "fill": 0.01,
+    "active": 164,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.02,
+     0,
+     0
+    ]
+   },
+   {
+    "t": 0.85,
+    "level": 0.856987880083089,
+    "fill": 0.01,
+    "active": 164,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.02,
+     0,
+     0
+    ]
+   },
+   {
+    "t": 1.3,
+    "level": 0.6612058157022432,
+    "fill": 0.071,
+    "active": 157,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.17,
+     0,
+     0.03
+    ]
+   },
+   {
+    "t": 1.73,
+    "level": 0.5023467007371122,
+    "fill": 0.272,
+    "active": 134,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.55,
+     0.06,
+     0.2
+    ]
+   },
+   {
+    "t": 2.18,
+    "level": 0.36422541242166456,
+    "fill": 0.308,
+    "active": 130,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.62,
+     0.1,
+     0.2
+    ]
+   },
+   {
+    "t": 2.36,
+    "level": 0.3146996617769007,
+    "fill": 0.337,
+    "active": 127,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.64,
+     0.1,
+     0.27
+    ]
+   },
+   {
+    "t": 2.8,
+    "level": 0.21121039355248603,
+    "fill": 0.376,
+    "active": 123,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.64,
+     0.19,
+     0.3
+    ]
+   },
+   {
+    "t": 2.98,
+    "level": 0.17256889048853702,
+    "fill": 0.405,
+    "active": 120,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.64,
+     0.29,
+     0.3
+    ]
+   },
+   {
+    "t": 3.19,
+    "level": 0.13040784397550903,
+    "fill": 0.436,
+    "active": 116,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.67,
+     0.39,
+     0.3
+    ]
+   },
+   {
+    "t": 3.38,
+    "level": 0.09750019076216776,
+    "fill": 0.455,
+    "active": 114,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.69,
+     0.42,
+     0.3
+    ]
+   },
+   {
+    "t": 3.95,
+    "level": 0.045,
+    "fill": 0.654,
+    "active": 87,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.9,
+     0.9,
+     0.4
+    ]
+   },
+   {
+    "t": 4.13,
+    "level": 0.045,
+    "fill": 0.713,
+    "active": 78,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.43
+    ]
+   },
+   {
+    "t": 4.34,
+    "level": 0.045,
+    "fill": 0.755,
+    "active": 73,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.53
+    ]
+   },
+   {
+    "t": 4.53,
+    "level": 0.045,
+    "fill": 0.799,
+    "active": 65,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.6
+    ]
+   },
+   {
+    "t": 5.05,
+    "level": 0.045,
+    "fill": 0.811,
+    "active": 62,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.67
+    ]
+   },
+   {
+    "t": 5.23,
+    "level": 0.045,
+    "fill": 0.826,
+    "active": 60,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.67
+    ]
+   },
+   {
+    "t": 5.43,
+    "level": 0.045,
+    "fill": 0.831,
+    "active": 58,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.67
+    ]
+   },
+   {
+    "t": 5.61,
+    "level": 0.045,
+    "fill": 0.855,
+    "active": 55,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.73
+    ]
+   },
+   {
+    "t": 5.81,
+    "level": 0.045,
+    "fill": 0.857,
+    "active": 54,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.73
+    ]
+   },
+   {
+    "t": 6,
+    "level": 0.045,
+    "fill": 0.857,
+    "active": 54,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.73
+    ]
+   },
+   {
+    "t": 6.19,
+    "level": 0.045,
+    "fill": 0.857,
+    "active": 54,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.73
+    ]
+   },
+   {
+    "t": 6.38,
+    "level": 0.045,
+    "fill": 0.861,
+    "active": 52,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.73
+    ]
+   },
+   {
+    "t": 6.57,
+    "level": 0.045,
+    "fill": 0.867,
+    "active": 51,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.77
+    ]
+   },
+   {
+    "t": 7.08,
+    "level": 0.045,
+    "fill": 0.876,
+    "active": 50,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.77
+    ]
+   },
+   {
+    "t": 7.27,
+    "level": 0.045,
+    "fill": 0.888,
+    "active": 48,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.77
+    ]
+   },
+   {
+    "t": 7.46,
+    "level": 0.045,
+    "fill": 0.897,
+    "active": 47,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.8
+    ]
+   },
+   {
+    "t": 7.67,
+    "level": 0.045,
+    "fill": 0.897,
+    "active": 47,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.8
+    ]
+   },
+   {
+    "t": 7.86,
+    "level": 0.045,
+    "fill": 0.901,
+    "active": 46,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.8
+    ]
+   },
+   {
+    "t": 8.06,
+    "level": 0.045,
+    "fill": 0.907,
+    "active": 45,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.83
+    ]
+   },
+   {
+    "t": 8.25,
+    "level": 0.045,
+    "fill": 0.907,
+    "active": 45,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.83
+    ]
+   },
+   {
+    "t": 8.44,
+    "level": 0.045,
+    "fill": 0.907,
+    "active": 45,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.83
+    ]
+   },
+   {
+    "t": 8.63,
+    "level": 0.045,
+    "fill": 0.907,
+    "active": 45,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.83
+    ]
+   },
+   {
+    "t": 8.82,
+    "level": 0.045,
+    "fill": 0.912,
+    "active": 44,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.83
+    ]
+   },
+   {
+    "t": 9.01,
+    "level": 0.045,
+    "fill": 0.915,
+    "active": 43,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.83
+    ]
+   },
+   {
+    "t": 9.52,
+    "level": 0.045,
+    "fill": 0.921,
+    "active": 42,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.86
+    ]
+   },
+   {
+    "t": 9.7,
+    "level": 0.045,
+    "fill": 0.921,
+    "active": 42,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.86
+    ]
+   },
+   {
+    "t": 9.9,
+    "level": 0.045,
+    "fill": 0.921,
+    "active": 42,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.86
+    ]
+   },
+   {
+    "t": 10.09,
+    "level": 0.045,
+    "fill": 0.921,
+    "active": 42,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.86
+    ]
+   },
+   {
+    "t": 10.29,
+    "level": 0.045,
+    "fill": 0.921,
+    "active": 42,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.86
+    ]
+   },
+   {
+    "t": 10.48,
+    "level": 0.045,
+    "fill": 0.921,
+    "active": 42,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.86
+    ]
+   },
+   {
+    "t": 10.67,
+    "level": 0.045,
+    "fill": 0.922,
+    "active": 41,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.9
+    ]
+   },
+   {
+    "t": 10.86,
+    "level": 0.045,
+    "fill": 0.922,
+    "active": 41,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.9
+    ]
+   },
+   {
+    "t": 11.05,
+    "level": 0.045,
+    "fill": 0.922,
+    "active": 41,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.9
+    ]
+   },
+   {
+    "t": 11.25,
+    "level": 0.045,
+    "fill": 0.922,
+    "active": 41,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.9
+    ]
+   },
+   {
+    "t": 11.44,
+    "level": 0.045,
+    "fill": 0.922,
+    "active": 41,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.9
+    ]
+   },
+   {
+    "t": 11.63,
+    "level": 0.045,
+    "fill": 0.922,
+    "active": 41,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.9
+    ]
+   },
+   {
+    "t": 11.82,
+    "level": 0.045,
+    "fill": 0.922,
+    "active": 41,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.9
+    ]
+   },
+   {
+    "t": 12.01,
+    "level": 0.045,
+    "fill": 0.922,
+    "active": 41,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.9
+    ]
+   },
+   {
+    "t": 12.53,
+    "level": 0.045,
+    "fill": 0.927,
+    "active": 39,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.93
+    ]
+   },
+   {
+    "t": 12.72,
+    "level": 0.045,
+    "fill": 0.931,
+    "active": 38,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.93
+    ]
+   },
+   {
+    "t": 12.92,
+    "level": 0.045,
+    "fill": 0.931,
+    "active": 38,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.93
+    ]
+   },
+   {
+    "t": 13.11,
+    "level": 0.045,
+    "fill": 0.937,
+    "active": 37,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 13.31,
+    "level": 0.045,
+    "fill": 0.937,
+    "active": 37,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 13.49,
+    "level": 0.045,
+    "fill": 0.937,
+    "active": 37,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 13.69,
+    "level": 0.045,
+    "fill": 0.937,
+    "active": 37,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 13.88,
+    "level": 0.045,
+    "fill": 0.937,
+    "active": 37,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 14.07,
+    "level": 0.045,
+    "fill": 0.937,
+    "active": 37,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 14.27,
+    "level": 0.045,
+    "fill": 0.937,
+    "active": 37,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 14.49,
+    "level": 0.045,
+    "fill": 0.937,
+    "active": 37,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 14.68,
+    "level": 0.045,
+    "fill": 0.937,
+    "active": 37,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 14.88,
+    "level": 0.045,
+    "fill": 0.937,
+    "active": 37,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 15.06,
+    "level": 0.045,
+    "fill": 0.937,
+    "active": 37,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 15.26,
+    "level": 0.045,
+    "fill": 0.937,
+    "active": 37,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 15.46,
+    "level": 0.045,
+    "fill": 0.937,
+    "active": 37,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 15.65,
+    "level": 0.045,
+    "fill": 0.937,
+    "active": 37,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 15.85,
+    "level": 0.045,
+    "fill": 0.937,
+    "active": 37,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 16.04,
+    "level": 0.045,
+    "fill": 0.941,
+    "active": 36,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 16.23,
+    "level": 0.045,
+    "fill": 0.941,
+    "active": 36,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 16.44,
+    "level": 0.045,
+    "fill": 0.941,
+    "active": 36,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 16.64,
+    "level": 0.045,
+    "fill": 0.941,
+    "active": 36,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 16.84,
+    "level": 0.045,
+    "fill": 0.941,
+    "active": 36,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 17.03,
+    "level": 0.045,
+    "fill": 0.941,
+    "active": 36,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 17.22,
+    "level": 0.045,
+    "fill": 0.941,
+    "active": 36,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 17.41,
+    "level": 0.045,
+    "fill": 0.941,
+    "active": 36,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 17.6,
+    "level": 0.045,
+    "fill": 0.941,
+    "active": 36,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 17.8,
+    "level": 0.045,
+    "fill": 0.941,
+    "active": 36,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 17.99,
+    "level": 0.045,
+    "fill": 0.941,
+    "active": 36,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 18.18,
+    "level": 0.045,
+    "fill": 0.941,
+    "active": 36,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 18.38,
+    "level": 0.045,
+    "fill": 0.941,
+    "active": 36,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 18.56,
+    "level": 0.045,
+    "fill": 0.941,
+    "active": 36,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 18.76,
+    "level": 0.045,
+    "fill": 0.941,
+    "active": 36,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 18.95,
+    "level": 0.045,
+    "fill": 0.941,
+    "active": 36,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 19.14,
+    "level": 0.045,
+    "fill": 0.941,
+    "active": 36,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 19.33,
+    "level": 0.045,
+    "fill": 0.941,
+    "active": 36,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 19.52,
+    "level": 0.045,
+    "fill": 0.941,
+    "active": 36,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 19.71,
+    "level": 0.045,
+    "fill": 0.941,
+    "active": 36,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 19.9,
+    "level": 0.045,
+    "fill": 0.941,
+    "active": 36,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 20.09,
+    "level": 0.045,
+    "fill": 0.941,
+    "active": 36,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 20.3,
+    "level": 0.045,
+    "fill": 0.941,
+    "active": 36,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 20.5,
+    "level": 0.045,
+    "fill": 0.941,
+    "active": 36,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 20.69,
+    "level": 0.045,
+    "fill": 0.941,
+    "active": 36,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 20.88,
+    "level": 0.045,
+    "fill": 0.941,
+    "active": 36,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 21.07,
+    "level": 0.045,
+    "fill": 0.941,
+    "active": 36,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 21.26,
+    "level": 0.045,
+    "fill": 0.941,
+    "active": 36,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 21.46,
+    "level": 0.045,
+    "fill": 0.941,
+    "active": 36,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 21.64,
+    "level": 0.045,
+    "fill": 0.941,
+    "active": 36,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 21.84,
+    "level": 0.045,
+    "fill": 0.941,
+    "active": 36,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 22.03,
+    "level": 0.045,
+    "fill": 0.941,
+    "active": 36,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 22.22,
+    "level": 0.045,
+    "fill": 0.941,
+    "active": 36,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     0.96
+    ]
+   },
+   {
+    "t": 22.41,
+    "level": 0.045,
+    "fill": 0.943,
+    "active": 35,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 22.61,
+    "level": 0.045,
+    "fill": 0.943,
+    "active": 35,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 22.8,
+    "level": 0.045,
+    "fill": 0.943,
+    "active": 35,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 22.99,
+    "level": 0.045,
+    "fill": 0.943,
+    "active": 35,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 23.18,
+    "level": 0.045,
+    "fill": 0.943,
+    "active": 35,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 23.37,
+    "level": 0.045,
+    "fill": 0.943,
+    "active": 35,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 23.56,
+    "level": 0.045,
+    "fill": 0.943,
+    "active": 35,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 23.75,
+    "level": 0.045,
+    "fill": 0.943,
+    "active": 35,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 23.95,
+    "level": 0.045,
+    "fill": 0.943,
+    "active": 35,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 24.14,
+    "level": 0.045,
+    "fill": 0.943,
+    "active": 35,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 24.33,
+    "level": 0.045,
+    "fill": 0.943,
+    "active": 35,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 24.52,
+    "level": 0.045,
+    "fill": 0.943,
+    "active": 35,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 24.71,
+    "level": 0.045,
+    "fill": 0.943,
+    "active": 35,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 24.91,
+    "level": 0.045,
+    "fill": 0.943,
+    "active": 35,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 25.09,
+    "level": 0.045,
+    "fill": 0.943,
+    "active": 35,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 25.29,
+    "level": 0.045,
+    "fill": 0.943,
+    "active": 35,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 25.48,
+    "level": 0.045,
+    "fill": 0.943,
+    "active": 35,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 25.67,
+    "level": 0.045,
+    "fill": 0.943,
+    "active": 35,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 25.86,
+    "level": 0.045,
+    "fill": 0.943,
+    "active": 35,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   }
+  ]
+ },
+ {
+  "summary": {
+   "run": 3,
+   "size": "ipad-landscape",
+   "latchT": 0.35,
+   "castT": null,
+   "drainDur": null,
+   "levelStages": {
+    "l75": 1.43,
+    "l50": 1.94,
+    "l25": 3.04,
+    "l05": 3.97
+   },
+   "fillAtHalfLevel": 0.257,
+   "meanAngleDeg": 66.4,
+   "particNearT": 1.06,
+   "particFarT": 1.02,
+   "particN": 160
+  },
+  "timeline": [
+   {
+    "t": 0.35,
+    "level": 0.9901943828845448,
+    "fill": 0.029,
+    "active": 162,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.05,
+     0.03,
+     0
+    ]
+   },
+   {
+    "t": 0.9,
+    "level": 0.8236025575184633,
+    "fill": 0.058,
+    "active": 159,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.07,
+     0.1,
+     0
+    ]
+   },
+   {
+    "t": 1.43,
+    "level": 0.614821173812617,
+    "fill": 0.126,
+    "active": 152,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.1,
+     0.29,
+     0
+    ]
+   },
+   {
+    "t": 1.94,
+    "level": 0.44851668984897247,
+    "fill": 0.257,
+    "active": 138,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.33,
+     0.39,
+     0.03
+    ]
+   },
+   {
+    "t": 2.5,
+    "level": 0.2994615093665939,
+    "fill": 0.299,
+    "active": 133,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.33,
+     0.48,
+     0.1
+    ]
+   },
+   {
+    "t": 3.04,
+    "level": 0.18524753354378695,
+    "fill": 0.401,
+    "active": 121,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.5,
+     0.61,
+     0.13
+    ]
+   },
+   {
+    "t": 3.24,
+    "level": 0.14796382977565578,
+    "fill": 0.447,
+    "active": 116,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.52,
+     0.68,
+     0.2
+    ]
+   },
+   {
+    "t": 3.78,
+    "level": 0.061093870522373334,
+    "fill": 0.575,
+    "active": 98,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.74,
+     0.81,
+     0.37
+    ]
+   },
+   {
+    "t": 3.97,
+    "level": 0.045,
+    "fill": 0.692,
+    "active": 82,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.95,
+     0.84,
+     0.57
+    ]
+   },
+   {
+    "t": 4.16,
+    "level": 0.045,
+    "fill": 0.736,
+    "active": 75,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.97,
+     0.94,
+     0.67
+    ]
+   },
+   {
+    "t": 4.36,
+    "level": 0.045,
+    "fill": 0.81,
+    "active": 65,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     0.97,
+     0.8
+    ]
+   },
+   {
+    "t": 4.54,
+    "level": 0.045,
+    "fill": 0.832,
+    "active": 61,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     0.97,
+     0.9
+    ]
+   },
+   {
+    "t": 5.11,
+    "level": 0.045,
+    "fill": 0.879,
+    "active": 54,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 5.3,
+    "level": 0.045,
+    "fill": 0.879,
+    "active": 54,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 5.5,
+    "level": 0.045,
+    "fill": 0.888,
+    "active": 52,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 5.69,
+    "level": 0.045,
+    "fill": 0.891,
+    "active": 51,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 5.89,
+    "level": 0.045,
+    "fill": 0.894,
+    "active": 50,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 6.07,
+    "level": 0.045,
+    "fill": 0.894,
+    "active": 50,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 6.27,
+    "level": 0.045,
+    "fill": 0.896,
+    "active": 49,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 6.46,
+    "level": 0.045,
+    "fill": 0.901,
+    "active": 48,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 6.65,
+    "level": 0.045,
+    "fill": 0.91,
+    "active": 47,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 7.23,
+    "level": 0.045,
+    "fill": 0.917,
+    "active": 45,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 7.43,
+    "level": 0.045,
+    "fill": 0.922,
+    "active": 43,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 7.63,
+    "level": 0.045,
+    "fill": 0.931,
+    "active": 41,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 7.82,
+    "level": 0.045,
+    "fill": 0.94,
+    "active": 37,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 8.01,
+    "level": 0.045,
+    "fill": 0.94,
+    "active": 37,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 8.2,
+    "level": 0.045,
+    "fill": 0.94,
+    "active": 37,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 8.39,
+    "level": 0.045,
+    "fill": 0.946,
+    "active": 35,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 8.59,
+    "level": 0.045,
+    "fill": 0.946,
+    "active": 35,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 8.78,
+    "level": 0.045,
+    "fill": 0.946,
+    "active": 35,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 8.97,
+    "level": 0.045,
+    "fill": 0.948,
+    "active": 34,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 9.16,
+    "level": 0.045,
+    "fill": 0.948,
+    "active": 34,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 9.79,
+    "level": 0.045,
+    "fill": 0.948,
+    "active": 34,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 9.98,
+    "level": 0.045,
+    "fill": 0.951,
+    "active": 33,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 10.17,
+    "level": 0.045,
+    "fill": 0.951,
+    "active": 33,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 10.36,
+    "level": 0.045,
+    "fill": 0.951,
+    "active": 33,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 10.55,
+    "level": 0.045,
+    "fill": 0.951,
+    "active": 33,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 10.74,
+    "level": 0.045,
+    "fill": 0.951,
+    "active": 33,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 10.94,
+    "level": 0.045,
+    "fill": 0.951,
+    "active": 33,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 11.13,
+    "level": 0.045,
+    "fill": 0.951,
+    "active": 33,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 11.32,
+    "level": 0.045,
+    "fill": 0.951,
+    "active": 33,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 11.51,
+    "level": 0.045,
+    "fill": 0.955,
+    "active": 32,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 11.71,
+    "level": 0.045,
+    "fill": 0.955,
+    "active": 32,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 11.89,
+    "level": 0.045,
+    "fill": 0.955,
+    "active": 32,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 12.09,
+    "level": 0.045,
+    "fill": 0.957,
+    "active": 31,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 12.68,
+    "level": 0.045,
+    "fill": 0.958,
+    "active": 30,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 12.88,
+    "level": 0.045,
+    "fill": 0.958,
+    "active": 30,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 13.08,
+    "level": 0.045,
+    "fill": 0.961,
+    "active": 29,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 13.27,
+    "level": 0.045,
+    "fill": 0.962,
+    "active": 28,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 13.46,
+    "level": 0.045,
+    "fill": 0.962,
+    "active": 28,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 13.65,
+    "level": 0.045,
+    "fill": 0.967,
+    "active": 27,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 13.84,
+    "level": 0.045,
+    "fill": 0.967,
+    "active": 27,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 14.03,
+    "level": 0.045,
+    "fill": 0.972,
+    "active": 25,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 14.23,
+    "level": 0.045,
+    "fill": 0.972,
+    "active": 25,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 14.42,
+    "level": 0.045,
+    "fill": 0.972,
+    "active": 24,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 14.61,
+    "level": 0.045,
+    "fill": 0.972,
+    "active": 24,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 14.8,
+    "level": 0.045,
+    "fill": 0.972,
+    "active": 24,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 14.99,
+    "level": 0.045,
+    "fill": 0.972,
+    "active": 24,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 15.19,
+    "level": 0.045,
+    "fill": 0.974,
+    "active": 23,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 15.38,
+    "level": 0.045,
+    "fill": 0.974,
+    "active": 23,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 15.57,
+    "level": 0.045,
+    "fill": 0.974,
+    "active": 23,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 15.76,
+    "level": 0.045,
+    "fill": 0.983,
+    "active": 22,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 15.95,
+    "level": 0.045,
+    "fill": 0.985,
+    "active": 21,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 16.14,
+    "level": 0.045,
+    "fill": 0.985,
+    "active": 21,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 16.33,
+    "level": 0.045,
+    "fill": 0.985,
+    "active": 21,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 16.52,
+    "level": 0.045,
+    "fill": 0.985,
+    "active": 21,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 16.72,
+    "level": 0.045,
+    "fill": 0.985,
+    "active": 21,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 16.91,
+    "level": 0.045,
+    "fill": 0.985,
+    "active": 21,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 17.1,
+    "level": 0.045,
+    "fill": 0.985,
+    "active": 21,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 17.29,
+    "level": 0.045,
+    "fill": 0.985,
+    "active": 21,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 17.49,
+    "level": 0.045,
+    "fill": 0.985,
+    "active": 21,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 17.67,
+    "level": 0.045,
+    "fill": 0.985,
+    "active": 21,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 17.87,
+    "level": 0.045,
+    "fill": 0.985,
+    "active": 21,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 18.06,
+    "level": 0.045,
+    "fill": 0.985,
+    "active": 21,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 18.25,
+    "level": 0.045,
+    "fill": 0.985,
+    "active": 20,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 18.44,
+    "level": 0.045,
+    "fill": 0.985,
+    "active": 20,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 18.64,
+    "level": 0.045,
+    "fill": 0.985,
+    "active": 20,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 18.82,
+    "level": 0.045,
+    "fill": 0.985,
+    "active": 20,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 19.02,
+    "level": 0.045,
+    "fill": 0.991,
+    "active": 18,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 19.21,
+    "level": 0.045,
+    "fill": 0.991,
+    "active": 18,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 19.43,
+    "level": 0.045,
+    "fill": 0.991,
+    "active": 18,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 19.61,
+    "level": 0.045,
+    "fill": 0.991,
+    "active": 18,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 19.82,
+    "level": 0.045,
+    "fill": 0.991,
+    "active": 18,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 20.01,
+    "level": 0.045,
+    "fill": 0.991,
+    "active": 18,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 20.2,
+    "level": 0.045,
+    "fill": 0.991,
+    "active": 18,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 20.39,
+    "level": 0.045,
+    "fill": 0.991,
+    "active": 18,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 20.59,
+    "level": 0.045,
+    "fill": 0.991,
+    "active": 18,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 20.77,
+    "level": 0.045,
+    "fill": 0.991,
+    "active": 18,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 20.97,
+    "level": 0.045,
+    "fill": 0.991,
+    "active": 18,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 21.16,
+    "level": 0.045,
+    "fill": 0.991,
+    "active": 18,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 21.35,
+    "level": 0.045,
+    "fill": 0.991,
+    "active": 18,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 21.54,
+    "level": 0.045,
+    "fill": 0.991,
+    "active": 18,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 21.74,
+    "level": 0.045,
+    "fill": 0.991,
+    "active": 18,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 21.92,
+    "level": 0.045,
+    "fill": 0.991,
+    "active": 18,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 22.12,
+    "level": 0.045,
+    "fill": 0.991,
+    "active": 18,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 22.31,
+    "level": 0.045,
+    "fill": 0.991,
+    "active": 18,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 22.5,
+    "level": 0.045,
+    "fill": 0.991,
+    "active": 18,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 22.69,
+    "level": 0.045,
+    "fill": 0.991,
+    "active": 18,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 22.88,
+    "level": 0.045,
+    "fill": 0.991,
+    "active": 18,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 23.07,
+    "level": 0.045,
+    "fill": 0.991,
+    "active": 18,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 23.27,
+    "level": 0.045,
+    "fill": 0.991,
+    "active": 18,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 23.45,
+    "level": 0.045,
+    "fill": 0.991,
+    "active": 18,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 23.65,
+    "level": 0.045,
+    "fill": 0.991,
+    "active": 18,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 23.84,
+    "level": 0.045,
+    "fill": 0.991,
+    "active": 18,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 24.04,
+    "level": 0.045,
+    "fill": 0.991,
+    "active": 18,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 24.22,
+    "level": 0.045,
+    "fill": 0.991,
+    "active": 18,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 24.42,
+    "level": 0.045,
+    "fill": 0.991,
+    "active": 18,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 24.61,
+    "level": 0.045,
+    "fill": 0.991,
+    "active": 18,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 24.8,
+    "level": 0.045,
+    "fill": 0.991,
+    "active": 18,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 24.99,
+    "level": 0.045,
+    "fill": 0.991,
+    "active": 18,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 25.18,
+    "level": 0.045,
+    "fill": 0.991,
+    "active": 18,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 25.37,
+    "level": 0.045,
+    "fill": 0.991,
+    "active": 18,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 25.57,
+    "level": 0.045,
+    "fill": 0.991,
+    "active": 18,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 25.76,
+    "level": 0.045,
+    "fill": 0.991,
+    "active": 18,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 25.95,
+    "level": 0.045,
+    "fill": 0.991,
+    "active": 18,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   }
+  ]
+ }
+]

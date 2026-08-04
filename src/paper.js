@@ -294,6 +294,10 @@ export class Paper {
   // membrane closes: a translucent damage-local pulp wash — a disclosed
   // finishing touch, never a swap to a finished image (docs/LEAFCASTING.md)
   sealDamage(d, col = '#f2ead6') {
+    // a sealed deficit takes no more pulp — remaining fibers become veil
+    for (const k of this.sinks) {
+      if (k.d === d) k.cap = Math.min(k.cap, k.got);
+    }
     const c = this.deposit.getContext('2d');
     c.save();
     c.clip(d.path);

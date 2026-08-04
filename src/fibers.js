@@ -96,11 +96,16 @@ export class FiberSim {
   }
 
   allFull() {
+    // the sheet is whole when every deficit has sealed (97% of its capacity —
+    // the same moment its membrane closes), not when bookkeeping hits 100%
     if (!this.paper) return true;
-    return this.paper.fillRatio() >= 0.995;
+    for (const d of this.paper.damages) {
+      if (d.cap > 0 && d.got < d.cap * 0.97) return false;
+    }
+    return true;
   }
 
-  pickSink(f) {
+  pickSink(f, closing = false) {
     let best = -1, bs = -1;
     const n = this.sinks.length;
     if (!n) return -1;
@@ -110,7 +115,12 @@ export class FiberSim {
       const rem = k.s.cap - k.s.got;
       if (rem <= 0) continue;
       const d = Math.hypot(k.x - f.x, k.y - f.y);
-      const sc = rem * (1.25 - Math.min(d, 1));
+      // randomized weight spreads fibers across ALL deficits at once, so the
+      // hole, tear and thin patch fill in parallel instead of one by one;
+      // in the closing film, everyone hurries to the nearest remaining gap
+      const sc = closing
+        ? rem * (1.6 - Math.min(d, 1))
+        : rem * (0.5 + Math.random()) * (1.2 - 0.55 * Math.min(d, 1));
       if (sc > bs) { bs = sc; best = j; }
     }
     return best;
@@ -138,7 +148,7 @@ export class FiberSim {
       if (this.gv[i] > 0) this.gv[i] = 0;
     }
     const full = this.allFull();
-    const grainW = CAP_TOTAL / Math.max(1, this.need) * 1.45; // grains per settled fiber
+    const grainW = CAP_TOTAL / Math.max(1, this.need) * 1.6; // grains per settled fiber
 
     // excluded volume: fibers in an overcrowded cell push each other apart
     // (flocs break up), so the slurry relaxes toward an even cloud and can
@@ -200,9 +210,11 @@ export class FiberSim {
 
       const pre = (!this.draining && this.preview > 0.02) ? this.preview : 0;
       if ((drain > 0 || pre > 0) && this.paper) {
+        const closingMode = drain > 0 && this.level <= 0.12;
         if (f.tg < 0 || f.tg >= this.sinks.length ||
-          this.sinks[f.tg].s.got >= this.sinks[f.tg].s.cap || Math.random() < dt * 0.4) {
-          f.tg = this.pickSink(f);
+          this.sinks[f.tg].s.got >= this.sinks[f.tg].s.cap ||
+          Math.random() < dt * (closingMode ? 1.2 : 0.4)) {
+          f.tg = this.pickSink(f, closingMode);
         }
         if (f.tg >= 0) {
           const k = this.sinks[f.tg];
@@ -214,9 +226,14 @@ export class FiberSim {
           // suction spreads outward from the deficits: nearby fibers feel it
           // first, distant ones join as the wave reaches them (遅れて参加)
           const act = drain > 0 ? clamp((this.drainT - d * 1.15) / 0.35, 0, 1) : 0;
-          // strong contrast between deficits (perm≈1) and intact paper
-          const base = (0.10 + 0.16 * Math.min(d * 3, 1)) * (0.25 + perm * 1.15);
-          const pull = drain * act * base + pre * 0.10 * base;
+          // lateral surface current carries fibers over intact paper almost
+          // freely — only the downward through-flow (deposition, threads,
+          // vortices) is gated by where the paper is missing
+          const base = (0.14 + 0.18 * Math.min(d * 3, 1)) * (0.7 + perm * 0.5);
+          // once only the last film remains, all suction concentrates on the
+          // remaining deficits — the stragglers hurry in
+          const closing = drain > 0 && this.level <= 0.12 ? 2.0 : 1;
+          const pull = drain * act * base * closing + pre * 0.10 * base;
           // handed swirl that fades on approach → readable inward spiral
           const sw = pull * 0.55 * f.hand * clamp(d * 5, 0, 1);
           f.vx += (dx * pull - dy * sw) * dt * 4.5;
@@ -225,7 +242,7 @@ export class FiberSim {
             f.vx += (Math.random() - 0.5) * pre * 0.16 * dt;
             f.vy += (Math.random() - 0.5) * pre * 0.16 * dt;
           }
-          if (drain > 0 && d < 0.05 && k.s.got < k.s.cap) {
+          if (drain > 0 && d < (this.level <= 0.12 ? 0.10 : 0.06) && k.s.got < k.s.cap) {
             k.s.got += grainW;
             k.s.d.got += grainW;
             const [u, v] = tankToUv(f.x, f.y);

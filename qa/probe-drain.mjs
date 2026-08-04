@@ -88,7 +88,18 @@ for (let run = 0; run < RUNS; run++) {
   await page.mouse.up();
   await page.waitForTimeout(500);
   let s = await state();
-  if (!s.flags.dispersed) { console.log(`run${run}: not dispersed, waiting`); await page.waitForTimeout(4000); }
+  for (let extra = 0; extra < 3 && !(await state()).flags.dispersed; extra++) {
+    console.log(`run${run}: not dispersed, stirring again`);
+    await page.mouse.move(tk.x + tk.w * 0.3, tk.y + tk.h * 0.35);
+    await page.mouse.down();
+    for (let i = 0; i < 18; i++) {
+      const a = i / 18 * Math.PI * 2.6;
+      await page.mouse.move(tk.x + tk.w * (0.5 + 0.33 * Math.cos(a + extra)), tk.y + tk.h * (0.5 + 0.33 * Math.sin(a * 1.2)));
+      await page.waitForTimeout(24);
+    }
+    await page.mouse.up();
+    await page.waitForTimeout(800);
+  }
 
   // capture initial fiber field + sinks, then latch the lever
   const sk = await sinks();
@@ -100,6 +111,10 @@ for (let run = 0; run < RUNS; run++) {
   const fiberFrames = [];
   // latch (async while sampling: do the drag first — it takes ~0.3s)
   await drag(t.lever.x, t.lever.y, t.leverEnd.x, t.leverEnd.y + 30, 8, 18);
+  if (!(await state()).flags.latched) {
+    const t2 = await targets();
+    await drag(t2.lever.x, t2.lever.y, t2.leverEnd.x, t2.leverEnd.y + 30, 8, 18);
+  }
   let shotIdx = 0;
   while (Date.now() - t0 < 26000) {
     const el = (Date.now() - t0) / 1000;
