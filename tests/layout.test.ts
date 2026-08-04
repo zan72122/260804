@@ -52,6 +52,16 @@ describe.each(SIZES)('layout $name', (size) => {
     }
   })
 
+  it('keeps the whole lever travel on screen, cap and all', () => {
+    const t = l.tools.lever
+    const top = t.trackTop - t.r * 0.6
+    const bottom = t.trackBottom + t.r * 0.6
+    expect(bottom).toBeLessThanOrEqual(size.h - size.insets.bottom + 0.5)
+    expect(top).toBeGreaterThanOrEqual(size.h - size.insets.bottom - l.barH - 0.5)
+    // The knob must still be able to travel far enough to feel like a stroke.
+    expect(t.trackBottom - t.trackTop).toBeGreaterThanOrEqual(44)
+  })
+
   it('gives every required control a finger-sized target', () => {
     for (const t of toolDiscs(l)) {
       expect(t.r * 2, `${t.name} diameter`).toBeGreaterThanOrEqual(52)

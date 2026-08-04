@@ -106,8 +106,11 @@ export function computeLayout(vp: Viewport): Layout {
 
   const gap = clamp(Math.min(w * 0.24, 156 * ui), 76, 178)
   const cx = w * 0.5
-  const levelR = clamp(38 * ui, 30, 62)
-  const trackH = clamp(barH * 0.6, 58, 122)
+  // The lever is drawn as a track with a rounded cap 0.6r proud at each end. Size
+  // the knob and the track so that whole shape always fits inside the tool bar —
+  // a control whose travel runs off the bottom of the screen is unusable.
+  const levelR = clamp(Math.min(38 * ui, (barH - 58) / 1.2), 26, 62)
+  const trackH = Math.max(46, Math.min(clamp(barH * 0.6, 58, 122), barH - 1.2 * levelR - 6))
 
   return {
     w,
