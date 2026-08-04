@@ -1,0 +1,1334 @@
+[
+ {
+  "summary": {
+   "run": 0,
+   "size": "iphone-portrait",
+   "latchT": 0.29,
+   "castT": 5.17,
+   "drainDur": 4.88,
+   "levelStages": {
+    "l75": 1.22,
+    "l50": 1.74,
+    "l25": 2.81,
+    "l05": 3.89
+   },
+   "fillAtHalfLevel": 0.265,
+   "meanAngleDeg": 62.8,
+   "particNearT": 0.77,
+   "particFarT": 1.22,
+   "particN": 164
+  },
+  "timeline": [
+   {
+    "t": 0.29,
+    "level": 0.9947053606299601,
+    "fill": 0.019,
+    "active": 163,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0,
+     0.06,
+     0
+    ]
+   },
+   {
+    "t": 0.61,
+    "level": 0.9221877534497783,
+    "fill": 0.019,
+    "active": 163,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0,
+     0.06,
+     0
+    ]
+   },
+   {
+    "t": 0.92,
+    "level": 0.7953272802572898,
+    "fill": 0.019,
+    "active": 163,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0,
+     0.06,
+     0
+    ]
+   },
+   {
+    "t": 1.22,
+    "level": 0.6759236295431731,
+    "fill": 0.039,
+    "active": 161,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0,
+     0.13,
+     0
+    ]
+   },
+   {
+    "t": 1.42,
+    "level": 0.6033661306752012,
+    "fill": 0.087,
+    "active": 156,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.1,
+     0.16,
+     0
+    ]
+   },
+   {
+    "t": 1.74,
+    "level": 0.499071265005298,
+    "fill": 0.265,
+    "active": 136,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.48,
+     0.26,
+     0.03
+    ]
+   },
+   {
+    "t": 1.94,
+    "level": 0.4392858256648796,
+    "fill": 0.284,
+    "active": 134,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.48,
+     0.32,
+     0.03
+    ]
+   },
+   {
+    "t": 2.12,
+    "level": 0.38821956517845396,
+    "fill": 0.299,
+    "active": 132,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.52,
+     0.32,
+     0.03
+    ]
+   },
+   {
+    "t": 2.32,
+    "level": 0.33637073402848067,
+    "fill": 0.309,
+    "active": 131,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.52,
+     0.32,
+     0.07
+    ]
+   },
+   {
+    "t": 2.62,
+    "level": 0.2655211699795528,
+    "fill": 0.342,
+    "active": 127,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.52,
+     0.35,
+     0.17
+    ]
+   },
+   {
+    "t": 2.81,
+    "level": 0.22246832363369887,
+    "fill": 0.39,
+    "active": 122,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.57,
+     0.42,
+     0.2
+    ]
+   },
+   {
+    "t": 3,
+    "level": 0.1857520282367128,
+    "fill": 0.423,
+    "active": 118,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.57,
+     0.48,
+     0.27
+    ]
+   },
+   {
+    "t": 3.2,
+    "level": 0.14845196360351418,
+    "fill": 0.501,
+    "active": 110,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.64,
+     0.61,
+     0.3
+    ]
+   },
+   {
+    "t": 3.5,
+    "level": 0.09748276763607011,
+    "fill": 0.669,
+    "active": 86,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.97,
+     0.74,
+     0.5
+    ]
+   },
+   {
+    "t": 3.7,
+    "level": 0.06652549239606524,
+    "fill": 0.755,
+    "active": 76,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.97,
+     0.87,
+     0.7
+    ]
+   },
+   {
+    "t": 3.89,
+    "level": 0.045,
+    "fill": 0.778,
+    "active": 72,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.97,
+     1,
+     0.7
+    ]
+   },
+   {
+    "t": 4.08,
+    "level": 0.045,
+    "fill": 0.789,
+    "active": 70,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.97,
+     1,
+     0.77
+    ]
+   },
+   {
+    "t": 4.27,
+    "level": 0.045,
+    "fill": 0.798,
+    "active": 67,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.97,
+     1,
+     0.86
+    ]
+   },
+   {
+    "t": 4.47,
+    "level": 0.03643071428571433,
+    "fill": 0.821,
+    "active": 37,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.97,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 4.65,
+    "level": 0.02464714285714295,
+    "fill": 0.821,
+    "active": 22,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.97,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 4.99,
+    "level": 0.0032207142857142027,
+    "fill": 0.821,
+    "active": 7,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.97,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 5.17,
+    "level": 0,
+    "fill": 0.821,
+    "active": 6,
+    "latched": true,
+    "cast": true,
+    "dmg": [
+     0.97,
+     1,
+     1
+    ]
+   }
+  ]
+ },
+ {
+  "summary": {
+   "run": 1,
+   "size": "iphone-landscape",
+   "latchT": 0.29,
+   "castT": 4.91,
+   "drainDur": 4.62,
+   "levelStages": {
+    "l75": 1.01,
+    "l50": 1.9,
+    "l25": 2.67,
+    "l05": 3.59
+   },
+   "fillAtHalfLevel": 0.299,
+   "meanAngleDeg": 62.1,
+   "particNearT": 0.81,
+   "particFarT": 1.23,
+   "particN": 162
+  },
+  "timeline": [
+   {
+    "t": 0.29,
+    "level": 0.9982840503377824,
+    "fill": 0.01,
+    "active": 164,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.02,
+     0,
+     0
+    ]
+   },
+   {
+    "t": 0.64,
+    "level": 0.9155812403466324,
+    "fill": 0.01,
+    "active": 164,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.02,
+     0,
+     0
+    ]
+   },
+   {
+    "t": 1.01,
+    "level": 0.7492472103165223,
+    "fill": 0.029,
+    "active": 162,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.07,
+     0,
+     0
+    ]
+   },
+   {
+    "t": 1.35,
+    "level": 0.6123107123001924,
+    "fill": 0.116,
+    "active": 153,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.19,
+     0.13,
+     0
+    ]
+   },
+   {
+    "t": 1.55,
+    "level": 0.5385672324999806,
+    "fill": 0.177,
+    "active": 146,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.36,
+     0.13,
+     0
+    ]
+   },
+   {
+    "t": 1.9,
+    "level": 0.42316730706302746,
+    "fill": 0.299,
+    "active": 132,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.62,
+     0.23,
+     0
+    ]
+   },
+   {
+    "t": 2.12,
+    "level": 0.3594914815748727,
+    "fill": 0.328,
+    "active": 129,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.64,
+     0.29,
+     0
+    ]
+   },
+   {
+    "t": 2.3,
+    "level": 0.3098066591481638,
+    "fill": 0.334,
+    "active": 127,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.64,
+     0.35,
+     0
+    ]
+   },
+   {
+    "t": 2.67,
+    "level": 0.22091582569159335,
+    "fill": 0.402,
+    "active": 120,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.64,
+     0.48,
+     0.1
+    ]
+   },
+   {
+    "t": 2.85,
+    "level": 0.18118968241065353,
+    "fill": 0.412,
+    "active": 119,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.64,
+     0.52,
+     0.1
+    ]
+   },
+   {
+    "t": 3.05,
+    "level": 0.14108531901980856,
+    "fill": 0.433,
+    "active": 116,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.67,
+     0.55,
+     0.13
+    ]
+   },
+   {
+    "t": 3.24,
+    "level": 0.10708107479813632,
+    "fill": 0.541,
+    "active": 100,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.83,
+     0.77,
+     0.2
+    ]
+   },
+   {
+    "t": 3.59,
+    "level": 0.04619426710799148,
+    "fill": 0.698,
+    "active": 77,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.97,
+     1,
+     0.53
+    ]
+   },
+   {
+    "t": 3.78,
+    "level": 0.045,
+    "fill": 0.729,
+    "active": 73,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.97,
+     1,
+     0.67
+    ]
+   },
+   {
+    "t": 3.97,
+    "level": 0.045,
+    "fill": 0.767,
+    "active": 67,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.97,
+     1,
+     0.86
+    ]
+   },
+   {
+    "t": 4.15,
+    "level": 0.045,
+    "fill": 0.77,
+    "active": 65,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.97,
+     1,
+     0.93
+    ]
+   },
+   {
+    "t": 4.35,
+    "level": 0.03322285714285733,
+    "fill": 0.777,
+    "active": 41,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.97,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 4.54,
+    "level": 0.02143928571428572,
+    "fill": 0.777,
+    "active": 23,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.97,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 4.91,
+    "level": 0,
+    "fill": 0.777,
+    "active": 10,
+    "latched": true,
+    "cast": true,
+    "dmg": [
+     0.97,
+     1,
+     1
+    ]
+   }
+  ]
+ },
+ {
+  "summary": {
+   "run": 2,
+   "size": "ipad-portrait",
+   "latchT": 0.38,
+   "castT": 5.17,
+   "drainDur": 4.79,
+   "levelStages": {
+    "l75": 1.25,
+    "l50": 2.15,
+    "l25": 2.77,
+    "l05": 3.92
+   },
+   "fillAtHalfLevel": 0.358,
+   "meanAngleDeg": 60.3,
+   "particNearT": 1.05,
+   "particFarT": 1.31,
+   "particN": 160
+  },
+  "timeline": [
+   {
+    "t": 0.38,
+    "level": 0.9918915350646367,
+    "fill": 0.048,
+    "active": 160,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.07,
+     0.06,
+     0
+    ]
+   },
+   {
+    "t": 0.8,
+    "level": 0.8629616555415589,
+    "fill": 0.058,
+    "active": 159,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.07,
+     0.1,
+     0
+    ]
+   },
+   {
+    "t": 1.25,
+    "level": 0.6717861653394981,
+    "fill": 0.097,
+    "active": 155,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.17,
+     0.1,
+     0
+    ]
+   },
+   {
+    "t": 1.68,
+    "level": 0.5098318068491083,
+    "fill": 0.265,
+    "active": 136,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.55,
+     0.19,
+     0
+    ]
+   },
+   {
+    "t": 2.15,
+    "level": 0.36448665079540726,
+    "fill": 0.358,
+    "active": 125,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.71,
+     0.29,
+     0.03
+    ]
+   },
+   {
+    "t": 2.33,
+    "level": 0.31450089941887976,
+    "fill": 0.388,
+    "active": 122,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.71,
+     0.32,
+     0.1
+    ]
+   },
+   {
+    "t": 2.77,
+    "level": 0.20644806381064032,
+    "fill": 0.397,
+    "active": 121,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.71,
+     0.35,
+     0.1
+    ]
+   },
+   {
+    "t": 2.97,
+    "level": 0.1677624335512064,
+    "fill": 0.419,
+    "active": 118,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.76,
+     0.39,
+     0.1
+    ]
+   },
+   {
+    "t": 3.17,
+    "level": 0.12562899615246007,
+    "fill": 0.461,
+    "active": 113,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.83,
+     0.42,
+     0.13
+    ]
+   },
+   {
+    "t": 3.37,
+    "level": 0.09275292866420612,
+    "fill": 0.586,
+    "active": 96,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     0.61,
+     0.23
+    ]
+   },
+   {
+    "t": 3.92,
+    "level": 0.045,
+    "fill": 0.768,
+    "active": 68,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     0.97,
+     0.8
+    ]
+   },
+   {
+    "t": 4.1,
+    "level": 0.039638571428571336,
+    "fill": 0.812,
+    "active": 51,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 4.31,
+    "level": 0.02571428571428571,
+    "fill": 0.812,
+    "active": 34,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 4.5,
+    "level": 0.013930714285714333,
+    "fill": 0.812,
+    "active": 26,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 4.7,
+    "level": 1.4988010832439614e-17,
+    "fill": 0.812,
+    "active": 15,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 5.17,
+    "level": 0,
+    "fill": 0.812,
+    "active": 5,
+    "latched": true,
+    "cast": true,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   }
+  ]
+ },
+ {
+  "summary": {
+   "run": 3,
+   "size": "ipad-landscape",
+   "latchT": 0.34,
+   "castT": 5.11,
+   "drainDur": 4.77,
+   "levelStages": {
+    "l75": 1.42,
+    "l50": 1.97,
+    "l25": 2.5,
+    "l05": 3.78
+   },
+   "fillAtHalfLevel": 0.239,
+   "meanAngleDeg": 51.3,
+   "particNearT": 1.16,
+   "particFarT": 1.01,
+   "particN": 160
+  },
+  "timeline": [
+   {
+    "t": 0.34,
+    "level": 0.991301467629737,
+    "fill": 0.029,
+    "active": 162,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.02,
+     0.06,
+     0
+    ]
+   },
+   {
+    "t": 0.89,
+    "level": 0.8049472513294886,
+    "fill": 0.039,
+    "active": 161,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.02,
+     0.1,
+     0
+    ]
+   },
+   {
+    "t": 1.42,
+    "level": 0.5626541663810679,
+    "fill": 0.135,
+    "active": 151,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.17,
+     0.23,
+     0
+    ]
+   },
+   {
+    "t": 1.97,
+    "level": 0.37707953096239427,
+    "fill": 0.239,
+    "active": 140,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.33,
+     0.32,
+     0.03
+    ]
+   },
+   {
+    "t": 2.5,
+    "level": 0.229940635365385,
+    "fill": 0.287,
+    "active": 135,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.38,
+     0.35,
+     0.1
+    ]
+   },
+   {
+    "t": 3.02,
+    "level": 0.11653434077407672,
+    "fill": 0.486,
+    "active": 108,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.76,
+     0.58,
+     0.23
+    ]
+   },
+   {
+    "t": 3.21,
+    "level": 0.07903541196179836,
+    "fill": 0.581,
+    "active": 97,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.93,
+     0.68,
+     0.27
+    ]
+   },
+   {
+    "t": 3.78,
+    "level": 0.045,
+    "fill": 0.755,
+    "active": 71,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     0.97,
+     0.73
+    ]
+   },
+   {
+    "t": 3.98,
+    "level": 0.045,
+    "fill": 0.798,
+    "active": 63,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     0.97,
+     1
+    ]
+   },
+   {
+    "t": 4.17,
+    "level": 0.03535714285714286,
+    "fill": 0.802,
+    "active": 39,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 4.36,
+    "level": 0.02250642857142871,
+    "fill": 0.802,
+    "active": 24,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 4.55,
+    "level": 0.01071642857142862,
+    "fill": 0.802,
+    "active": 20,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 5.11,
+    "level": 0,
+    "fill": 0.802,
+    "active": 7,
+    "latched": true,
+    "cast": true,
+    "dmg": [
+     1,
+     1,
+     1
+    ]
+   }
+  ]
+ },
+ {
+  "summary": {
+   "run": 4,
+   "size": "iphone-portrait",
+   "latchT": 0.3,
+   "castT": 4.72,
+   "drainDur": 4.42,
+   "levelStages": {
+    "l75": 1.08,
+    "l50": 1.65,
+    "l25": 2.6,
+    "l05": 3.56
+   },
+   "fillAtHalfLevel": 0.214,
+   "meanAngleDeg": 64.2,
+   "particNearT": 0.64,
+   "particFarT": 0.7,
+   "particN": 160
+  },
+  "timeline": [
+   {
+    "t": 0.3,
+    "level": 0.991770910039188,
+    "fill": 0.048,
+    "active": 160,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.07,
+     0.06,
+     0
+    ]
+   },
+   {
+    "t": 0.48,
+    "level": 0.9519276585652059,
+    "fill": 0.048,
+    "active": 160,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.07,
+     0.06,
+     0
+    ]
+   },
+   {
+    "t": 0.69,
+    "level": 0.8751859828523952,
+    "fill": 0.058,
+    "active": 159,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.07,
+     0.1,
+     0
+    ]
+   },
+   {
+    "t": 0.88,
+    "level": 0.7910863264350735,
+    "fill": 0.068,
+    "active": 158,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.07,
+     0.13,
+     0
+    ]
+   },
+   {
+    "t": 1.08,
+    "level": 0.7021323001823587,
+    "fill": 0.078,
+    "active": 157,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.07,
+     0.16,
+     0
+    ]
+   },
+   {
+    "t": 1.26,
+    "level": 0.6268002535882222,
+    "fill": 0.087,
+    "active": 156,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.07,
+     0.19,
+     0
+    ]
+   },
+   {
+    "t": 1.46,
+    "level": 0.5508430689597205,
+    "fill": 0.155,
+    "active": 149,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.21,
+     0.23,
+     0
+    ]
+   },
+   {
+    "t": 1.65,
+    "level": 0.4865175947198595,
+    "fill": 0.214,
+    "active": 142,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.38,
+     0.23,
+     0
+    ]
+   },
+   {
+    "t": 1.84,
+    "level": 0.42168954019745664,
+    "fill": 0.285,
+    "active": 134,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.52,
+     0.29,
+     0
+    ]
+   },
+   {
+    "t": 2.03,
+    "level": 0.36673127698206626,
+    "fill": 0.295,
+    "active": 133,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.52,
+     0.32,
+     0
+    ]
+   },
+   {
+    "t": 2.22,
+    "level": 0.3113484266524848,
+    "fill": 0.314,
+    "active": 131,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.55,
+     0.32,
+     0.03
+    ]
+   },
+   {
+    "t": 2.41,
+    "level": 0.26444663212672315,
+    "fill": 0.314,
+    "active": 131,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.55,
+     0.32,
+     0.03
+    ]
+   },
+   {
+    "t": 2.6,
+    "level": 0.22093411201264795,
+    "fill": 0.343,
+    "active": 128,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.57,
+     0.35,
+     0.07
+    ]
+   },
+   {
+    "t": 2.79,
+    "level": 0.1770854284386431,
+    "fill": 0.365,
+    "active": 125,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.59,
+     0.42,
+     0.07
+    ]
+   },
+   {
+    "t": 2.99,
+    "level": 0.13672509684033068,
+    "fill": 0.401,
+    "active": 120,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.67,
+     0.45,
+     0.1
+    ]
+   },
+   {
+    "t": 3.18,
+    "level": 0.10252747439303249,
+    "fill": 0.515,
+    "active": 104,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.95,
+     0.55,
+     0.13
+    ]
+   },
+   {
+    "t": 3.38,
+    "level": 0.06804606510079966,
+    "fill": 0.656,
+    "active": 85,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.97,
+     0.81,
+     0.47
+    ]
+   },
+   {
+    "t": 3.56,
+    "level": 0.045,
+    "fill": 0.708,
+    "active": 74,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.97,
+     0.81,
+     0.83
+    ]
+   },
+   {
+    "t": 3.76,
+    "level": 0.045,
+    "fill": 0.757,
+    "active": 66,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.97,
+     0.94,
+     0.96
+    ]
+   },
+   {
+    "t": 3.94,
+    "level": 0.045,
+    "fill": 0.771,
+    "active": 64,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.97,
+     0.97,
+     1
+    ]
+   },
+   {
+    "t": 4.14,
+    "level": 0.03642428571428585,
+    "fill": 0.775,
+    "active": 42,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.97,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 4.33,
+    "level": 0.024640714285714235,
+    "fill": 0.775,
+    "active": 30,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.97,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 4.54,
+    "level": 0.01178357142857138,
+    "fill": 0.775,
+    "active": 16,
+    "latched": true,
+    "cast": false,
+    "dmg": [
+     0.97,
+     1,
+     1
+    ]
+   },
+   {
+    "t": 4.72,
+    "level": 0,
+    "fill": 0.775,
+    "active": 10,
+    "latched": true,
+    "cast": true,
+    "dmg": [
+     0.97,
+     1,
+     1
+    ]
+   }
+  ]
+ }
+]
