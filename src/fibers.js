@@ -137,6 +137,13 @@ export class FiberSim {
       const [gvx, gvy] = this.gridAt(f.x, f.y);
       f.vx += gvx * 3.0 * dt;
       f.vy += gvy * 3.0 * dt;
+      // turbulent diffusion: strong currents shred clumps apart instead of
+      // carrying them coherently (this is what actually disperses the slurry)
+      const gmag = Math.hypot(gvx, gvy);
+      if (gmag > 0.01) {
+        f.vx += (Math.random() - 0.5) * gmag * 7 * dt;
+        f.vy += (Math.random() - 0.5) * gmag * 7 * dt;
+      }
       // slow brownian drift so clumps loosen on their own
       f.vx += Math.cos(f.ph + this.t * (0.7 + f.ph * 0.1)) * 0.05 * dt;
       f.vy += Math.sin(f.ph * 1.7 + this.t * (0.6 + f.ph * 0.07)) * 0.05 * dt;
@@ -152,8 +159,8 @@ export class FiberSim {
       // gentle ambient circulation while the slurry rests — the water is
       // alive, and clumps slowly loosen even without stirring
       if (!drain && this.level > 0.05) {
-        f.vx += -(f.y - 0.5) * 0.10 * dt;
-        f.vy += (f.x - 0.5) * 0.10 * dt;
+        f.vx += -(f.y - 0.5) * 0.03 * dt;
+        f.vy += (f.x - 0.5) * 0.03 * dt;
       }
 
       if (drain > 0 && this.paper) {
