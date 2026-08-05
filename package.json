@@ -1,0 +1,14 @@
+{
+  "name": "oyoufuku-koubou",
+  "version": "1.0.0",
+  "description": "ちょきちょき！カタカタ！おようふく工房 — a 3D sewing workshop for four-year-olds",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "python3 -m http.server 8000",
+    "shots": "node tools/shot.mjs && node tools/shot.mjs --portrait"
+  },
+  "devDependencies": {
+    "playwright": "^1.48.0"
+  }
+}

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#ffe9d9">
+<title>ちょきちょき！カタカタ！おようふく工房</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>%E2%9C%82%EF%B8%8F</text></svg>">
+<link rel="stylesheet" href="./src/style.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three/three.module.js",
+    "three/addons/": "./vendor/three/addons/"
+  }
+}
+</script>
+</head>
+<body>
+<canvas id="stage"></canvas>
+
+<!-- ===== overlay: pictogram-only HUD (no text anywhere) ===== -->
+<div id="hud" aria-hidden="true">
+  <div id="hud-tool" class="card">
+    <svg id="tool-icon" viewBox="0 0 64 64"></svg>
+  </div>
+  <div id="hud-pips"></div>
+  <button id="hud-sound" class="card tap" aria-label="sound">
+    <svg viewBox="0 0 64 64" id="sound-icon"></svg>
+  </button>
+</div>
+
+<!-- ===== decoration picker (phase 6) ===== -->
+<div id="deco-bar" class="hidden"></div>
+
+<!-- ===== start / loading veil ===== -->
+<div id="veil">
+  <div id="veil-inner">
+    <svg id="veil-art" viewBox="0 0 220 220"></svg>
+    <div id="veil-dots"><i></i><i></i><i></i></div>
+  </div>
+</div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
