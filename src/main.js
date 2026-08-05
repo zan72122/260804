@@ -260,7 +260,8 @@ for (let i = 0; i < 10; i++) {
   glow.scale.set(1.6, 1.6, 1);
   glow.position.y = 3.1; g.add(glow);
   lanternGlows.push(glow.material);
-  g.position.set(Math.sin(a) * 6.7, 0, Math.cos(a) * 6.7);
+  // カーテンの外側に立つ会場の街灯（制作中の視界を遮らない）
+  g.position.set(Math.sin(a) * 11.3, 0, Math.cos(a) * 11.3);
   scene.add(g);
 }
 
