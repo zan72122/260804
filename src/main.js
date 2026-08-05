@@ -254,7 +254,7 @@ for (let i = 0; i < 10; i++) {
   pole.position.y = 1.55; pole.castShadow = true; g.add(pole);
   const lm = new THREE.MeshStandardMaterial({ color: 0xffe9c9, emissive: 0xffa64d, emissiveIntensity: 0, roughness: 0.6 });
   lanternMats.push(lm);
-  const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 10), lm);
+  const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.19, 12, 10), lm);
   lamp.position.y = 3.1; g.add(lamp);
   const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: texGlow, color: 0xffa64d, transparent: true, opacity: 0, depthWrite: false }));
   glow.scale.set(1.6, 1.6, 1);
