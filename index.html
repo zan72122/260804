@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>ねつききゅうを とばそう！</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎈</text></svg>">
+<style>
+  :root{
+    --pink:#ff7fae; --yellow:#ffd23f; --sky:#7fd4ff; --deep:#5b4a6b;
+  }
+  *{ margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ width:100%; height:100%; overflow:hidden; background:#ffd9a0;
+    touch-action:none; user-select:none; -webkit-user-select:none;
+    font-family:"Hiragino Maru Gothic ProN","Rounded Mplus 1c","BIZ UDPGothic","Yu Gothic","Meiryo",sans-serif; }
+  #app{ position:fixed; inset:0; }
+  canvas{ display:block; }
+
+  /* soft vignette for depth */
+  #vignette{ position:fixed; inset:0; pointer-events:none;
+    background:radial-gradient(ellipse at 50% 45%, transparent 62%, rgba(60,30,60,.22) 100%); }
+
+  /* ---------- instruction bubble ---------- */
+  #say{ position:fixed; top:max(10px, env(safe-area-inset-top)); left:50%; transform:translateX(-50%);
+    max-width:min(92vw, 560px); background:rgba(255,255,255,.94); border:4px solid var(--pink);
+    border-radius:28px; padding:10px 20px; font-size:clamp(17px, 4.6vw, 26px); font-weight:800;
+    color:var(--deep); text-align:center; line-height:1.35; box-shadow:0 6px 18px rgba(90,40,70,.25);
+    transition:opacity .3s, transform .3s; pointer-events:none; white-space:pre-line; }
+  #say.hidden{ opacity:0; transform:translateX(-50%) translateY(-12px); }
+
+  /* ---------- progress stars ---------- */
+  #stars{ position:fixed; top:max(10px, env(safe-area-inset-top)); right:10px; display:flex; flex-direction:column;
+    gap:2px; font-size:clamp(14px,3.4vw,20px); filter:drop-shadow(0 2px 3px rgba(90,40,70,.35));
+    pointer-events:none; }
+  @media (orientation:landscape){ #stars{ flex-direction:row; top:auto; bottom:10px; right:12px; } }
+  #stars span{ opacity:.35; transition:opacity .3s, transform .3s; }
+  #stars span.on{ opacity:1; transform:scale(1.25); }
+
+  /* ---------- hand hint ---------- */
+  #hand{ position:fixed; left:0; top:0; font-size:clamp(34px,8vw,50px); pointer-events:none;
+    filter:drop-shadow(0 3px 4px rgba(0,0,0,.35)); transform:translate(-30%, 8%);
+    animation:bob 1s ease-in-out infinite; transition:opacity .25s; z-index:5; }
+  @keyframes bob{ 0%,100%{ margin-top:0 } 50%{ margin-top:14px } }
+  #hand.hidden{ opacity:0; }
+
+  /* ---------- big hold button ---------- */
+  #holdBtn{ position:fixed; left:50%; bottom:max(18px, env(safe-area-inset-bottom));
+    transform:translateX(-50%); width:clamp(88px,22vw,120px); height:clamp(88px,22vw,120px);
+    border-radius:50%; border:none; font-size:clamp(40px,10vw,54px); cursor:pointer;
+    background:conic-gradient(var(--yellow) 0deg, rgba(255,255,255,.85) 0deg);
+    box-shadow:0 8px 0 rgba(120,70,40,.45), 0 10px 24px rgba(90,40,70,.35);
+    outline:6px solid rgba(255,255,255,.85); transition:opacity .3s, transform .15s; z-index:6; }
+  #holdBtn:active{ transform:translateX(-50%) scale(.94); }
+  #holdBtn.hidden{ opacity:0; pointer-events:none; }
+  #holdLabel{ position:fixed; left:50%; bottom:calc(max(18px, env(safe-area-inset-bottom)) + clamp(92px,23vw,126px));
+    transform:translateX(-50%); font-weight:800; color:#fff; font-size:clamp(14px,3.6vw,19px);
+    text-shadow:0 2px 4px rgba(90,40,70,.6); pointer-events:none; transition:opacity .3s; }
+  #holdLabel.hidden{ opacity:0; }
+
+  /* ---------- title / replay ---------- */
+  .panel{ position:fixed; inset:0; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; gap:4vh; z-index:10; background:radial-gradient(ellipse at 50% 40%,
+    rgba(255,214,160,.35), rgba(120,70,120,.45)); transition:opacity .5s; }
+  .panel.hidden{ opacity:0; pointer-events:none; }
+  #title h1{ font-size:clamp(30px,8vw,58px); color:#fff; text-align:center; line-height:1.3;
+    text-shadow:0 4px 0 rgba(200,80,130,.85), 0 8px 20px rgba(90,40,70,.5); }
+  #title .balloon{ font-size:clamp(60px,16vw,110px); animation:bob2 2.2s ease-in-out infinite;
+    filter:drop-shadow(0 8px 14px rgba(90,40,70,.4)); }
+  @keyframes bob2{ 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(14px) } }
+  .bigBtn{ border:none; cursor:pointer; background:linear-gradient(#ffde68,#ffb63f);
+    border-radius:40px; padding:16px 46px; font-size:clamp(22px,5.5vw,32px); font-weight:800;
+    color:#7a4a12; font-family:inherit; box-shadow:0 7px 0 #c9812a, 0 10px 22px rgba(90,40,70,.4); }
+  .bigBtn:active{ transform:translateY(4px); box-shadow:0 3px 0 #c9812a; }
+  #replay{ position:fixed; left:50%; bottom:max(16px, env(safe-area-inset-bottom));
+    transform:translateX(-50%); z-index:6; transition:opacity .4s; padding:10px 30px;
+    font-size:clamp(17px,4.2vw,24px); }
+  #replay.hidden{ opacity:0; pointer-events:none; }
+
+  /* DOM star burst */
+  .burst{ position:fixed; pointer-events:none; font-size:26px; z-index:8;
+    transition:transform 1s cubic-bezier(.2,.7,.3,1), opacity 1s; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="vignette"></div>
+<div id="say" class="hidden"></div>
+<div id="stars"></div>
+<div id="hand" class="hidden">👆</div>
+<button id="holdBtn" class="hidden">🌀</button>
+<div id="holdLabel" class="hidden"></div>
+<button id="replay" class="bigBtn hidden">🎈 もういちど</button>
+<div id="title" class="panel">
+  <div class="balloon">🎈</div>
+  <h1>ねつききゅうを<br>とばそう！</h1>
+  <button id="startBtn" class="bigBtn">▶ はじめる</button>
+</div>
+<script src="lib/three.min.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
