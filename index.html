@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>かげえげきじょう — 影絵劇スタッフ3Dゲーム</title>
+<style>
+  :root{
+    --warm:#ffb867; --warm2:#ff8f4f; --paper:#fff6e8; --ink:#4a2f1d;
+  }
+  *{ margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ width:100%; height:100%; overflow:hidden; background:#0d0a08;
+    font-family:"Hiragino Maru Gothic ProN","BIZ UDPGothic","IPAGothic","Noto Sans JP",system-ui,sans-serif;
+    touch-action:none; user-select:none; -webkit-user-select:none; }
+  #app{ position:fixed; inset:0; }
+  canvas{ display:block; }
+
+  #ui{ position:fixed; inset:0; pointer-events:none; display:flex; flex-direction:column;
+       align-items:center; justify-content:space-between;
+       padding:calc(env(safe-area-inset-top) + 10px) 10px calc(env(safe-area-inset-bottom) + 14px); }
+
+  #banner{ pointer-events:none; background:rgba(255,246,232,.94); color:var(--ink);
+    border-radius:999px; padding:.55em 1.2em; font-size:clamp(15px, 2.6vmax, 26px); font-weight:700;
+    box-shadow:0 4px 18px rgba(0,0,0,.45); display:flex; align-items:center; gap:.5em;
+    max-width:94vw; text-align:center; transition:opacity .4s, transform .4s; }
+  #banner.hidden{ opacity:0; transform:translateY(-20px); }
+  #bannerIcon{ font-size:1.25em; font-family:"Noto Color Emoji","Hiragino Maru Gothic ProN",sans-serif; }
+
+  #stars{ position:fixed; top:calc(env(safe-area-inset-top) + 12px); left:12px; display:flex; gap:4px;
+    pointer-events:none; transition:opacity .4s; }
+  #stars.hidden{ opacity:0; }
+  #stars span{ font-size:clamp(13px,2vmax,20px); filter:grayscale(1) opacity(.35); transition:filter .5s, transform .5s;
+    font-family:"Noto Color Emoji",sans-serif; }
+  #stars span.on{ filter:none; transform:scale(1.18); }
+
+  .bigbtn{ pointer-events:auto; cursor:pointer; border:none; color:#fff;
+    background:linear-gradient(180deg,var(--warm),var(--warm2));
+    border-radius:999px; padding:.7em 1.6em; font-size:clamp(17px,3vmax,30px); font-weight:800;
+    font-family:inherit; box-shadow:0 6px 0 #c95f22, 0 10px 26px rgba(0,0,0,.5);
+    transition:transform .15s, opacity .35s; letter-spacing:.04em; }
+  .bigbtn:active{ transform:translateY(4px); box-shadow:0 2px 0 #c95f22, 0 6px 16px rgba(0,0,0,.5); }
+  .bigbtn.hidden{ opacity:0; pointer-events:none; }
+  .bigbtn.red{ background:linear-gradient(180deg,#ff7a6b,#f4513d); box-shadow:0 6px 0 #b3271c, 0 10px 26px rgba(0,0,0,.5); }
+  .bigbtn.red:active{ box-shadow:0 2px 0 #b3271c, 0 6px 16px rgba(0,0,0,.5); }
+
+  #btnrow{ display:flex; gap:14px; pointer-events:none; }
+  #btnrow .bigbtn{ pointer-events:auto; }
+  #btnrow .bigbtn.hidden, .bigbtn.hidden{ pointer-events:none !important; visibility:hidden; }
+
+  #overlay{ position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:4vmin; background:radial-gradient(ellipse at 50% 42%, rgba(48,30,16,.6), rgba(8,5,3,.88));
+    transition:opacity .7s; z-index:5; }
+  #overlay.hidden{ opacity:0; pointer-events:none; }
+  #overlay h1{ color:var(--paper); font-size:clamp(30px,7vmax,72px); font-weight:900; letter-spacing:.08em;
+    text-shadow:0 0 30px rgba(255,180,90,.55), 0 4px 14px rgba(0,0,0,.6); text-align:center; }
+  #overlay p{ color:#ffdcae; font-size:clamp(14px,2.6vmax,24px); font-weight:700; text-align:center; line-height:1.7;
+    padding:0 1em; }
+  #overlay .lantern{ font-size:clamp(38px,8vmax,84px); font-family:"Noto Color Emoji",sans-serif;
+    animation:sway 3.2s ease-in-out infinite; }
+  @keyframes sway{ 0%,100%{ transform:rotate(-6deg);} 50%{ transform:rotate(6deg);} }
+
+  #fin{ position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:flex-end;
+    padding-bottom:calc(env(safe-area-inset-bottom) + 16px); gap:2vmin; pointer-events:none; z-index:4;
+    transition:opacity .7s; }
+  #fin.hidden{ opacity:0; visibility:hidden; }
+  #fin h2{ color:#fff3d8; font-size:clamp(24px,5vmax,52px); font-weight:900; letter-spacing:.1em;
+    text-shadow:0 0 24px rgba(255,190,90,.8); }
+
+  #err{ position:fixed; inset:0; display:none; align-items:center; justify-content:center; color:#fff;
+    background:#201510; font-size:18px; padding:2em; text-align:center; z-index:9; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<div id="overlay">
+  <div class="lantern">🏮</div>
+  <h1>かげえ げきじょう</h1>
+  <p>きょうは きみが かげえげきの スタッフさん。<br>ちいさな にんぎょうが、おおきな まほうに かわるよ！</p>
+  <button id="startBtn" class="bigbtn">はじめる</button>
+</div>
+
+<div id="ui">
+  <div id="banner" class="hidden"><span id="bannerIcon">🎭</span><span id="bannerText"></span></div>
+  <div id="btnrow">
+    <button id="okBtn" class="bigbtn hidden">これで OK！</button>
+    <button id="showBtn" class="bigbtn red hidden">🌙 ほんばん スタート！</button>
+  </div>
+</div>
+
+<div id="stars" class="hidden">
+  <span>⭐</span><span>⭐</span><span>⭐</span><span>⭐</span><span>⭐</span><span>⭐</span><span>⭐</span>
+</div>
+
+<div id="fin" class="hidden">
+  <h2>✨ おしまい ✨</h2>
+  <div id="btnrow2" style="display:flex;gap:14px;">
+    <button id="againBtn" class="bigbtn" style="pointer-events:auto;">もういちど みる</button>
+    <button id="newBtn" class="bigbtn red" style="pointer-events:auto;">あたらしく つくる</button>
+  </div>
+</div>
+
+<div id="err">ごめんなさい、この ブラウザでは あそべません（WebGL が ひつよう です）</div>
+
+<script type="importmap">{ "imports": { "three": "./lib/three.module.min.js" } }</script>
+<script type="module" src="./js/main.js"></script>
+</body>
+</html>
