@@ -1004,11 +1004,16 @@ function startNightPhase() {
   setBanner('よるに なるよ…', '');
   setProgress(null);
   state.nightTarget = 1;
+  state.switchShown = false;
   cam.radiusTarget = 15.5; cam.heightTarget = 3.6; cam.lookYTarget = 2.6;
-  setTimeout(() => {
+}
+function maybeShowSwitch() {
+  // 夜が十分深まってからスイッチを出す（ゲーム内時間基準）
+  if (state.phase === PHASE.NIGHT && !state.switchShown && state.night > 0.93) {
+    state.switchShown = true;
     setBanner('じゅんび OK！', 'スイッチを おしてね');
     ui.bigSwitch.style.display = 'flex';
-  }, 4200);
+  }
 }
 
 function pressSwitch() {
@@ -1079,8 +1084,8 @@ function updateReveal(dt) {
     let c;
     if (state.revealMode <= 1) c = new THREE.Color().setHSL(0.58 + i * 0.015, 0.9, 0.6);
     else if (state.revealMode === 2) c = new THREE.Color().setHSL(0.75 + i * 0.02, 0.85, 0.62);
-    else c = s.isRainbow || true ? new THREE.Color().setHSL((clock.elapsedTime * 0.08 + i * 0.2) % 1, 0.9, 0.6) : new THREE.Color(s.color);
-    if (state.revealMode === 3 && !s.isRainbow) c = new THREE.Color(s.color);
+    else if (s.isRainbow) c = new THREE.Color().setHSL((clock.elapsedTime * 0.08 + i * 0.2) % 1, 0.9, 0.6);
+    else c = new THREE.Color(s.color);
     s.light.color.copy(c);
     s.light.intensity = orbOn * (state.revealMode === 3 ? 9 : 6);
     s.orb.material.emissive.copy(c);
@@ -1365,6 +1370,7 @@ function animate() {
   curtainUniforms.uTime.value = t;
 
   applyEnvironment(dt);
+  maybeShowSwitch();
   updateStackAnim(dt);
   updateAutoFinish();
   updateDebris(dt);
@@ -1464,6 +1470,8 @@ window.__game = {
   get voxels() { return { total: vox.count, excessLeft: vox.excessLeft, excessTotal: vox.excessTotal, skinLeft: vox.skinLeft, skinTotal: vox.skinTotal }; },
   choose(k) { startGame(k); },
   stack() { dropNextBlock(); },
+  stackCount() { return state.stackCount; },
+  time() { return clock.elapsedTime; },
   // ランダムな余分ボクセルを中心に指定割合まで削る（試遊補助）
   autoCarve(frac = 0.5) {
     if (state.phase !== PHASE.CARVE && state.phase !== PHASE.BRUSH) return;
