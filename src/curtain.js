@@ -334,9 +334,9 @@ export class Curtain {
           const y = TOP - v * h;
           // ちぢんだぶんだけ、横向きのひだが深くなる
           const comp = clamp(h / H, 0.12, 1);
-          const Av = 0.06 + 0.42 * (1 - comp);
-          const Nr = 2.5 + 7.0 * (1 - comp);
-          const ruffle = Math.sin(v * Math.PI * Nr + t * 0.5 + u * 1.7) * Av * (0.35 + v * 0.9);
+          const Av = 0.09 + 0.60 * (1 - comp);
+          const Nr = 3.0 + 9.0 * (1 - comp);
+          const ruffle = Math.sin(v * Math.PI * Nr + t * 0.5 + u * 1.7) * Av * (0.55 + v * 0.7);
           const fold = Math.sin(Math.PI * 2 * F * u + t * 0.4 + sway * 2.0)
             * (0.11 + o * 0.16) * (0.45 + v * 0.75);
           let z = ruffle + fold;
