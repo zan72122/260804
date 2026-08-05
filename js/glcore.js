@@ -1,0 +1,208 @@
+/* =========================================================
+   glcore.js — 生WebGLの小さなヘルパ（依存なし）
+   ========================================================= */
+(function (global) {
+  'use strict';
+
+  var G = {};
+
+  G.create = function (canvas) {
+    var opts = {
+      alpha: false, antialias: true, depth: true, stencil: false,
+      premultipliedAlpha: true, preserveDrawingBuffer: false,
+      powerPreference: 'high-performance', failIfMajorPerformanceCaveat: false
+    };
+    var gl = canvas.getContext('webgl', opts) || canvas.getContext('experimental-webgl', opts);
+    return gl;
+  };
+
+  function shader(gl, type, src) {
+    var s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+      console.error('shader error:', gl.getShaderInfoLog(s), '\n', src);
+      return null;
+    }
+    return s;
+  }
+
+  /* プログラム生成 + uniform/attrib の自動収集 */
+  G.program = function (gl, vsSrc, fsSrc) {
+    var vs = shader(gl, gl.VERTEX_SHADER, vsSrc);
+    var fs = shader(gl, gl.FRAGMENT_SHADER, fsSrc);
+    if (!vs || !fs) return null;
+    var p = gl.createProgram();
+    gl.attachShader(p, vs); gl.attachShader(p, fs);
+    gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+      console.error('link error:', gl.getProgramInfoLog(p));
+      return null;
+    }
+    var obj = { p: p, u: {}, a: {} };
+    var nu = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+    for (var i = 0; i < nu; i++) {
+      var ui = gl.getActiveUniform(p, i);
+      var nm = ui.name.replace(/\[0\]$/, '');
+      obj.u[nm] = gl.getUniformLocation(p, ui.name);
+    }
+    var na = gl.getProgramParameter(p, gl.ACTIVE_ATTRIBUTES);
+    for (var j = 0; j < na; j++) {
+      var ai = gl.getActiveAttrib(p, j);
+      obj.a[ai.name] = gl.getAttribLocation(p, ai.name);
+    }
+    return obj;
+  };
+
+  G.buffer = function (gl, data, type, usage) {
+    var b = gl.createBuffer();
+    var t = type || gl.ARRAY_BUFFER;
+    gl.bindBuffer(t, b);
+    gl.bufferData(t, data, usage || gl.STATIC_DRAW);
+    return b;
+  };
+
+  G.attrib = function (gl, prog, name, buf, size, stride, offset) {
+    var loc = prog.a[name];
+    if (loc === undefined || loc < 0) return;
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, size, gl.FLOAT, false, (stride || 0) * 4, (offset || 0) * 4);
+  };
+
+  G.disableAll = function (gl, prog) {
+    for (var k in prog.a) {
+      if (prog.a[k] >= 0) gl.disableVertexAttribArray(prog.a[k]);
+    }
+  };
+
+  /* ---------- ジオメトリ ---------- */
+
+  /* 球（inward=true で内側から見る用に法線・面を反転） */
+  G.sphere = function (radius, segs, rings, polarMaxDeg, inward) {
+    var pos = [], nrm = [], uv = [], idx = [];
+    var pmax = (polarMaxDeg || 180) * Math.PI / 180;
+    for (var r = 0; r <= rings; r++) {
+      var v = r / rings;
+      var phi = v * pmax;
+      var sp = Math.sin(phi), cp = Math.cos(phi);
+      for (var s = 0; s <= segs; s++) {
+        var u = s / segs;
+        var th = u * Math.PI * 2;
+        var x = sp * Math.cos(th), y = cp, z = sp * Math.sin(th);
+        pos.push(x * radius, y * radius, z * radius);
+        var n = inward ? -1 : 1;
+        nrm.push(x * n, y * n, z * n);
+        uv.push(u, v);
+      }
+    }
+    for (var rr = 0; rr < rings; rr++) {
+      for (var ss = 0; ss < segs; ss++) {
+        var a = rr * (segs + 1) + ss;
+        var b = a + segs + 1;
+        if (inward) idx.push(a, a + 1, b, b, a + 1, b + 1);
+        else idx.push(a, b, a + 1, a + 1, b, b + 1);
+      }
+    }
+    return {
+      pos: new Float32Array(pos), nrm: new Float32Array(nrm),
+      uv: new Float32Array(uv), idx: new Uint16Array(idx), count: idx.length
+    };
+  };
+
+  /* 箱 */
+  G.box = function (w, h, d) {
+    var x = w / 2, y = h / 2, z = d / 2;
+    var P = [
+      [-x, -y, z], [x, -y, z], [x, y, z], [-x, y, z],
+      [-x, -y, -z], [-x, y, -z], [x, y, -z], [x, -y, -z]
+    ];
+    var faces = [
+      [0, 1, 2, 3, 0, 0, 1], [7, 4, 5, 6, 0, 0, -1],
+      [1, 7, 6, 2, 1, 0, 0], [4, 0, 3, 5, -1, 0, 0],
+      [3, 2, 6, 5, 0, 1, 0], [4, 7, 1, 0, 0, -1, 0]
+    ];
+    var pos = [], nrm = [], uv = [], idx = [], k = 0;
+    faces.forEach(function (f) {
+      for (var i = 0; i < 4; i++) {
+        pos.push(P[f[i]][0], P[f[i]][1], P[f[i]][2]);
+        nrm.push(f[4], f[5], f[6]);
+      }
+      uv.push(0, 0, 1, 0, 1, 1, 0, 1);
+      idx.push(k, k + 1, k + 2, k, k + 2, k + 3);
+      k += 4;
+    });
+    return {
+      pos: new Float32Array(pos), nrm: new Float32Array(nrm),
+      uv: new Float32Array(uv), idx: new Uint16Array(idx), count: idx.length
+    };
+  };
+
+  /* 円盤（床） */
+  G.disk = function (radius, segs) {
+    var pos = [0, 0, 0], nrm = [0, 1, 0], uv = [0.5, 0.5], idx = [];
+    for (var i = 0; i <= segs; i++) {
+      var a = i / segs * Math.PI * 2;
+      pos.push(Math.cos(a) * radius, 0, Math.sin(a) * radius);
+      nrm.push(0, 1, 0);
+      uv.push(0.5 + Math.cos(a) * 0.5, 0.5 + Math.sin(a) * 0.5);
+      if (i > 0) idx.push(0, i, i + 1);
+    }
+    return {
+      pos: new Float32Array(pos), nrm: new Float32Array(nrm),
+      uv: new Float32Array(uv), idx: new Uint16Array(idx), count: idx.length
+    };
+  };
+
+  /* 円柱 */
+  G.cylinder = function (r0, r1, h, segs) {
+    var pos = [], nrm = [], uv = [], idx = [], k = 0;
+    for (var i = 0; i < segs; i++) {
+      var a0 = i / segs * Math.PI * 2, a1 = (i + 1) / segs * Math.PI * 2;
+      var c0 = Math.cos(a0), s0 = Math.sin(a0), c1 = Math.cos(a1), s1 = Math.sin(a1);
+      pos.push(c0 * r0, -h / 2, s0 * r0, c1 * r0, -h / 2, s1 * r0,
+               c1 * r1, h / 2, s1 * r1, c0 * r1, h / 2, s0 * r1);
+      nrm.push(c0, 0.25, s0, c1, 0.25, s1, c1, 0.25, s1, c0, 0.25, s0);
+      uv.push(0, 0, 1, 0, 1, 1, 0, 1);
+      idx.push(k, k + 1, k + 2, k, k + 2, k + 3);
+      k += 4;
+    }
+    return {
+      pos: new Float32Array(pos), nrm: new Float32Array(nrm),
+      uv: new Float32Array(uv), idx: new Uint16Array(idx), count: idx.length
+    };
+  };
+
+  /* 複数ジオメトリを行列で焼きこんで結合 */
+  G.merge = function (parts) {
+    var np = 0, ni = 0;
+    parts.forEach(function (p) { np += p.geo.pos.length / 3; ni += p.geo.idx.length; });
+    var pos = new Float32Array(np * 3), nrm = new Float32Array(np * 3);
+    var uv = new Float32Array(np * 2), ext = new Float32Array(np * 3);
+    var idx = (np > 65000) ? new Uint32Array(ni) : new Uint16Array(ni);
+    var vo = 0, io = 0;
+    parts.forEach(function (p) {
+      var m = p.m, g = p.geo, n = g.pos.length / 3;
+      var e = p.extra || [0, 0, 0];
+      for (var i = 0; i < n; i++) {
+        var x = g.pos[i * 3], y = g.pos[i * 3 + 1], z = g.pos[i * 3 + 2];
+        pos[(vo + i) * 3]     = m[0] * x + m[4] * y + m[8] * z + m[12];
+        pos[(vo + i) * 3 + 1] = m[1] * x + m[5] * y + m[9] * z + m[13];
+        pos[(vo + i) * 3 + 2] = m[2] * x + m[6] * y + m[10] * z + m[14];
+        var nx = g.nrm[i * 3], ny = g.nrm[i * 3 + 1], nz = g.nrm[i * 3 + 2];
+        var ox = m[0] * nx + m[4] * ny + m[8] * nz;
+        var oy = m[1] * nx + m[5] * ny + m[9] * nz;
+        var oz = m[2] * nx + m[6] * ny + m[10] * nz;
+        var l = Math.sqrt(ox * ox + oy * oy + oz * oz) || 1;
+        nrm[(vo + i) * 3] = ox / l; nrm[(vo + i) * 3 + 1] = oy / l; nrm[(vo + i) * 3 + 2] = oz / l;
+        uv[(vo + i) * 2] = g.uv[i * 2]; uv[(vo + i) * 2 + 1] = g.uv[i * 2 + 1];
+        ext[(vo + i) * 3] = e[0]; ext[(vo + i) * 3 + 1] = e[1]; ext[(vo + i) * 3 + 2] = e[2];
+      }
+      for (var j = 0; j < g.idx.length; j++) idx[io + j] = g.idx[j] + vo;
+      vo += n; io += g.idx.length;
+    });
+    return { pos: pos, nrm: nrm, uv: uv, ext: ext, idx: idx, count: idx.length, big: np > 65000 };
+  };
+
+  global.GLC = G;
+})(window);
