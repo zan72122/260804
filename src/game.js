@@ -24,7 +24,7 @@ const TIMES = [
     fogCol: [0.82, 0.76, 0.70], fogDensity: 0.0055, stars: 0, lamp: 0.40,
   },
   {
-    id: 'yugata', sunDir: [0.50, -0.64, 0.58], sunCol: [13.0, 5.8, 2.3],
+    id: 'yugata', sunDir: [0.50, -0.62, 0.60], sunCol: [13.0, 5.8, 2.3],
     skyTop: [0.36, 0.33, 0.69], skyHorizon: [1.50, 0.75, 0.36],
     fogCol: [0.86, 0.54, 0.36], fogDensity: 0.0062, stars: 0.12, lamp: 0.52,
   },
@@ -809,6 +809,16 @@ class Game {
 
     let pos = [p.pos[0], p.pos[1], p.pos[2]];
     const tgt = [p.target[0], p.target[1], p.target[2]];
+
+    // 眺めるときは、時間帯ごとに変わる「床の模様の位置」へ画面を寄せる
+    if (key === 'view') {
+      const d = this.env.sunDir;
+      const t = Math.min(6, 2.0 / Math.max(0.25, -d[1]));
+      const px = MathX.clamp(d[0] * t, -1.7, 1.9);
+      const pz = MathX.clamp(WIN.glassZ + d[2] * t, -1.8, 1.5);
+      tgt[0] += (px - 0.84) * 0.70;
+      tgt[2] += (pz + 0.42) * 0.55;
+    }
 
     // 縦持ちでも被写体が収まるように: まず画角、足りなければ後退
     let fovDeg = p.fov;
