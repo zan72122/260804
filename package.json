@@ -1,0 +1,23 @@
+{
+  "name": "patissier-daisuki",
+  "version": "1.0.0",
+  "description": "4歳向けパティシエ3Dゲーム (WebGL/three.js)",
+  "scripts": {
+    "start": "node test/server.js",
+    "test": "node test/playthrough.js portrait && node test/playthrough.js landscape"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zan72122/260804.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/zan72122/260804/issues"
+  },
+  "homepage": "https://github.com/zan72122/260804#readme",
+  "devDependencies": {
+    "playwright-core": "^1.49.1"
+  }
+}
