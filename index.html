@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>おはなの こうえん</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>🌷</text></svg>">
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+  { "imports": { "three": "./lib/three.module.min.js" } }
+</script>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="ui">
+  <div id="banner" class="hidden">
+    <span id="banner-icon">🍂</span>
+    <span id="banner-text">はっぱを あつめよう</span>
+    <span id="banner-count"></span>
+  </div>
+
+  <div id="tasks">
+    <div class="task" data-i="0">🍂</div>
+    <div class="task" data-i="1">⛏️</div>
+    <div class="task" data-i="2">🌷</div>
+    <div class="task" data-i="3">🧩</div>
+    <div class="task" data-i="4">⛲</div>
+    <div class="task" data-i="5">🌊</div>
+  </div>
+
+  <div id="hint" class="hidden"><span id="hint-hand">👆</span></div>
+
+  <div id="cheer" class="hidden">できた！<span>⭐</span></div>
+
+  <div id="title-screen">
+    <div id="title-card">
+      <div id="title-flower">🌷</div>
+      <h1>おはなの こうえん</h1>
+      <p>かわいた こうえんに<br>おみずと おはなを とどけよう</p>
+      <button id="start-btn">▶ はじめる</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
