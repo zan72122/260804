@@ -892,7 +892,7 @@ function startGame(shapeKey) {
   ui.title.style.display = 'none';
   state.phase = PHASE.STACK;
   state.stackCount = 0;
-  cam.radiusTarget = 11.5; cam.heightTarget = 3.4; cam.lookYTarget = 2.4;
+  cam.radiusTarget = 9.0; cam.heightTarget = 3.4; cam.lookYTarget = 2.4;
   setBanner('ゆきを つみあげよう！', 'ボタンを おしてね');
   setAction('❄️ ゆきを つむ！');
 }
@@ -1464,7 +1464,9 @@ function animate() {
   const shx = (Math.random() - 0.5) * state.shake * 0.25;
   const shy = (Math.random() - 0.5) * state.shake * 0.25;
   const portrait = camera.aspect < 1 ? 1.28 : 1;
-  const r = cam.radius * cam.zoom * portrait;
+  let r = cam.radius * cam.zoom * portrait;
+  // カーテンが立っている間はカーテンの内側に留まる
+  if (state.phase < PHASE.NIGHT) r = Math.min(r, CURTAIN_R - 0.8);
   camera.position.set(Math.sin(cam.yaw) * r + shx, cam.height + Math.sin(t * 0.4) * 0.08 + shy, Math.cos(cam.yaw) * r);
   camera.lookAt(shx, cam.lookY, 0);
 
