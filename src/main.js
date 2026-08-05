@@ -1189,14 +1189,15 @@ function carveAtPointer(e) {
 
 function updateCarveProgress() {
   if (state.finishing || state.celebrating) return;
+  // 奥まって届きにくいボクセルが残るため、7〜8割で楽しい自動仕上げに切り替える
   if (state.phase === PHASE.CARVE) {
     const pct = 1 - vox.excessLeft / Math.max(1, vox.excessTotal);
     setProgress(pct, 'けずる');
-    if (pct >= 0.9) beginAutoFinish(3);
+    if (pct >= 0.78) beginAutoFinish(3);
   } else if (state.phase === PHASE.BRUSH) {
     const pct = 1 - vox.skinLeft / Math.max(1, vox.skinTotal);
     setProgress(pct, 'みがく');
-    if (pct >= 0.88) beginAutoFinish(2);
+    if (pct >= 0.75) beginAutoFinish(2);
   }
 }
 
@@ -1478,15 +1479,21 @@ window.__game = {
     const kind = state.phase === PHASE.CARVE ? 3 : 2;
     const total = kind === 3 ? vox.excessTotal : vox.skinTotal;
     const target = Math.floor(total * frac);
-    let guard = 0;
-    while ((kind === 3 ? vox.excessTotal - vox.excessLeft : vox.skinTotal - vox.skinLeft) < target && guard < 4000) {
-      guard++;
-      const ci = (Math.random() * vox.state.length) | 0;
-      if (vox.state[ci] !== kind) continue;
-      const iz = Math.floor(ci / (NY * NX));
-      const iy = Math.floor((ci - iz * NY * NX) / NX);
-      const ix = ci - (iz * NY + iy) * NX;
-      removeSphere(GMINX + (ix + 0.5) * VS, (iy + 0.5) * VS + PEDESTAL_H, GMINZ + (iz + 0.5) * VS, 0.45, kind);
+    if (frac >= 1) {
+      // 全走査で確実に削り切る
+      for (let ci = 0; ci < vox.state.length; ci++) if (vox.state[ci] === kind) removeCell(ci, false);
+      vox.mesh.instanceMatrix.needsUpdate = true;
+    } else {
+      let guard = 0;
+      while ((kind === 3 ? vox.excessTotal - vox.excessLeft : vox.skinTotal - vox.skinLeft) < target && guard < 4000) {
+        guard++;
+        const ci = (Math.random() * vox.state.length) | 0;
+        if (vox.state[ci] !== kind) continue;
+        const iz = Math.floor(ci / (NY * NX));
+        const iy = Math.floor((ci - iz * NY * NX) / NX);
+        const ix = ci - (iz * NY + iy) * NX;
+        removeSphere(GMINX + (ix + 0.5) * VS, (iy + 0.5) * VS + PEDESTAL_H, GMINZ + (iz + 0.5) * VS, 0.45, kind);
+      }
     }
     updateCarveProgress();
   },
@@ -1505,6 +1512,7 @@ window.__game = {
       mist: mistMat.opacity, glow: glowUniform.value,
       exposure: renderer.toneMappingExposure, revealMode: state.revealMode,
       camR: cam.radius, camYaw: cam.yaw,
+      finishing: state.finishing, celebrating: state.celebrating,
     };
   },
   // 未設置スロットの画面座標（試遊でタップ位置を得るため）
