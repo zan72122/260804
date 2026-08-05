@@ -1,0 +1,10 @@
+{
+  "name": "projectionist-3d-game",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "4歳向け 映写技師3Dゲーム (WebGL / Three.js)",
+  "scripts": {
+    "start": "python3 -m http.server 8080"
+  }
+}
