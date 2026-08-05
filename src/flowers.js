@@ -66,9 +66,9 @@ const TYPE_DEFS = {
   rose: {
     petalGeo: () => makePetalGeometry(0.05, 0.054, { bend: 0.55, cup: 0.9, tip: 0.5 }),
     whorls: [
-      { n: 5, r: 0.004, h: 0.006, closed: 0.04, open: 0.42, s: 0.55, yawOff: 0 },
-      { n: 7, r: 0.007, h: 0.004, closed: 0.10, open: 0.82, s: 0.8, yawOff: 0.45 },
-      { n: 8, r: 0.010, h: 0.002, closed: 0.18, open: 1.22, s: 1.0, yawOff: 0.85 },
+      { n: 6, r: 0.004, h: 0.006, closed: 0.04, open: 0.3, s: 0.5, yawOff: 0 },
+      { n: 8, r: 0.007, h: 0.004, closed: 0.10, open: 0.62, s: 0.8, yawOff: 0.45 },
+      { n: 9, r: 0.010, h: 0.002, closed: 0.18, open: 0.95, s: 1.05, yawOff: 0.85 },
     ],
     center: null,
     headR: 0.045,
@@ -93,7 +93,7 @@ const TYPE_DEFS = {
   },
 };
 
-const CAPACITY = { rose: 2400, tulip: 900, daisy: 3400 };
+const CAPACITY = { rose: 3000, tulip: 900, daisy: 3400 };
 const CENTER_CAP = 220;
 const CALYX_CAP = 220;
 

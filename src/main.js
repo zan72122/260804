@@ -56,10 +56,10 @@ function updateTweens(dt) {
 const SHOTS = {
   pickType: { pos: [0, 1.52, 8.5], look: [0, 1.18, 6.35], fov: 42, maxF: 1.5, light: [[0.6, 4.2, 8.0], [0, 1, 6.5]] },
   stems:    { pos: [0, 1.62, 8.6], look: [0, 1.42, 6.5], fov: 42, maxF: 1.5, light: [[0.6, 4.2, 8.0], [0, 1.5, 6.5]] },
-  water:    { pos: [-0.05, 1.7, 8.8], look: [-0.05, 1.02, 6.45], fov: 46, maxF: 1.4, light: [[0.6, 4.2, 8.0], [0, 1, 6.5]] },
+  water:    { pos: [0, 1.95, 8.6], look: [0, 0.95, 6.5], fov: 46, maxF: 1.4, light: [[0.6, 4.2, 8.0], [0, 1, 6.5]] },
   arch:     { pos: [0, 1.7, -5.3], look: [0, 1.75, -9.3], fov: 50, maxF: 1.9, light: [[0, 4.6, -5.6], [0, 1.6, -9.3]] },
   table:    { pos: [3.4, 2.0, 0.35], look: [3.4, 0.8, -2.2], fov: 45, maxF: 1.6, light: [[3.4, 4.2, -0.6], [3.4, 0.9, -2.2]] },
-  hang:     { pos: [0, 1.35, 0.9], look: [0, 4.7, -4.5], fov: 54, maxF: 1.25, light: [[2.2, 3.0, -1.0], [0, 5.6, -4.5]] },
+  hang:     { pos: [0, 1.35, 0.9], look: [0, 4.7, -4.5], fov: 54, maxF: 1.0, light: [[2.2, 3.0, -1.0], [0, 5.6, -4.5]] },
   doors:    { pos: [0, 1.7, 14.7], look: [0, 2.1, 10], fov: 46, maxF: 1.3, light: [[0, 4.4, 13.8], [0, 1.6, 10.2]] },
   finale:   { pos: [0, 2.35, 6.9], look: [0, 1.95, -5.5], fov: 50, maxF: 1.15, light: [[0, 4.4, 5], [0, 1, -3]] },
 };
@@ -76,7 +76,7 @@ function shotVectors(name) {
   const look = new THREE.Vector3(...s.look);
   const pos = new THREE.Vector3(...s.pos).sub(look).multiplyScalar(f).add(look);
   // 後退しきれない分は画角を広げる（縦画面対応）
-  const fov = Math.min(72, s.fov * (1 + (desired / f - 1) * 0.9));
+  const fov = Math.min(78, s.fov * (1 + (desired / f - 1) * 1.2));
   return { pos, look, fov };
 }
 function applyShot(name, dur = 1.4, done = null) {
@@ -292,7 +292,7 @@ let lastInteract = 0;
 const hitGeo = new THREE.SphereGeometry(1, 8, 6);
 const hitMat = new THREE.MeshBasicMaterial({ visible: false });
 
-function addTarget(pos, r, data) {
+function addTarget(pos, r, data, markerPos = null) {
   const sphere = new THREE.Mesh(hitGeo, hitMat);
   sphere.scale.setScalar(r);
   sphere.position.copy(pos);
@@ -303,7 +303,7 @@ function addTarget(pos, r, data) {
     blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false,
   }));
   marker.scale.setScalar(r * 1.15);
-  marker.position.copy(pos);
+  marker.position.copy(markerPos || pos);
   marker.userData.baseScale = r * 1.15;
   marker.userData.phase = Math.random() * 6.28;
   scene.add(marker);
@@ -571,7 +571,7 @@ function enterPickType() {
     samples.forEach((s, i) => {
       addTarget(s.pot.position.clone().add(new THREE.Vector3(0, 0.34, 0)), 0.24, {
         onTap: () => chooseType(i),
-      });
+      }, s.pot.position.clone().add(new THREE.Vector3(0, 0.05, 0.1)));
     });
   });
 }
@@ -612,7 +612,7 @@ function enterPickColor() {
     colorPots.forEach((cp, i) => {
       addTarget(cp.pot.position.clone().add(new THREE.Vector3(0, 0.32, 0)), 0.2, {
         onTap: () => chooseColor(i),
-      });
+      }, cp.pot.position.clone().add(new THREE.Vector3(0, 0.05, 0.1)));
     });
   });
 }
@@ -818,13 +818,13 @@ function enterTable() {
 const waterVases = [];
 const waterBuds = [];
 let budsInWater = 0;
-const dragPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -(benchZ - 0.1));
+const dragPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -(benchZ + 0.1));
 function enterWater() {
   phaseName = 'water';
   cutTo('water', () => {
     for (let i = 0; i < 5; i++) {
       const vase = makeVase();
-      vase.position.set(0.08 + i * 0.21, benchY, benchZ + 0.05);
+      vase.position.set(-0.4 + i * 0.2, benchY, benchZ - 0.18);
       vase.scale.setScalar(0.01);
       scene.add(vase);
       waterVases.push({ vase, filled: false });
@@ -832,7 +832,7 @@ function enterWater() {
     }
     for (let i = 0; i < 5; i++) {
       const grp = new THREE.Group();
-      grp.position.set(-0.95 + i * 0.2, benchY + 0.03, benchZ + 0.22);
+      grp.position.set(-0.4 + i * 0.2, benchY + 0.03, benchZ + 0.36);
       grp.rotation.z = Math.PI / 2 - 0.12;
       grp.rotation.y = (Math.random() - 0.5) * 0.5;
       grp.scale.setScalar(0.01);
@@ -857,9 +857,9 @@ function enterWater() {
             raycaster.setFromCamera(pointer, camera);
             const p = new THREE.Vector3();
             if (!raycaster.ray.intersectPlane(dragPlane, p)) return;
-            p.x = THREE.MathUtils.clamp(p.x, -1.15, 1.15);
+            p.x = THREE.MathUtils.clamp(p.x, -0.9, 0.9);
             p.y = THREE.MathUtils.clamp(p.y, benchY + 0.05, benchY + 0.7);
-            bud.grp.position.set(p.x, p.y, benchZ + 0.14);
+            bud.grp.position.set(p.x, p.y, benchZ + 0.1);
             const up = Math.min(1, (p.y - benchY - 0.05) / 0.3);
             bud.grp.rotation.z = (Math.PI / 2 - 0.12) * (1 - up);
             h.sphere.position.copy(bud.grp.position);
@@ -907,7 +907,7 @@ function enterHang() {
   phaseName = 'hang';
   cutTo('hang', () => {
     const beamY = 6.6, beamZ = -4.5;
-    [-3, -1, 1, 3].forEach((x) => {
+    [-2.1, -0.7, 0.7, 2.1].forEach((x) => {
       addTarget(new THREE.Vector3(x, beamY - 0.9, beamZ), 0.38, {
         onTap: (h) => {
           removeTarget(h);
