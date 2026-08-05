@@ -1,0 +1,16 @@
+{
+  "name": "douro-wo-tsukurou",
+  "version": "1.0.0",
+  "private": true,
+  "description": "4さいむけ けんせつじゅうき 3D あそび（ショベルカー と ロードローラー）",
+  "type": "module",
+  "scripts": {
+    "start": "npx --yes http-server -p 8123 -c-1 .",
+    "playtest": "node fullplay.mjs iphone-landscape",
+    "playtest:portrait": "node fullplay.mjs iphone-portrait"
+  },
+  "devDependencies": {
+    "playwright": "^1.56.1",
+    "three": "0.185.1"
+  }
+}

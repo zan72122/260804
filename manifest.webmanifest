@@ -1,0 +1,19 @@
+{
+  "name": "どうろを つくろう",
+  "short_name": "どうろ",
+  "description": "4さいからの けんせつじゅうき 3D あそび。ショベルカーで つちを すくって、ロードローラーで どうろを つくろう。",
+  "lang": "ja",
+  "start_url": "./index.html",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#bfe4f5",
+  "theme_color": "#8fd0ef",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
