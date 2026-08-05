@@ -22,7 +22,7 @@ const css = `
     transform: translateX(-50%); pointer-events: auto; border: none; cursor: pointer;
     background: linear-gradient(#63d66a, #2fa53a); color: #fff;
     font-size: clamp(20px, 5.5vw, 30px); font-weight: 800; padding: 16px 44px;
-    border-radius: 999px; border-bottom: 6px solid #1d7a28;
+    border-radius: 999px; border-bottom: 6px solid #1d7a28; white-space: nowrap;
     box-shadow: 0 6px 22px rgba(0,0,0,0.5); animation: pulse 1.2s ease-in-out infinite;
     font-family: inherit; }
   .bigbtn:active { transform: translateX(-50%) scale(0.94); }

@@ -169,7 +169,7 @@ export function buildPlaza() {
       depthWrite: false, blending: THREE.AdditiveBlending,
     }));
     spME.position.set(x, POOL_Y + 0.05, z);
-    spME.scale.setScalar(2.2);
+    spME.scale.setScalar(3.1);
     g.add(spME);
     const housing = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 0.08, 12),
       new THREE.MeshStandardMaterial({ color: 0x555b60, metalness: 0.8, roughness: 0.5 }));

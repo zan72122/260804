@@ -152,6 +152,8 @@ function updateCamera(dt, t) {
 const ui = new UI();
 let phase = 'title';
 let stars = 0;
+// latches so slow tap-animations can never advance a station twice
+const stationDone = { pipes: false, clog: false };
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 let hitList = [];      // [{mesh, handler}]
@@ -246,7 +248,8 @@ function installPiece(pd) {
       pd.ghost.visible = false;
       sfx.snap();
       sparkle(to, 0xaef4ff, 0.5);
-      if (room.pieces.every(p => p.done)) {
+      if (!stationDone.pipes && room.pieces.every(p => p.done)) {
+        stationDone.pipes = true;
         sfx.chime();
         stars = 1; ui.setStars(stars);
         ui.message('つながった！', 1.6);
@@ -283,7 +286,8 @@ function popGunk(gd) {
       }, {
         onDone: () => {
           gd.grp.visible = false;
-          if (room.gunks.every(x => x.done)) {
+          if (!stationDone.clog && room.gunks.every(x => x.done)) {
+            stationDone.clog = true;
             sfx.chime();
             stars = 2; ui.setStars(stars);
             ui.message('ピカピカ！', 1.6);
@@ -671,6 +675,8 @@ function startShow() {
 
 let ringBeatT = 0;
 let orbitA = 0.12;
+const _tint = new THREE.Color();
+const _white = new THREE.Color(0xcfeaff);
 function updateShow(dt, t) {
   showT += dt;
   const T = showT;
@@ -694,7 +700,7 @@ function updateShow(dt, t) {
     const col = seq[(i + Math.floor(T / 1.2)) % seq.length];
     uw[i].sprite.material.color.set(col);
     const tw = 0.75 + 0.25 * Math.sin(T * 3 + i);
-    uw[i].sprite.material.opacity = on * 0.5 * tw * Math.min(1, (T - onAt) * 2);
+    uw[i].sprite.material.opacity = on * 0.75 * tw * Math.min(1, (T - onAt) * 2);
   }
   once('l1', 0.8, () => { sfx.sparkle(); });
   once('l2', 1.6, () => sfx.sparkle());
@@ -740,6 +746,11 @@ function updateShow(dt, t) {
 
   // crown ring pulses (water rings rising)
   J.crown.on = T > 9 && Math.sin(T * 1.05) > 0.15 ? 1 : 0;
+
+  // let the chosen light colors bleed into the spray
+  _tint.set(currentSeqColor()).lerp(_white, 0.55);
+  J.ringJets.forEach(j => j.uniforms.uColor.value.lerp(_tint, dt * 1.2));
+  J.crown.uniforms.uColor.value.lerp(_tint, dt * 1.2);
 
   // feature jets
   J.fanJets.forEach((j, i) => {
@@ -790,7 +801,7 @@ function updateShow(dt, t) {
     ui.message('やったね！', 3.0);
   });
   once('replay', 17, () => {
-    ui.button('もういちど みる', () => {
+    ui.button('もういちど', () => {
       showT = 1.5;
       for (const k in fired) delete fired[k];
       ui.button(null);
