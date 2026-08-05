@@ -6,7 +6,7 @@ import { backdropTexture, glowSprite, sparkleSprite } from './textures.js';
 export const THEMES = [
   {
     id: 'forest',
-    sky: ['#bff0d0', '#6fd2a8', '#1e7a6a', '#0c3a3e'],
+    sky: ['#8fdcb4', '#4bbd94', '#186a5e', '#0b3236'],
     accent: 0x9df0b8,
     fog: 0x08201f,
     ambient: 0x2a5a52,
@@ -16,7 +16,7 @@ export const THEMES = [
   },
   {
     id: 'sea',
-    sky: ['#cfeeff', '#79ccf5', '#1a6fb0', '#06294f'],
+    sky: ['#a6ddf7', '#57b4e8', '#155f9c', '#062244'],
     accent: 0x8fd8ff,
     fog: 0x05182f,
     ambient: 0x27506e,
@@ -26,7 +26,7 @@ export const THEMES = [
   },
   {
     id: 'night',
-    sky: ['#e8d9ff', '#9a7fe0', '#4a2a8a', '#160b33'],
+    sky: ['#c9b2f2', '#7e63ca', '#3f2378', '#12092c'],
     accent: 0xc6a0ff,
     fog: 0x0d0724,
     ambient: 0x3a2a68,
@@ -122,10 +122,10 @@ class Flat {
     const w = Math.min(bb.max.x - bb.min.x, 7.5), h = bb.max.y - bb.min.y;
     const cx = (bb.max.x + bb.min.x) / 2;
     for (const [x, y, ww, hh, rot] of [
-      [cx, bb.min.y + 0.35, w * 0.92, 0.16, 0],
-      [cx, bb.min.y + h * 0.62, w * 0.92, 0.14, 0],
-      [cx - w * 0.3, bb.min.y + h * 0.34, 0.14, h * 0.62, 0],
-      [cx + w * 0.3, bb.min.y + h * 0.34, 0.14, h * 0.62, 0],
+      [cx, bb.min.y + 0.30, w * 0.86, 0.15, 0],
+      [cx, bb.min.y + h * 0.24, w * 0.80, 0.13, 0],
+      [cx - w * 0.26, bb.min.y + h * 0.14, 0.13, h * 0.26, 0],
+      [cx + w * 0.26, bb.min.y + h * 0.14, 0.13, h * 0.26, 0],
     ]) {
       const m = new THREE.Mesh(new THREE.BoxGeometry(ww, hh, 0.09), braceMat);
       m.position.set(x, y, -0.11);
@@ -134,10 +134,11 @@ class Flat {
       brace.add(m);
     }
     // つっかえ棒
-    const stay = new THREE.Mesh(new THREE.BoxGeometry(0.1, h * 0.75, 0.1), braceMat);
-    stay.position.set(cx + w * 0.18, bb.min.y + h * 0.36, -0.55);
+    const stay = new THREE.Mesh(new THREE.BoxGeometry(0.1, h * 0.5, 0.1), braceMat);
+    stay.position.set(cx + w * 0.18, bb.min.y + h * 0.23, -0.42);
     stay.rotation.x = -0.42;
     brace.add(stay);
+    this.brace = brace;
     this.group.add(brace);
 
     // キャスター
@@ -316,7 +317,7 @@ export class StageSet {
 
   _buildBackdrop() {
     const tex = backdropTexture(this.theme);
-    const geo = new THREE.CylinderGeometry(19, 19, 17, 56, 1, true, Math.PI * 0.64, Math.PI * 0.72);
+    const geo = new THREE.CylinderGeometry(19, 19, 17, 64, 1, true, Math.PI * 0.54, Math.PI * 0.92);
     this.backdropMat = new THREE.MeshStandardMaterial({
       map: tex, side: THREE.BackSide, roughness: 1, metalness: 0, color: 0x6a7590,
       emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.12,
@@ -548,7 +549,9 @@ export class StageSet {
 
   setLit(v) {
     this.lit = v;
-    this.backdropMat.emissiveIntensity = lerp(0.12, 0.38, v);
+    // 木枠は舞台裏から見るとかわいいが、客席からは見せない
+    for (const f of this.flats) f.brace.visible = v < 0.55;
+    this.backdropMat.emissiveIntensity = lerp(0.12, 0.26, v);
     this.backdropMat.color.setRGB(lerp(0.42, 1, v), lerp(0.46, 1, v), lerp(0.56, 1, v));
     this.lifeMat.uniforms.uOpacity.value = lerp(0.25, 0.95, v);
     if (this.fly.light) this.fly.light.intensity = lerp(3, this.fly.kind === 'star' ? 16 : 12, v);

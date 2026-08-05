@@ -185,15 +185,15 @@ export class Theatre {
 
   _buildRoom() {
     const wallMat = new THREE.MeshStandardMaterial({
-      map: backWallTexture(), color: 0x50525e, roughness: 0.95, metalness: 0,
+      map: backWallTexture(), color: 0x2e3038, roughness: 0.95, metalness: 0,
     });
-    const back = new THREE.Mesh(new THREE.PlaneGeometry(40, 22), wallMat);
-    back.position.set(0, 11, -13.5);
+    const back = new THREE.Mesh(new THREE.PlaneGeometry(46, 26), wallMat);
+    back.position.set(0, 13, -17.6);
     back.receiveShadow = true;
     this.scene.add(back);
     for (const sx of [-1, 1]) {
-      const side = new THREE.Mesh(new THREE.PlaneGeometry(30, 22), wallMat);
-      side.position.set(sx * 12.5, 11, -3);
+      const side = new THREE.Mesh(new THREE.PlaneGeometry(34, 26), wallMat);
+      side.position.set(sx * 12.5, 13, -5);
       side.rotation.y = -sx * Math.PI / 2;
       this.scene.add(side);
     }
@@ -224,8 +224,7 @@ export class Theatre {
       for (let i = 0; i < 3; i++) {
         const fl = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, H + 1.4, 10, 1, false, 0, Math.PI), gold);
         fl.position.set(sx * (halfOpen + 0.45 + i * 0.72), (H + 1.4) / 2 - 0.2, 1.16);
-        fl.rotation.x = -Math.PI / 2;
-        fl.rotation.z = Math.PI / 2;
+        fl.rotation.y = -Math.PI / 2;   // 半円の丸いほうを客席へ向ける
         g.add(fl);
       }
       const cap = new THREE.Mesh(new THREE.BoxGeometry(3.0, 0.55, 1.9), gold);
@@ -589,7 +588,7 @@ export class Theatre {
     prep: { pos: [-3.4, 4.7, 4.6], look: [0.2, 3.0, -6.9], fov: 55 },
     lift: { pos: [-2.8, 4.6, 4.6], look: [0.0, 5.4, -6.6], fov: 54 },
     spot: { pos: [-3.6, 5.8, 6.2], look: [0.0, 1.8, -5.2], fov: 52 },
-    curtain: { pos: [-1.4, 4.3, -6.6], look: [0.2, 3.4, 0.4], fov: 56 },
+    curtain: { pos: [-1.2, 4.1, -5.9], look: [0.3, 3.3, 0.5], fov: 56 },
     reveal: { pos: [0.0, 3.6, 3.4], look: [0.0, 3.4, -4.5], fov: 56 },
     house: { pos: [0.0, 3.9, 10.6], look: [0.0, 3.1, -4.0], fov: 48 },
     show: { pos: [-0.6, 3.0, 6.4], look: [0.2, 2.3, -3.4], fov: 50 },
@@ -666,7 +665,7 @@ export class Theatre {
       this.washes[i].intensity = lerp(0, 168 * this.washes[i].userData.k, m) * (0.88 + 0.12 * Math.sin(t * 0.5 + i));
     }
     this.footLight.intensity = lerp(0, 30, m);
-    for (const l of this.cycLights) l.intensity = lerp(6, 92, m);
+    for (const l of this.cycLights) l.intensity = lerp(6, 52, m);
     for (const f of this.foots) {
       f.sp.material.opacity = m * 0.85;
       f.dome.material.color.setRGB(1, lerp(0.55, 0.85, m), lerp(0.28, 0.62, m));
@@ -676,7 +675,7 @@ export class Theatre {
     this.ghostLight.intensity = 150 * gi * (0.96 + 0.04 * Math.sin(t * 7.3) * Math.sin(t * 2.1));
     this.ghostGlow.material.opacity = 0.5 * gi;
     this.bulbMat.color.setRGB(1, 0.86 * (0.35 + 0.65 * gi), 0.66 * (0.2 + 0.8 * gi));
-    this.ghost.visible = gi > 0.08;
+    this.ghost.visible = gi > 0.34;
 
     for (const l of this.houseLights) l.intensity = lerp(10, 1.6, m);
     this.workLights[0].intensity = lerp(88, 5, m);
@@ -686,11 +685,9 @@ export class Theatre {
     this.floorMat.roughness = lerp(0.42, 0.30, m);
     this.reflectUniforms.uReflect.value = lerp(0.30, 0.17, m);
 
-    this.curtainBack.intensity = lerp(this.curtainBack.intensity, this.curtainBackLevel * 250, 1 - Math.exp(-2.5 * dt));
+    this.curtainBack.intensity = lerp(this.curtainBack.intensity, this.curtainBackLevel * 130, 1 - Math.exp(-2.5 * dt));
 
     this.props.visible = m < 0.55;
-    for (const leg of this.legs) leg.position.x = lerp(leg.userData.homeX, leg.userData.outX, m);
-    for (const b of this.borders) b.position.y = b.userData.homeY + m * 2.4;
     this.moteMat.uniforms.uTime.value = t;
     this.moteMat.uniforms.uOpacity.value = lerp(0.30, 0.14, m);
   }

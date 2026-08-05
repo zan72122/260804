@@ -37,7 +37,8 @@ class Petals {
   burst(n = 46, opts = {}) {
     const tints = [0xffffff, 0xffd9e8, 0xffe9f2, 0xffc0d8, 0xfff0c0];
     let spawned = 0;
-    for (const it of this.items) {
+    for (let idx = 0; idx < this.max; idx++) {
+      const it = this.items[idx];
       if (spawned >= n) break;
       if (it.alive) continue;
       it.alive = true;
@@ -55,7 +56,7 @@ class Petals {
       it.freq = rand(1.0, 2.2);
       it.size = rand(0.75, 1.5);
       _col.setHex(tints[(Math.random() * tints.length) | 0]);
-      this.mesh.setColorAt(this.items.indexOf(it), _col);
+      this.mesh.setColorAt(idx, _col);
       spawned++;
     }
     if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;

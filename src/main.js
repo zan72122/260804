@@ -315,7 +315,7 @@ class Game {
 
   /* ---- 幕があいた瞬間。ここがいちばんのごほうび ---- */
   _reveal() {
-    if (this.state === 'reveal' || this.state === 'show') return;
+    if (this.state !== 'curtainStep') return;   // じゆうモードで開け直しても、公演は始め直さない
     this._stepDone();
     this.setState('reveal');
     this.ui.hideHint();
@@ -400,6 +400,7 @@ class Game {
     setTimeout(() => {
       if (this.curtain) this.curtain.close();
       this.audio.whoosh({ dur: 2.0, gain: 0.14, up: false });
+      this.theatre.setView('house', 3.0);
     }, 4200);
     setTimeout(() => this._toEnd(), 7200);
   }
@@ -454,7 +455,7 @@ class Game {
 
   /* ============ 毎フレーム ============ */
   _frame() {
-    const dt = Math.min(this.clock.getDelta(), 0.05);
+    const dt = Math.min(this.clock.getDelta(), 0.1);
     this.stateT += dt;
     const st = this.state;
 
@@ -470,7 +471,7 @@ class Game {
     // 幕をえらんで開けるあいだだけ、幕のうらを照らす
     const co = this.curtain ? this.curtain.openNow : 0;
     this.theatre.curtainBackLevel =
-      st === 'pickCurtain' ? 1 : st === 'curtainStep' ? (1 - 0.75 * co) : 0;
+      st === 'pickCurtain' ? 1 : st === 'curtainStep' ? (1 - 0.85 * co) : 0;
     if (this.stageSet) this.stageSet.setLit(this.theatre.moodShow);
 
     // スポットの明るさ
@@ -522,7 +523,7 @@ class Game {
 
     // 幕開けの閃光
     this.flash = damp(this.flash, 0, 1.6, dt);
-    this.post.flash = this.flash * 0.38;
+    this.post.flash = this.flash * 0.26;
     this.post.exposure = lerp(1.02, 0.82, this.theatre.moodShow);
     this.post.threshold = lerp(0.95, 1.28, this.theatre.moodShow);
     this.post.bloomStrength = lerp(0.60, 0.74, this.theatre.moodShow) + this.flash * 0.45;

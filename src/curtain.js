@@ -112,7 +112,7 @@ const PRESETS = {
     sheenRoughness: 0.5, roughness: 0.88,
   },
   austrian: {
-    color: 0xffffff, sheen: 0xffd6f2, base: '#c479cf',
+    color: 0xffffff, sheen: 0xffd6f2, base: '#a35cb4',
     folds: 7, fullness: 1.5, mode: 'austrian', trim: true,
     sheenRoughness: 0.42, roughness: 0.75,
   },
@@ -170,9 +170,9 @@ export class Curtain {
     };
     if (this.p.sheer) {
       matOpts.transparent = true;
-      matOpts.opacity = 0.72;
+      matOpts.opacity = 0.52;
       matOpts.emissive = new THREE.Color(0x6fa8ff);
-      matOpts.emissiveIntensity = 0.55;
+      matOpts.emissiveIntensity = 0.42;
       matOpts.emissiveMap = starMapTexture();
       matOpts.map = null;
     }
@@ -237,7 +237,9 @@ export class Curtain {
 
     if (!this._openedFired && this.openNow > 0.93 && this.open >= 1) {
       this._openedFired = true;
-      if (this.onOpened) this.onOpened();
+      const cb = this.onOpened;
+      this.onOpened = null;
+      if (cb) cb();
     }
 
     // 動きの勢いを、揺れと膨らみに変える
@@ -325,7 +327,7 @@ export class Curtain {
           // 紐の位置（s=0）でいちばん高く持ち上がり、あいだはふっくら垂れる
           const sn = Math.sin(Math.PI * SW * u);
           const s = Math.pow(sn * sn, 0.62);
-          const lift = o * (0.60 + 0.34 * (1 - s));
+          const lift = o * (0.74 + 0.24 * (1 - s));
           const h = H * (1 - lift * 0.86);            // その列の垂れ下がる長さ
           const gather = 1 - o * 0.16 * (1 - s);
           const x = (u - 0.5) * fullW * gather + sway * 0.45 * v;
