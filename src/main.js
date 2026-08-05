@@ -516,7 +516,7 @@ class Game {
     if (this.curtain) this.curtain.update(dt);
     if (this.troupe) {
       this.troupe.update(dt);
-      this.troupe.updateSpot(this.spot.aim);
+      this.troupe.updateSpot(this.spot.aim, this.spot.light.color);
     }
     this.spot.update(dt);
     this.effects.update(dt);

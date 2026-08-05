@@ -51,9 +51,12 @@ export class SpotRig {
     this.light.shadow.mapSize.set(1024, 1024);
     this.light.shadow.camera.near = 1.5;
     this.light.shadow.camera.far = 34;
-    this.light.shadow.bias = -0.0016;
-    this.light.shadow.normalBias = 0.035;
-    this.light.shadow.radius = 3;
+    // 自己影のちらつき（アクネ）が出ると、影カメラの四角い境目が
+    // 出演者の顔を横切って見えてしまうので、バイアスを強めに取る。
+    this.light.shadow.bias = -0.0004;
+    this.light.shadow.normalBias = 0.09;
+    this.light.shadow.radius = 4;
+    this.light.shadow.focus = 1.3;
     scene.add(this.light);
 
     this._buildHousing();

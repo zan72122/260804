@@ -201,47 +201,162 @@ export function velvetTexture(base = '#7e1225') {
   });
 }
 
-/* ---------- お顔 ---------- */
+/* ---------- お顔（目は立体で作るので、ここは口・ほっぺ・まゆだけ） ---------- */
 export function faceTexture(kind = 0) {
   return cached('face' + kind, () => {
+    // 顔のパーツは canvas いっぱいに広げて描く。
+    // 頭の球の一部（phi ±0.91 / theta 0.90〜2.12）に貼ると、ちょうど良い間隔になる。
     const s = 512, c = makeCanvas(s, s), g = c.getContext('2d');
     g.clearRect(0, 0, s, s);
-    const cx = s * 0.5, cy = s * 0.52;
-    // ほっぺ
-    g.fillStyle = 'rgba(255,150,170,0.55)';
+    const cx = s * 0.5;
+    const BROW = s * 0.335, NOSE = s * 0.545, BLUSH = s * 0.615, MOUTH = s * 0.74;
+
+    // ほっぺ（ふわっとぼかす）
     for (const sgn of [-1, 1]) {
+      const bx = cx + sgn * s * 0.305;
+      const grd = g.createRadialGradient(bx, BLUSH, 0, bx, BLUSH, s * 0.14);
+      grd.addColorStop(0, 'rgba(255,138,164,0.60)');
+      grd.addColorStop(0.5, 'rgba(255,150,175,0.28)');
+      grd.addColorStop(1, 'rgba(255,160,180,0)');
+      g.fillStyle = grd;
       g.beginPath();
-      g.ellipse(cx + sgn * s * 0.19, cy + s * 0.07, s * 0.075, s * 0.05, 0, 0, Math.PI * 2);
+      g.ellipse(bx, BLUSH, s * 0.14, s * 0.10, 0, 0, Math.PI * 2);
       g.fill();
     }
-    // お目め
-    g.fillStyle = '#2a1c2e';
+
+    // まゆ
+    g.strokeStyle = 'rgba(86,52,64,0.88)';
+    g.lineWidth = s * 0.028;
+    g.lineCap = 'round';
     for (const sgn of [-1, 1]) {
+      const ex = cx + sgn * s * 0.200;
       g.beginPath();
-      if (kind === 1) {
-        // にっこり閉じ目
-        g.lineWidth = s * 0.028; g.strokeStyle = '#2a1c2e';
-        g.arc(cx + sgn * s * 0.115, cy + s * 0.01, s * 0.055, Math.PI * 1.15, Math.PI * 1.85);
-        g.stroke();
-      } else {
-        g.ellipse(cx + sgn * s * 0.115, cy - s * 0.005, s * 0.036, s * 0.05, 0, 0, Math.PI * 2);
-        g.fill();
-      }
+      g.moveTo(ex - sgn * s * 0.078, BROW + s * (kind === 2 ? 0.004 : 0.020));
+      g.quadraticCurveTo(ex, BROW - s * 0.026, ex + sgn * s * 0.078, BROW + s * 0.012);
+      g.stroke();
     }
-    if (kind !== 1) {
-      g.fillStyle = 'rgba(255,255,255,0.95)';
-      for (const sgn of [-1, 1]) {
-        g.beginPath();
-        g.ellipse(cx + sgn * s * 0.115 - s * 0.012, cy - s * 0.022, s * 0.013, s * 0.016, 0, 0, Math.PI * 2);
-        g.fill();
-      }
-    }
+
+    // 鼻（ほんのり）
+    const ng = g.createRadialGradient(cx, NOSE, 0, cx, NOSE, s * 0.05);
+    ng.addColorStop(0, 'rgba(224,142,138,0.32)');
+    ng.addColorStop(1, 'rgba(224,142,138,0)');
+    g.fillStyle = ng;
+    g.beginPath(); g.arc(cx, NOSE, s * 0.05, 0, Math.PI * 2); g.fill();
+
     // お口
-    g.strokeStyle = '#8c3a52'; g.lineWidth = s * 0.022; g.lineCap = 'round';
-    g.beginPath();
-    g.arc(cx, cy + s * 0.06, s * 0.045, Math.PI * 0.15, Math.PI * 0.85);
-    g.stroke();
+    g.lineJoin = 'round';
+    if (kind === 2) {
+      // ちいさく「お」の口
+      g.fillStyle = '#9c4059';
+      g.beginPath();
+      g.ellipse(cx, MOUTH, s * 0.048, s * 0.058, 0, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = 'rgba(255,168,186,0.85)';
+      g.beginPath();
+      g.ellipse(cx, MOUTH + s * 0.018, s * 0.028, s * 0.026, 0, 0, Math.PI * 2);
+      g.fill();
+    } else {
+      const w = kind === 1 ? 0.115 : 0.090;
+      g.strokeStyle = '#9c4059';
+      g.lineWidth = s * 0.034;
+      g.beginPath();
+      g.moveTo(cx - s * w, MOUTH - s * 0.024);
+      g.quadraticCurveTo(cx, MOUTH + s * (kind === 1 ? 0.086 : 0.062), cx + s * w, MOUTH - s * 0.024);
+      g.stroke();
+      if (kind === 1) {
+        g.fillStyle = 'rgba(255,150,175,0.92)';
+        g.beginPath();
+        g.ellipse(cx, MOUTH + s * 0.044, s * 0.056, s * 0.030, 0, 0, Math.PI);
+        g.fill();
+      }
+    }
     return tex(c);
+  });
+}
+
+/* ---------- チュールの網目（チュチュのアルファに使う） ---------- */
+export function tulleNetTexture() {
+  return cached('tulle', () => {
+    const s = 128, c = makeCanvas(s, s), g = c.getContext('2d');
+    g.fillStyle = '#000'; g.fillRect(0, 0, s, s);
+    g.lineCap = 'round';
+    // 斜め二方向の細い糸
+    for (const dir of [1, -1]) {
+      g.save();
+      g.translate(s / 2, s / 2);
+      g.rotate((dir * Math.PI) / 4);
+      g.translate(-s, -s);
+      g.strokeStyle = 'rgba(255,255,255,0.62)';
+      g.lineWidth = 1.5;
+      for (let i = 0; i <= s * 2; i += 11) {
+        g.beginPath(); g.moveTo(i, 0); g.lineTo(i, s * 2); g.stroke();
+      }
+      g.restore();
+    }
+    // 結び目をほんのり明るく
+    g.fillStyle = 'rgba(255,255,255,0.30)';
+    for (let y = 0; y <= s; y += 11) {
+      for (let x = ((y / 11) % 2) * 5.5; x <= s; x += 11) {
+        g.beginPath(); g.arc(x, y, 1.5, 0, Math.PI * 2); g.fill();
+      }
+    }
+    // 全体を少しだけ持ち上げて、糸のあいだも薄く残す
+    g.fillStyle = 'rgba(255,255,255,0.16)';
+    g.fillRect(0, 0, s, s);
+    return tex(c, { srgb: false, repeat: [1, 1], aniso: 8 });
+  });
+}
+
+/* ---------- サテン・肌の細かなむら（roughness に使う） ---------- */
+export function fabricRoughTexture() {
+  return cached('fabricRough', () => {
+    const s = 256, c = makeCanvas(s, s), g = c.getContext('2d');
+    g.fillStyle = '#9a9a9a'; g.fillRect(0, 0, s, s);
+    for (let i = 0; i < 900; i++) {
+      const x = rand(0, s), y = rand(0, s), r = rand(4, 26);
+      const grd = g.createRadialGradient(x, y, 0, x, y, r);
+      const v = hash1(i) > 0.5 ? 255 : 0;
+      grd.addColorStop(0, `rgba(${v},${v},${v},${rand(0.03, 0.10)})`);
+      grd.addColorStop(1, `rgba(${v},${v},${v},0)`);
+      g.fillStyle = grd;
+      g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+    }
+    // サテンらしい細い縦の艶すじ
+    for (let i = 0; i < 120; i++) {
+      g.fillStyle = `rgba(0,0,0,${rand(0.02, 0.06)})`;
+      g.fillRect(rand(0, s), 0, rand(1, 3), s);
+    }
+    return tex(c, { srgb: false, repeat: [3, 3] });
+  });
+}
+
+/* ---------- 髪の縦グラデ（根元は暗く、毛先は明るく） ---------- */
+export function hairRampTexture(root = '#3a2436', tip = '#8a6478') {
+  return cached('hairRamp' + root + tip, () => {
+    const w = 8, h = 128, c = makeCanvas(w, h), g = c.getContext('2d');
+    const grd = g.createLinearGradient(0, 0, 0, h);
+    grd.addColorStop(0.00, tip);          // てっぺん（v=1）に艶
+    grd.addColorStop(0.13, tip);
+    grd.addColorStop(0.30, root);
+    grd.addColorStop(1.00, root);
+    g.fillStyle = grd; g.fillRect(0, 0, w, h);
+    g.fillStyle = 'rgba(255,255,255,0.14)';
+    g.fillRect(0, h * 0.04, w, h * 0.06);
+    return tex(c);
+  });
+}
+
+/* ---------- 足元の接地影 ---------- */
+export function contactShadowTexture() {
+  return cached('contact', () => {
+    const s = 128, c = makeCanvas(s, s), g = c.getContext('2d');
+    const grd = g.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
+    grd.addColorStop(0, 'rgba(255,255,255,0.95)');
+    grd.addColorStop(0.35, 'rgba(255,255,255,0.55)');
+    grd.addColorStop(0.72, 'rgba(255,255,255,0.14)');
+    grd.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grd; g.fillRect(0, 0, s, s);
+    return tex(c, { srgb: false });
   });
 }
 
