@@ -1,0 +1,531 @@
+:root {
+  --pink: #ff86ab;
+  --pink-soft: #ffd3e2;
+  --cream: #fff6ee;
+  --deep: #131a3a;
+  --deep-soft: rgba(19, 26, 58, 0.55);
+  --gold: #ffd88a;
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  background: #05070f;
+  overscroll-behavior: none;
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Maru Gothic ProN', 'ヒラギノ丸ゴ ProN W4',
+    'Hiragino Sans', 'Yu Gothic', sans-serif;
+  color: var(--cream);
+}
+
+#app {
+  position: fixed;
+  inset: 0;
+}
+
+#scene {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+#ui {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.layer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(10px, 2.4vmin, 22px);
+  padding: calc(var(--safe-t) + 12px) calc(var(--safe-r) + 12px) calc(var(--safe-b) + 12px)
+    calc(var(--safe-l) + 12px);
+  opacity: 0;
+  transform: scale(0.97);
+  transition: opacity 0.45s ease, transform 0.45s ease, visibility 0s linear 0.45s;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+/* 中の button は pointer-events:auto を持つので、親を none にするだけでは
+   消えかけの（あるいは消えている）ボタンを押せてしまう。明示的に殺す。 */
+.layer:not(.on) .chip,
+.layer:not(.on) .big,
+.layer:not(.on) button {
+  pointer-events: none;
+}
+
+.layer.on {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+  visibility: visible;
+  transition: opacity 0.45s ease, transform 0.45s ease, visibility 0s linear 0s;
+}
+
+.layer.on.pass {
+  pointer-events: none;
+}
+
+.scrim {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120% 90% at 50% 40%, rgba(10, 14, 34, 0.15) 0%, rgba(6, 9, 24, 0.78) 100%);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
+/* おわりの画面は、光の見せ場を隠さないように下へ寄せて薄くする */
+#end-layer {
+  justify-content: flex-end;
+}
+
+#end-layer .scrim {
+  background: linear-gradient(180deg, rgba(6, 9, 24, 0) 40%, rgba(6, 9, 24, 0.72) 88%);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+#end-layer .title .main {
+  font-size: clamp(21px, 5.4vmin, 40px);
+}
+
+#end-layer .stack {
+  padding-bottom: 4px;
+}
+
+#end-layer .row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: clamp(8px, 1.8vmin, 16px);
+}
+
+@media (orientation: landscape) {
+  #end-layer .big {
+    min-width: clamp(150px, 26vmin, 260px);
+    padding: clamp(9px, 2vmin, 15px) clamp(14px, 3vmin, 26px);
+    font-size: clamp(14px, 3.4vmin, 21px);
+  }
+}
+
+.stack {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(10px, 2.2vmin, 20px);
+  max-width: min(92vw, 640px);
+}
+
+/* ---------- タイトル ---------- */
+
+.title {
+  text-align: center;
+  line-height: 1.24;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.55), 0 0 34px rgba(255, 190, 150, 0.35);
+}
+
+.title .sub {
+  display: block;
+  font-size: clamp(15px, 3.6vmin, 26px);
+  letter-spacing: 0.12em;
+  color: var(--pink-soft);
+}
+
+.title .main {
+  display: block;
+  font-size: clamp(27px, 7.4vmin, 60px);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  background: linear-gradient(100deg, #fff3d0, #ffd0e3 40%, #cfe8ff 72%, #fff3d0);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 3px 10px rgba(0, 0, 0, 0.5));
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: clamp(8px, 1.8vmin, 16px);
+}
+
+.chip {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: clamp(64px, 15vmin, 104px);
+  height: clamp(64px, 15vmin, 104px);
+  border-radius: 26%;
+  border: 3px solid rgba(255, 255, 255, 0.24);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.06));
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.2s, box-shadow 0.2s;
+  font-size: clamp(24px, 6vmin, 40px);
+  cursor: pointer;
+}
+
+.chip .cap {
+  font-size: clamp(9px, 2vmin, 12px);
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+  white-space: nowrap;
+}
+
+.chip:active {
+  transform: scale(0.9);
+}
+
+.chip.sel {
+  border-color: var(--pink);
+  background: linear-gradient(160deg, rgba(255, 160, 195, 0.5), rgba(255, 130, 175, 0.22));
+  box-shadow: 0 0 0 4px rgba(255, 134, 171, 0.22), 0 10px 26px rgba(0, 0, 0, 0.4);
+  transform: translateY(-3px);
+}
+
+.big {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-width: clamp(190px, 46vmin, 320px);
+  padding: clamp(12px, 2.6vmin, 20px) clamp(20px, 5vmin, 36px);
+  border-radius: 999px;
+  border: none;
+  font-size: clamp(17px, 4.2vmin, 27px);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #58203a;
+  background: linear-gradient(160deg, #fff0c9, #ffb6d2 55%, #ff9ec4);
+  box-shadow: 0 10px 30px rgba(255, 130, 175, 0.4), inset 0 -4px 0 rgba(0, 0, 0, 0.12);
+  cursor: pointer;
+  animation: breathe 2.6s ease-in-out infinite;
+}
+
+.big:active {
+  transform: scale(0.94);
+  animation: none;
+}
+
+.big.alt {
+  background: linear-gradient(160deg, #dff1ff, #a9d8ff 60%, #8fc7f5);
+  box-shadow: 0 10px 30px rgba(120, 190, 250, 0.34), inset 0 -4px 0 rgba(0, 0, 0, 0.1);
+  color: #123050;
+}
+
+.big.alt2 {
+  background: linear-gradient(160deg, #fff5d6, #ffe08a 60%, #ffcf60);
+  box-shadow: 0 10px 30px rgba(255, 205, 100, 0.34), inset 0 -4px 0 rgba(0, 0, 0, 0.1);
+  color: #5a3f0e;
+}
+
+@keyframes breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.045); }
+}
+
+/* ---------- ヒント ---------- */
+
+.hint {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+  filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.6));
+}
+
+.hint.on { opacity: 1; }
+
+.hint .glyph {
+  font-size: clamp(40px, 11vmin, 82px);
+  line-height: 1;
+}
+
+.hint .word {
+  font-size: clamp(13px, 3.2vmin, 21px);
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  color: #fff;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.7);
+}
+
+.hint.up .glyph { animation: floatUp 1.5s ease-in-out infinite; }
+@keyframes floatUp {
+  0% { transform: translateY(14px); opacity: 0.25; }
+  45% { opacity: 1; }
+  100% { transform: translateY(-22px); opacity: 0; }
+}
+
+.hint.rub .glyph { animation: rubbing 1.5s ease-in-out infinite; }
+@keyframes rubbing {
+  0%, 100% { transform: translate(-16px, 0) rotate(-8deg); }
+  50% { transform: translate(16px, -6px) rotate(8deg); }
+}
+
+.hint.turn .glyph { animation: turning 2.1s linear infinite; }
+@keyframes turning {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.hint.down .glyph { animation: pressing 1.3s ease-in-out infinite; }
+@keyframes pressing {
+  0%, 100% { transform: translateY(-8px); }
+  55% { transform: translateY(12px); }
+}
+
+.hint.tap .glyph { animation: tapping 1.4s ease-in-out infinite; }
+@keyframes tapping {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(0.82); }
+}
+
+/* ---------- 上部の小物 ---------- */
+
+.topbar {
+  position: absolute;
+  top: calc(var(--safe-t) + 10px);
+  left: calc(var(--safe-l) + 10px);
+  right: calc(var(--safe-r) + 10px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.icon-btn {
+  pointer-events: auto;
+  width: clamp(42px, 9vmin, 58px);
+  height: clamp(42px, 9vmin, 58px);
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.22);
+  background: rgba(16, 22, 46, 0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  font-size: clamp(19px, 4.4vmin, 27px);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+
+.icon-btn:active { transform: scale(0.88); }
+.icon-btn.hidden { display: none; }
+
+.found-row {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  max-width: 46vw;
+  justify-content: center;
+}
+
+.found-row .f {
+  width: clamp(26px, 5.6vmin, 36px);
+  height: clamp(26px, 5.6vmin, 36px);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  border: 2px solid rgba(255, 214, 230, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(13px, 3vmin, 19px);
+  animation: pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes pop {
+  from { transform: scale(0.2) rotate(-30deg); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+/* 高さゲージ（縦画面で灯台の高さを強調） */
+.climb {
+  position: absolute;
+  right: calc(var(--safe-r) + 12px);
+  top: 22%;
+  bottom: 22%;
+  width: 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  overflow: visible;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.5s;
+}
+
+.climb.on { opacity: 1; }
+
+.climb .fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 999px;
+  background: linear-gradient(0deg, #ff9ec4, #ffd88a);
+  transition: height 0.28s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+.climb .knob {
+  position: absolute;
+  left: 50%;
+  width: clamp(24px, 5.4vmin, 34px);
+  height: clamp(24px, 5.4vmin, 34px);
+  margin-left: calc(clamp(24px, 5.4vmin, 34px) / -2);
+  border-radius: 50%;
+  background: linear-gradient(160deg, #fff6e0, #ffc7e6);
+  box-shadow: 0 0 16px rgba(255, 200, 230, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(13px, 3vmin, 18px);
+  transition: bottom 0.28s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+.climb .top-mark {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: -26px;
+  font-size: clamp(15px, 3.4vmin, 22px);
+  filter: drop-shadow(0 0 8px rgba(255, 220, 150, 0.8));
+}
+
+/* 磨きの進み具合 */
+.polish {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--safe-b) + 16px);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 16px 7px 10px;
+  border-radius: 999px;
+  background: rgba(16, 22, 46, 0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  opacity: 0;
+  transition: opacity 0.4s;
+  pointer-events: none;
+}
+
+.polish.on { opacity: 1; }
+
+.polish .bar {
+  width: clamp(90px, 30vmin, 190px);
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  overflow: hidden;
+}
+
+.polish .bar i {
+  display: block;
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #a9d8ff, #fff3d0);
+  transition: width 0.2s linear;
+}
+
+.polish .em { font-size: clamp(18px, 4vmin, 26px); }
+
+/* トースト（見つけたもの） */
+.toast {
+  position: absolute;
+  left: 50%;
+  top: 18%;
+  transform: translate(-50%, -12px);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px;
+  border-radius: 999px;
+  background: linear-gradient(160deg, rgba(255, 246, 224, 0.95), rgba(255, 199, 230, 0.9));
+  color: #5b2340;
+  font-weight: 800;
+  font-size: clamp(14px, 3.4vmin, 22px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  transition: opacity 0.35s, transform 0.35s;
+  pointer-events: none;
+}
+
+.toast.on {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.flash {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.9s ease-out;
+}
+
+.rot-note {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--safe-b) + 12px);
+  transform: translateX(-50%);
+  font-size: clamp(11px, 2.6vmin, 15px);
+  opacity: 0.55;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.credit {
+  font-size: clamp(10px, 2.2vmin, 13px);
+  opacity: 0.5;
+  letter-spacing: 0.1em;
+}
+
+@media (orientation: landscape) {
+  .stack { max-width: min(94vw, 900px); }
+  .climb { top: 12%; bottom: 12%; }
+}

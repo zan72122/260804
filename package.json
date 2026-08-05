@@ -1,0 +1,31 @@
+{
+  "name": "hikari-no-toudai",
+  "version": "1.0.0",
+  "description": "のぼって！みがいて！ひかりの灯台 — a Three.js lighthouse-keeper game for small children",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zan72122/260804.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/zan72122/260804/issues"
+  },
+  "homepage": "https://github.com/zan72122/260804#readme",
+  "dependencies": {
+    "three": "^0.185.1"
+  },
+  "devDependencies": {
+    "@types/three": "^0.185.4",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.0"
+  },
+  "private": true,
+  "type": "module"
+}
