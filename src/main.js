@@ -329,17 +329,19 @@ curtain.position.y = CURTAIN_H / 2;
 scene.add(curtain);
 // 支柱とリング
 const poleMat = new THREE.MeshStandardMaterial({ color: 0x8a6d52, roughness: 0.9 });
+const curtainRig = new THREE.Group(); // カーテン落下時に支柱ごと沈める
 for (let i = 0; i < 8; i++) {
   const a = (i / 8) * Math.PI * 2;
   const p = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, CURTAIN_H + 0.5, 8), poleMat);
   p.position.set(Math.sin(a) * (CURTAIN_R + 0.15), (CURTAIN_H + 0.5) / 2, Math.cos(a) * (CURTAIN_R + 0.15));
   p.castShadow = true;
-  scene.add(p);
+  curtainRig.add(p);
 }
 const topRing = new THREE.Mesh(new THREE.TorusGeometry(CURTAIN_R + 0.1, 0.05, 6, 64), poleMat);
 topRing.rotation.x = Math.PI / 2;
 topRing.position.y = CURTAIN_H + 0.15;
-scene.add(topRing);
+curtainRig.add(topRing);
+scene.add(curtainRig);
 
 // ---------------------------------------------------------------- 霧（制作中に全貌を隠す）
 const mistMat = new THREE.SpriteMaterial({ map: texGlow, color: 0xf2f7ff, transparent: true, opacity: 0.2, depthWrite: false });
@@ -1041,7 +1043,11 @@ function updateReveal(dt) {
     }
   }
   if (revealFlags.drop) {
-    curtainUniforms.uDrop.value = Math.min(1, curtainUniforms.uDrop.value + dt / 2.2);
+    const d = Math.min(1, curtainUniforms.uDrop.value + dt / 2.2);
+    curtainUniforms.uDrop.value = d;
+    // 支柱とリングも一緒に地面へ沈む
+    curtainRig.position.y = -d * d * (CURTAIN_H + 1.2);
+    if (d >= 1) { curtain.visible = false; curtainRig.visible = false; }
   }
   if (!revealFlags.blue && t > 2.9) {
     revealFlags.blue = true;
@@ -1095,6 +1101,15 @@ function updateReveal(dt) {
     const gs = 1.2 + orbOn * 1.4 + Math.sin(clock.elapsedTime * 3 + i) * 0.2;
     s.glowSprite.scale.set(gs, gs, 1);
     i++;
+  }
+  // 透明な氷パーツも祭りの色で内側から光る
+  if (state.revealMode > 0) {
+    let ec;
+    if (state.revealMode === 1) ec = new THREE.Color().setHSL(0.58, 0.9, 0.5);
+    else if (state.revealMode === 2) ec = new THREE.Color().setHSL(0.76, 0.85, 0.5);
+    else ec = new THREE.Color().setHSL((clock.elapsedTime * 0.055) % 1, 0.9, 0.5);
+    icePartMat.emissive.copy(ec);
+    icePartMat.emissiveIntensity = orbOn * (0.5 + 0.25 * Math.sin(clock.elapsedTime * 2.2));
   }
   // きらきら
   for (let g = 0; g < 3; g++) {
