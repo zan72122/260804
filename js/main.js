@@ -1,5 +1,5 @@
 /* =========================================================
-   main.js — 起動と ループ
+   main.js — 起動と ループ、ゆびの うけつけ
    ========================================================= */
 (function (global) {
   'use strict';
@@ -8,9 +8,7 @@
 
   function fail(msg) {
     var d = document.createElement('div');
-    d.style.cssText = 'position:fixed;inset:0;display:grid;place-items:center;padding:8vw;' +
-      'text-align:center;font-family:sans-serif;color:#fff;background:#0a0a18;z-index:99;' +
-      'font-size:4.2vmin;line-height:1.7';
+    d.id = 'nogl';
     d.innerHTML = '✦<br>' + msg;
     document.body.appendChild(d);
   }
@@ -24,6 +22,60 @@
     Scene.render(dt);
   }
 
+  /* ---------- ゆび ---------- */
+  function bindInput(canvas) {
+    var active = null;
+    function pos(ev) {
+      var t = (ev.touches && ev.touches[0]) || (ev.changedTouches && ev.changedTouches[0]) || ev;
+      return { x: t.clientX, y: t.clientY };
+    }
+    function down(ev) {
+      if (active !== null) return;
+      ev.preventDefault();
+      unlock();
+      active = (ev.pointerId !== undefined) ? ev.pointerId : 1;
+      if (canvas.setPointerCapture && ev.pointerId !== undefined) {
+        try { canvas.setPointerCapture(ev.pointerId); } catch (e) {}
+      }
+      var p = pos(ev);
+      Game.down(p.x, p.y);
+    }
+    function move(ev) {
+      if (active === null) return;
+      ev.preventDefault();
+      var p = pos(ev);
+      Game.move(p.x, p.y);
+    }
+    function up(ev) {
+      if (active === null) return;
+      ev.preventDefault();
+      active = null;
+      var p = pos(ev);
+      Game.up(p.x, p.y);
+    }
+    if (global.PointerEvent) {
+      canvas.addEventListener('pointerdown', down, { passive: false });
+      canvas.addEventListener('pointermove', move, { passive: false });
+      canvas.addEventListener('pointerup', up, { passive: false });
+      canvas.addEventListener('pointercancel', up, { passive: false });
+    } else {
+      canvas.addEventListener('touchstart', down, { passive: false });
+      canvas.addEventListener('touchmove', move, { passive: false });
+      canvas.addEventListener('touchend', up, { passive: false });
+      canvas.addEventListener('mousedown', function (e) {
+        down(e);
+        var mm = function (e2) { move(e2); };
+        var mu = function (e2) {
+          up(e2);
+          global.removeEventListener('mousemove', mm);
+          global.removeEventListener('mouseup', mu);
+        };
+        global.addEventListener('mousemove', mm);
+        global.addEventListener('mouseup', mu);
+      }, { passive: false });
+    }
+  }
+
   function boot() {
     var canvas = document.getElementById('stage');
     if (!Scene.init(canvas)) {
@@ -32,21 +84,15 @@
     }
     Scene.resize();
     Game.init();
+    bindInput(canvas);
     raf = requestAnimationFrame(loop);
   }
 
-  /* サイズ変更（回転をふくむ） */
   var resizeT = null;
   function onResize() {
     Scene.resize();
     if (resizeT) clearTimeout(resizeT);
-    resizeT = setTimeout(function () {
-      Scene.resize();
-      if (global.UI) {
-        try { UI.cable.redraw(); } catch (e) {}
-        try { UI.lever.reposition(); } catch (e) {}
-      }
-    }, 220);
+    resizeT = setTimeout(function () { Scene.resize(); }, 220);
   }
   global.addEventListener('resize', onResize);
   global.addEventListener('orientationchange', function () {
@@ -54,15 +100,13 @@
     setTimeout(onResize, 420);
   });
 
-  /* 音は 最初のタッチで 目ざめる */
   function unlock() {
     if (global.Snd) { Snd.init(); Snd.resume(); }
   }
   ['touchstart', 'pointerdown', 'mousedown', 'keydown'].forEach(function (e) {
-    global.addEventListener(e, unlock, { once: false, passive: true });
+    global.addEventListener(e, unlock, { passive: true });
   });
 
-  /* うっかりスクロール・ピンチを ふせぐ */
   document.addEventListener('touchmove', function (e) {
     if (e.touches.length > 1) e.preventDefault();
   }, { passive: false });
@@ -70,7 +114,6 @@
   document.addEventListener('dblclick', function (e) { e.preventDefault(); }, { passive: false });
   document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
 
-  /* 画面が かくれたら 休む */
   document.addEventListener('visibilitychange', function () {
     if (document.hidden) {
       if (raf) { cancelAnimationFrame(raf); raf = null; }

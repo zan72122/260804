@@ -1,206 +1,193 @@
 /* =========================================================
    game.js — 進行と、いちばんの みせば（フィナーレ）
+   画面に 出る 2D は ひとつも ない。案内は ぜんぶ 3D の 光。
    ========================================================= */
 (function (global) {
   'use strict';
 
   var G = {};
-  var st = null;                 // Scene.state への参照
+  var st = null;
   var tw = new U.Tweener();
   var tl = new U.Timeline();
-  var mode = 'title';            // title | prep | finale
-  var step = -1;
+
+  var mode = 'title';        // title | goto | work | finale | outro
   var theme = null;
+  var legs = ['lens', 'shelf', 'slot', 'console', 'power', 'lever'];
+  var leg = -1;
+  var idle = 0;
   var shootTimer = 0;
-  var yawSpeed = 0.9;
-  var prepT = 0;
-  var yawAuto = true;
-
-  /* その星座の ほうを むく（yaw は 方位角 + 90°） */
-  function lookAtFigure(i, dur) {
-    var f = theme.figures[i];
-    if (!f) return;
-    var target = f.az + 90;
-    while (target - st.camYaw > 180) target -= 360;
-    while (target - st.camYaw < -180) target += 360;
-    tw.to(st, 'camYaw', target, dur, U.easeInOutCubic);
-    tw.to(st, 'camPitch', U.clamp(f.alt - 3, 40, 66), dur, U.easeInOutCubic);
-    tw.to(st, 'fov', 74, dur, U.easeInOutCubic);
-  }
-
-  var HINTS = [
-    { icon: '👆', text: 'レンズを くるくる' },
-    { icon: '💿', text: 'すきな ディスクを さしこもう' },
-    { icon: '🪐', text: 'まるを うごかして あわせよう' },
-    { icon: '🔌', text: 'ケーブルを ちかづけよう' },
-    { icon: '🎚️', text: 'レバーを したまで さげて！' }
-  ];
+  var lookSky = { az: 90, alt: 45, k: 0 };
+  var finaleT = 0;
+  var camLock = false;
 
   /* ---------------- 起動 ---------------- */
   G.init = function () {
     st = Scene.state;
     theme = THEMES[0];
     Scene.setTheme(theme);
-    UI.setPanel(U.$('#panel'));
+    Room.init();
+    Room.setThemeColors(THEMES);
+    Room.state.knobColors = theme.planets.map(function (p) { return p.color; });
+    Actor.init();
+    Tasks.init();
 
-    /* タイトルは「よぞら」から始まる */
-    st.dim = 1; st.roomLight = 0; st.starReveal = 0.62; st.starAlpha = 1;
-    st.mw = 0.85; st.planetA = 0.7; st.moonA = 0;
-    st.c0 = 0; st.c1 = 0; st.c2 = 0; st.c3 = 0;
-    st.camPitch = 24; st.camYaw = 0; st.reflect = 0.5; st.projGlow = 0.5;
-    st.camY = -6; st.camZ = 40; st.fov = 62;
+    var e = Room.stand('entrance');
+    Actor.placeAt(e, 292);
+    Room.state.girlXZ = [e[0], e[2]];
 
-    /* 常設のバインド（要素は使い回し） */
-    UI.lens.bind();
-    UI.lever.bind();
+    /* タイトル ── 暗いドームの 中に 立っている */
+    st.dim = 0.90; st.roomLight = 0.06; st.starReveal = 0.55; st.starAlpha = 0.55;
+    st.mw = 0.5; st.planetA = 0.35; st.moonA = 0; st.projGlow = 0.30; st.reflect = 0.55;
+    st.c0 = st.c1 = st.c2 = st.c3 = 0;
+    Room.state.hotPad = [e[0], e[2]];
+    Room.state.hotAmt = 1;
+    Room.state.padAlpha = 1;
+    Room.state.padMode = 0;
 
-    U.$('#startBtn').addEventListener('click', G.start);
-    U.$('#againBtn').addEventListener('click', function () { G.replay(false); });
-    U.$('#themeBtn').addEventListener('click', function () { G.replay(true); });
+    Cam.orbit();
+    Cam.aim([e[0], e[1] + 16, e[2]], Actor.yaw + 176, 14, 60, 60);
+    Cam.snap();
   };
 
-  /* ---------------- タイトル → 準備室 ---------------- */
-  G.start = function () {
-    if (mode !== 'title') return;
-    if (global.Snd) { Snd.resume(); Snd.chime(523.25); Snd.whoosh(1.8); }
-    mode = 'prep';
-    U.$('#title').classList.add('gone');
-    setTimeout(function () { U.hide(U.$('#title')); }, 750);
+  /* ---------------- テーマ・惑星 ---------------- */
+  G.pickTheme = function (i) {
+    theme = THEMES[i];
+    Scene.setTheme(theme);
+    Room.state.knobColors = theme.planets.map(function (p) { return p.color; });
+  };
+  G.setPlanets = function (ts) {
+    Scene.planetAz = ts.map(function (t, k) {
+      return [30, 165, 285][k] + (t - 0.5) * 120;
+    });
+  };
 
+  /* ---------------- 進行 ---------------- */
+  function gotoLeg(i) {
+    leg = i;
+    if (i >= legs.length) return;
+    mode = 'goto';
+    idle = 0;
+    var key = legs[i];
+    var p = Room.stand(key);
+    Room.state.hotPad = [p[0], p[2]];
+    Room.state.hotAmt = 1;
+    Room.state.padAlpha = 1;
+    /* 次の もちばの ほうへ 体を むける ── カメラも ついてまわるので
+       目じるしが かならず 画面に 入る */
+    Actor.targetYaw = Math.atan2(p[2] - Actor.pos[2], p[0] - Actor.pos[0]) * 180 / Math.PI;
+  }
+
+  function arrive() {
+    var key = legs[leg];
+    mode = 'work';
+    Actor.targetYaw = Room.facing(key);
+    Room.state.hotAmt = 0.15;
+    tw.to(Room.state, 'padAlpha', 0.28, 0.6, U.easeOutCubic);
+    setTimeout(function () {
+      if (mode !== 'work') return;
+      Tasks.begin(key, function () {
+        tw.to(Room.state, 'padAlpha', 1, 0.6, U.easeOutCubic);
+        Actor.cheer = 0;
+        if (leg + 1 >= legs.length) startFinale();
+        else gotoLeg(leg + 1);
+      });
+    }, 620);
+  }
+
+  /* ---------------- ゆび ---------------- */
+  G.down = function (x, y) {
+    idle = 0;
+    if (mode === 'title') { begin(); return; }
+    if (mode === 'finale') return;
+
+    if (mode === 'work' && Tasks.down(x, y)) return;
+
+    /* パッドを たたいたら そこまで 歩く */
+    var pad = Room.padAt(x, y);
+    if (!pad) return;
+    if (mode === 'outro') {
+      Actor.targetYaw = null;
+      Actor.walkTo(pad.p, function () { checkOutro(pad); });
+      if (global.Snd) Snd.tap();
+      return;
+    }
+    if (mode === 'work') {
+      /* もちばの パッドで なければ しごとを 中断して 歩きだす */
+      var here = Room.stand(legs[leg]);
+      if (Math.hypot(pad.p[0] - here[0], pad.p[2] - here[2]) < 6) return;
+      Tasks.end();
+      mode = 'goto';
+      tw.to(Room.state, 'padAlpha', 1, 0.4, U.easeOutCubic);
+      Room.state.hotAmt = 1;
+    }
+    Actor.targetYaw = null;
+    Actor.walkTo(pad.p, null);
+    if (global.Snd) Snd.tap();
+  };
+  G.move = function (x, y) { idle = 0; if (mode === 'work') Tasks.move(x, y); };
+  G.up = function (x, y) { if (mode === 'work') Tasks.up(x, y); };
+
+  /* ---------------- タイトル → しごと ---------------- */
+  function begin() {
+    mode = 'goto';
+    if (global.Snd) { Snd.resume(); Snd.chime(523.25); Snd.whoosh(1.8); }
     tw.to(st, 'dim', 0, 2.2, U.easeInOutCubic);
-    tw.to(st, 'roomLight', 1, 1.9, U.easeOutCubic, 0.25);
+    tw.to(st, 'roomLight', 1, 1.9, U.easeOutCubic, 0.2);
     tw.to(st, 'starAlpha', 0, 1.2, U.easeOutCubic);
     tw.to(st, 'mw', 0, 1.0, U.easeOutCubic);
     tw.to(st, 'planetA', 0, 0.9, U.easeOutCubic);
-    tw.to(st, 'camPitch', 0, 2.6, U.easeInOutCubic);
-    tw.to(st, 'camY', -10, 2.6, U.easeInOutCubic);
-    tw.to(st, 'camZ', 82, 3.0, U.easeInOutCubic);
-    tw.to(st, 'reflect', 0, 1.5, U.easeOutCubic);
-    tw.to(st, 'projGlow', 0.14, 1.5, U.easeOutCubic);
+    tw.to(st, 'reflect', 0, 1.4, U.easeOutCubic);
+    tw.to(st, 'projGlow', 0.16, 1.4, U.easeOutCubic);
+    setTimeout(function () { gotoLeg(0); }, 900);
+  }
 
-    U.show(U.$('#lamps'));
-    U.show(U.$('#panel'));
-    U.$('#panel').classList.remove('fade');
-    setTimeout(function () { goStep(0); }, 900);
+  /* ---------------- レバーを さげている あいだ ---------------- */
+  G.onLever = function (p) {
+    if (mode !== 'work') return;
+    tw.kill(st, 'dim'); tw.kill(st, 'roomLight');
+    st.dim = p * 0.44;
+    st.roomLight = 1 - p * 0.84;
+    st.projGlow = 0.85 + p * 0.6;
+    Room.state.padAlpha = 0.28 * (1 - p);
   };
 
-  /* ---------------- ステップ進行 ---------------- */
-  function lamps() {
-    U.$$('#lamps i').forEach(function (e, i) {
-      e.classList.toggle('on', i < step);
-      e.classList.toggle('cur', i === step);
-    });
-  }
-
-  function setHint(i) {
-    var h = U.$('#hint');
-    if (i < 0) { U.hide(h); return; }
-    U.show(h);
-    h.classList.remove('out');
-    U.$('#hintIcon').textContent = HINTS[i].icon;
-    U.$('#hintText').textContent = HINTS[i].text;
-    /* アニメを再生し直す */
-    h.style.animation = 'none';
-    void h.offsetWidth;
-    h.style.animation = '';
-  }
-
-  function goStep(i) {
-    step = i;
-    lamps();
-    setHint(i);
-
-    /* カメラを ちょっと動かして いきいきさせる */
-    tw.to(st, 'camPitch', [0, 3, -2, 1, 4][i], 1.4, U.easeInOutCubic);
-    tw.to(st, 'camZ', [82, 78, 86, 80, 74][i], 1.8, U.easeInOutCubic);
-
-    if (i === 0) {
-      UI.activate('#task-lens');
-      UI.lens.init(function () { goStep(1); });
-    } else if (i === 1) {
-      UI.activate('#task-disc');
-      UI.disc.init(THEMES, function (idx) {
-        theme = THEMES[idx];
-        Scene.setTheme(theme);
-        goStep(2);
-      });
-    } else if (i === 2) {
-      UI.activate('#task-planet');
-      UI.planet.init(theme, function (pcts) {
-        Scene.planetAz = pcts.map(function (p, k) {
-          return [30, 165, 285][k] + (p - 50) * 1.6;
-        });
-        goStep(3);
-      });
-    } else if (i === 3) {
-      UI.activate('#task-cable');
-      UI.cable.init(function () { goStep(4); });
-    } else if (i === 4) {
-      UI.activate('#task-lever');
-      UI.lever.init(onLever, startFinale);
-    }
-  }
-
-  /* レバーを下げるほど 会場が暗くなる（その場で見える） */
-  function onLever(p) {
-    if (mode !== 'prep') return;
-    tw.kill(st, 'dim'); tw.kill(st, 'roomLight'); tw.kill(st, 'wash');
-    st.dim = p * 0.42;
-    st.roomLight = 1 - p * 0.82;
-    st.projGlow = 0.14 + p * 0.5;
-    var pan = U.$('#panel');
-    pan.style.opacity = String(1 - p * 0.25);
-  }
-
   /* ============================================================
-     フィナーレ ── ここが いちばんの みせば
+     フィナーレ
      ============================================================ */
   function startFinale() {
-    if (mode === 'finale') return;
     mode = 'finale';
-    yawAuto = true;
+    finaleT = 0;
+    camLock = false;
     if (global.Snd) { Snd.resume(); Snd.whoosh(2.8); }
+    Tasks.end();
 
-    /* UI を しずかに 消す */
-    var pan = U.$('#panel');
-    pan.style.opacity = '';
-    pan.classList.add('fade');
-    U.$('#hint').classList.add('out');
-    setTimeout(function () {
-      U.hide(pan); U.hide(U.$('#hint')); U.hide(U.$('#lamps'));
-    }, 620);
+    Room.state.padAlpha = 0;
+    Room.state.hotAmt = 0;
+    Actor.lean = 0; Actor.reachL = null; Actor.reachR = null; Actor.gripLever = false;
 
-    tl.clear();
+    /* ドームの まんなかへ 歩いていって、見あげる */
+    var open = Room.at(90, 62, 0);
+    Actor.walkTo(open, function () {
+      Actor.targetYaw = 268;
+      tw.to(Actor, 'lookUp', 1, 2.2, U.easeInOutCubic);
+    });
 
-    /* --- ① 会場の照明が ゆっくり おちる --- */
     tw.to(st, 'roomLight', 0, 2.8, U.easeInOutCubic);
     tw.to(st, 'dim', 1, 3.2, U.easeInOutCubic);
     tw.to(st, 'projGlow', 1.5, 1.8, U.easeOutCubic);
-    tw.to(st, 'twinkle', 1, 0.1, U.easeOutCubic);
     tw.to(st, 'starAlpha', 1, 0.4, U.easeOutCubic);
     st.starReveal = 0;
     st.c0 = st.c1 = st.c2 = st.c3 = 0;
     st.mw = 0; st.planetA = 0; st.moonA = 0; st.reflect = 0;
+    lookSky = { az: 268, alt: 16, k: 0 };
 
-    /* --- カメラが 天頂へ（ゆっくり 前へ すべりながら） --- */
-    tw.to(st, 'camPitch', 56, 7.2, U.easeInOutCubic, 0.9);
-    tw.to(st, 'fov', 76, 6.0, U.easeInOutCubic, 0.9);
-    tw.to(st, 'camZ', 70, 8.0, U.easeInOutCubic, 0.9);
-    tw.to(st, 'camY', -4, 8.0, U.easeInOutCubic, 0.9);
-
+    tl.clear();
     tl.at(1.0, function () { if (global.Snd) Snd.rumble(); });
-
-    /* --- ② 星が ひとつずつ --- */
-    tl.at(2.1, function () {
-      tw.to(st, 'starReveal', 0.078, 3.4, U.easeOutCubic);
-    });
+    tl.at(1.6, function () { tw.to(lookSky, 'alt', 52, 5.0, U.easeInOutCubic); });
+    tl.at(2.1, function () { tw.to(st, 'starReveal', 0.078, 3.4, U.easeOutCubic); });
     for (var k = 0; k < 9; k++) {
-      (function (i) {
-        tl.at(2.35 + i * 0.34, function () { if (global.Snd) Snd.pop(i); });
-      })(k);
+      (function (i) { tl.at(2.35 + i * 0.34, function () { if (global.Snd) Snd.pop(i); }); })(k);
     }
-
-    /* --- ③ そして いっきに ひろがる --- */
     tl.at(5.6, function () {
       tw.to(st, 'beamAmt', 1.0, 0.5, U.easeOutCubic);
       tw.to(st, 'wash', 0.10, 0.4, U.easeOutCubic);
@@ -209,138 +196,184 @@
       tw.to(st, 'starReveal', 1.0, 2.9, U.easeOutCubic);
       tw.to(st, 'beamAmt', 0, 3.2, U.easeInOutCubic);
       tw.to(st, 'wash', 0, 1.6, U.easeOutCubic);
-      var f = U.$('#flash');
-      f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
       tw.to(st, 'projGlow', 0.30, 3.4, U.easeInOutCubic, 0.8);
+      var f = document.getElementById('flash');
+      f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
       if (global.Snd) { Snd.bloom(); Snd.starRun(9, 523.25); }
     });
-
-    /* --- ④ 惑星と おつきさま --- */
+    tl.at(6.4, function () { tw.to(st, 'reflect', 1, 5.0, U.easeInOutCubic); });
     tl.at(8.8, function () {
       tw.to(st, 'planetA', 1, 2.4, U.easeOutCubic);
       if (theme.moon) tw.to(st, 'moonA', 1, 3.0, U.easeOutCubic, 0.6);
     });
 
-    /* --- ⑤ 星座の線が つながる（そのたびに 首が そちらを むく） --- */
+    /* 星座：そのたびに 彼女も カメラも そちらを むく */
     ['c0', 'c1', 'c2', 'c3'].forEach(function (key, i) {
       tl.at(9.6 + i * 2.0, function () {
-        yawAuto = false;
-        lookAtFigure(i, 1.9);
+        var f = theme.figures[i];
+        if (f) {
+          camLock = true;
+          tw.to(lookSky, 'az', nearestAngle(lookSky.az, f.az), 1.9, U.easeInOutCubic);
+          tw.to(lookSky, 'alt', U.clamp(f.alt, 24, 66), 1.9, U.easeInOutCubic);
+          Actor.targetYaw = f.az;
+        }
         tw.to(st, key, 1, 2.1, U.easeInOutCubic, 0.55);
         if (global.Snd) Snd.chime(392.0 * Math.pow(2, i / 12 * 3));
-        setTimeout(function () { showName(Scene.figureName(i)); }, 2000);
       });
     });
 
-    /* --- ⑥ 天の川が ドームの はしから はしへ --- */
     tl.at(18.4, function () {
+      camLock = false;
       tw.to(st, 'mw', 1, 8.0, U.easeInOutCubic);
-      tw.to(st, 'camPitch', 58, 3.0, U.easeInOutCubic);
-      tw.to(st, 'fov', 78, 3.0, U.easeInOutCubic);
-      setTimeout(function () { yawAuto = true; }, 3000);
+      tw.to(lookSky, 'alt', 62, 3.0, U.easeInOutCubic);
       if (global.Snd) Snd.whoosh(5.0);
     });
-
-    /* --- ⑦ 足元まで 反射光 --- */
-    tl.at(6.4, function () { tw.to(st, 'reflect', 1, 5.0, U.easeInOutCubic); });
-
-    /* --- ⑧ ゆっくり 視線を おろして、星あかりの 客席を みせる --- */
-    tl.at(25.0, function () {
-      yawAuto = true;
-      tw.to(st, 'camPitch', 16, 11.0, U.easeInOutCubic);
-      tw.to(st, 'camZ', 104, 11.0, U.easeInOutCubic);
-      tw.to(st, 'camY', -9, 11.0, U.easeInOutCubic);
-      tw.to(st, 'fov', 66, 11.0, U.easeInOutCubic);
-    });
-
-    /* --- ⑨ 音の うみ --- */
     tl.at(4.5, function () { if (global.Snd) Snd.droneOn(theme.id === 'sea' ? 110 : 130.81); });
-
-    /* --- ⑩ 流れ星 --- */
     tl.at(20.2, function () { Scene.shootingStar(false); });
     tl.at(22.8, function () { Scene.shootingStar(true); });
 
-    /* --- ⑪ ゆっくり ながめる時間のあとで ボタン --- */
-    tl.at(28.5, function () {
-      U.show(U.$('#replay'));
+    /* 余韻：ゆっくり 視線を おろして 星あかりの 客席を みせる */
+    tl.at(25.0, function () {
+      tw.to(lookSky, 'alt', 18, 9.0, U.easeInOutCubic);
     });
-
+    tl.at(28.5, function () { openOutro(); });
     tl.start();
     shootTimer = 0;
   }
 
-  var nameTimer = null;
-  function showName(txt) {
-    if (!txt) return;
-    var el = U.$('#figureName');
-    U.show(U.$('#afterglow'));
-    el.classList.remove('show');
-    void el.offsetWidth;
-    el.textContent = txt;
-    el.classList.add('show');
-    if (nameTimer) clearTimeout(nameTimer);
-    nameTimer = setTimeout(function () { el.classList.remove('show'); }, 3500);
+  function nearestAngle(cur, target) {
+    var t = target;
+    while (t - cur > 180) t -= 360;
+    while (t - cur < -180) t += 360;
+    return t;
   }
 
   /* ---------------- もういっかい ---------------- */
-  G.replay = function (changeTheme) {
-    if (mode !== 'finale') return;
-    mode = 'prep';
-    if (global.Snd) { Snd.tap(); Snd.droneOff(); Snd.whoosh(1.6); }
-    tl.clear();
-    U.hide(U.$('#replay'));
-    U.hide(U.$('#afterglow'));
+  function openOutro() {
+    mode = 'outro';
+    Actor.lookUp = 0;
+    Room.state.padMode = 1;
+    tw.to(Room.state, 'padAlpha', 1, 1.6, U.easeOutCubic);
+    Room.state.hotAmt = 0.9;
+    var a = Room.outroPads[0];
+    Room.state.hotPad = [a[0], a[2]];
+  }
 
-    /* 明かりが もどる */
+  function checkOutro(pad) {
+    if (mode !== 'outro') return;
+    var a = Room.outroPads[0], b = Room.outroPads[1];
+    var da = Math.hypot(pad.p[0] - a[0], pad.p[2] - a[2]);
+    var db = Math.hypot(pad.p[0] - b[0], pad.p[2] - b[2]);
+    if (da < 12) restart(false);
+    else if (db < 12) restart(true);
+  }
+
+  function restart(changeTheme) {
+    mode = 'goto';
+    if (global.Snd) { Snd.droneOff(); Snd.chime(523.25); Snd.whoosh(1.6); }
+    tl.clear();
+    Room.state.padMode = 0;
+
     tw.to(st, 'starAlpha', 0, 1.6, U.easeInOutCubic);
     tw.to(st, 'mw', 0, 1.4, U.easeInOutCubic);
     tw.to(st, 'planetA', 0, 1.2, U.easeInOutCubic);
     tw.to(st, 'moonA', 0, 1.2, U.easeInOutCubic);
-    tw.to(st, 'c0', 0, 1.0, U.easeInOutCubic);
-    tw.to(st, 'c1', 0, 1.0, U.easeInOutCubic);
-    tw.to(st, 'c2', 0, 1.0, U.easeInOutCubic);
-    tw.to(st, 'c3', 0, 1.0, U.easeInOutCubic);
+    ['c0', 'c1', 'c2', 'c3'].forEach(function (k) { tw.to(st, k, 0, 1.0, U.easeInOutCubic); });
     tw.to(st, 'dim', 0, 2.0, U.easeInOutCubic, 0.4);
     tw.to(st, 'roomLight', 1, 2.0, U.easeOutCubic, 0.6);
     tw.to(st, 'reflect', 0, 1.6, U.easeInOutCubic);
-    tw.to(st, 'projGlow', 0.14, 1.6, U.easeInOutCubic);
-    tw.to(st, 'camPitch', 2, 2.4, U.easeInOutCubic);
-    tw.to(st, 'fov', 62, 2.4, U.easeInOutCubic);
-    tw.to(st, 'camZ', 95, 2.6, U.easeInOutCubic);
-    tw.to(st, 'camY', -10, 2.6, U.easeInOutCubic);
+    tw.to(st, 'projGlow', 0.16, 1.6, U.easeInOutCubic);
+
+    /* 会場を もとに もどす */
+    Room.resetForReplay(changeTheme);
+    Scene.setTheme(theme);
+    Actor.carry = 0; Actor.lookUp = 0;
 
     setTimeout(function () {
       st.starReveal = 0;
-      U.show(U.$('#lamps'));
-      var pan = U.$('#panel');
-      U.show(pan);
-      pan.classList.remove('fade');
-      goStep(changeTheme ? 1 : 0);
+      Cam.orbit();
+      gotoLeg(changeTheme ? 1 : 0);
     }, 1500);
-  };
+  }
 
-  /* ---------------- 毎フレーム ---------------- */
+  /* ============================================================
+     毎フレーム
+     ============================================================ */
   G.update = function (dt) {
     tw.update(dt);
     tl.update(dt);
+    Tasks.update(dt);
+    Actor.update(dt);
+    idle += dt;
 
-    if (mode === 'title') {
-      st.camYaw += dt * 1.4;
-    } else if (mode === 'finale') {
-      if (yawAuto) st.camYaw += dt * yawSpeed;
-      /* ときどき 流れ星 */
-      shootTimer -= dt;
-      if (tl.t > 20 && shootTimer <= 0) {
-        shootTimer = 2.0 + Math.random() * 6.0 / Math.max(0.15, theme.shootRate * 3);
-        if (Math.random() < 0.85) Scene.shootingStar(Math.random() < 0.4);
-      }
-    } else {
-      prepT += dt;
-      st.camYaw = Math.sin(prepT * 0.16) * 4.0;
+    Room.state.girlXZ = [Actor.pos[0], Actor.pos[2]];
+    Room.state.carry = Tasks.discMatrix();
+    if (Room.state.discIn) Room.state.discSpin += dt * 90;
+
+    if (mode === 'finale') finaleT += dt;
+
+    /* もちばに 着いたら（すこし ずれていても）しごとが 始まる */
+    if (mode === 'goto' && leg >= 0 && leg < legs.length && !Actor.isWalking()) {
+      var tp = Room.stand(legs[leg]);
+      var dd = Math.hypot(Actor.pos[0] - tp[0], Actor.pos[2] - tp[2]);
+      if (dd < 3.5) arrive();
+      else if (dd < 18) Actor.walkTo(tp, null);
     }
+
+    /* 迷ったら 指さす */
+    Actor.point = null;
+    if ((mode === 'goto' || mode === 'outro') && idle > 3.2 && !Actor.isWalking()) {
+      var hp = Room.state.hotPad;
+      Actor.point = [hp[0], Actor.pos[1] + 6, hp[1]];
+    }
+
+    camera(dt);
+    Cam.update(dt);
   };
 
-  G.isFinale = function () { return mode === 'finale'; };
+  function camera(dt) {
+    var c = Actor.chestPos();
 
+    if (mode === 'finale') {
+      /* 彼女を 画面の 下に のこしたまま 天井を 見あげる */
+      /* 低い位置から 彼女ごしに 見あげる。
+         視線を 上げても、彼女の あたまが 画面の 下がわに のこる。 */
+      var d = U.dirFromAzAlt(lookSky.az, lookSky.alt);
+      var back = U.dirFromAzAlt(lookSky.az + 180, 0);
+      var eye = [
+        Actor.pos[0] + back[0] * 31,
+        Actor.pos[1] + 8.5,
+        Actor.pos[2] + back[2] * 31
+      ];
+      var tgt = [eye[0] + d[0] * 150, eye[1] + d[1] * 150, eye[2] + d[2] * 150];
+      Cam.free(eye, tgt, 74);
+      if (!camLock) lookSky.az += dt * 1.6;
+      return;
+    }
+
+    Cam.orbit();
+
+    if (mode === 'title') {
+      Cam.aim([c[0], c[1] + 3, c[2]], Actor.yaw + 176, 14, 60, 60);
+      return;
+    }
+
+    if (mode === 'outro') {
+      /* 星空を のこしたまま、ふたつの 輪が 見える ひろい絵 */
+      Cam.aim([c[0], c[1] + 8, c[2]], Actor.yaw + 180, 8, 76, 66);
+      return;
+    }
+
+    if (mode === 'work' && Tasks.active()) {
+      var k = Tasks.camera();
+      if (k) { Cam.aim(k.target, k.yaw, k.pitch, k.dist, k.fov); return; }
+    }
+
+    /* ついていく */
+    Cam.aim([c[0], c[1] + 3, c[2]], Actor.yaw + 180, 21, 68, 60);
+  }
+
+  G.mode = function () { return mode; };
+  G.isFinale = function () { return mode === 'finale'; };
   global.Game = G;
 })(window);

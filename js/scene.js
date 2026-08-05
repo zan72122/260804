@@ -237,9 +237,17 @@
   /* ---------- 会場のもの（床・座席・投影機） ---------- */
   var OBJ_VS = [
     'attribute vec3 aPos; attribute vec3 aNrm; attribute vec3 aCol; attribute vec2 aPar;',
-    'uniform mat4 uVP;',
+    'uniform mat4 uVP, uModel;',
+    'uniform vec3 uTintMul;',
     'varying vec3 vN, vC, vP; varying vec2 vPar;',
-    'void main(){ vN=aNrm; vC=aCol; vP=aPos; vPar=aPar; gl_Position = uVP*vec4(aPos,1.0); }'
+    'void main(){',
+    '  vec4 wp = uModel * vec4(aPos,1.0);',
+    '  vP = wp.xyz;',
+    '  vN = normalize((uModel * vec4(aNrm,0.0)).xyz);',
+    '  vC = aCol * uTintMul;',
+    '  vPar = aPar;',
+    '  gl_Position = uVP * wp;',
+    '}'
   ].join('\n');
 
   var OBJ_FS = [
@@ -252,7 +260,7 @@
     '  vec3 L = normalize(vec3(0.25,1.0,0.12));',
     '  float dif = max(dot(n,L),0.0);',
     '  float up = max(n.y,0.0);',
-    '  float bounce = 0.34 + 0.30*max(-n.y,0.0) + 0.26*max(n.y,0.0);',
+    '  float bounce = 0.44 + 0.30*max(-n.y,0.0) + 0.26*max(n.y,0.0);',
     '  vec3 col = vC*(bounce + 0.85*dif)*uWarm*uRoomLight;',
     /* 空からの淡い反射 */
     '  col += vC*uSkyTint*uReflect*(0.30+0.85*up)*2.1;',
@@ -266,7 +274,7 @@
     '    col *= 0.88+0.12*ring;',
     '  }',
     /* 投影機：星をあける ちいさな穴が きらり */
-    '  if(vPar.y > 1.5 && vPar.x > 0.01){',
+    '  if(vPar.y > 1.5 && vPar.y < 2.5 && vPar.x > 0.01){',
     '    float la = asin(clamp(n.y,-1.0,1.0));',
     '    float aa = atan(n.z, n.x);',
     '    vec2 g = fract(vec2(aa*2.9, la*5.4)) - 0.5;',
@@ -300,6 +308,49 @@
     '}'
   ].join('\n');
 
+  /* ---------- 床の 足あとパッド ---------- */
+  var PAD_VS = [
+    'attribute vec3 aPos; attribute vec2 aUV; attribute vec2 aCen; attribute float aFlag;',
+    'uniform mat4 uVP; uniform float uPadMode;',
+    'varying vec2 vUV; varying vec2 vCen; varying float vHide;',
+    'void main(){',
+    '  vUV=aUV; vCen=aCen;',
+    '  vHide = abs(aFlag - uPadMode);',
+    '  gl_Position = uVP*vec4(aPos,1.0);',
+    '}'
+  ].join('\n');
+
+  var PAD_FS = [
+    'precision mediump float;',
+    'varying vec2 vUV; varying vec2 vCen; varying float vHide;',
+    'uniform vec2 uHot, uGirl;',
+    'uniform float uTime, uHotAmt, uAlpha;',
+    'uniform vec3 uColor, uHotColor;',
+    'void main(){',
+    '  if(vHide > 0.5) discard;',
+    '  float r = length(vUV);',
+    '  if(r > 1.0) discard;',
+    '  float ring = smoothstep(1.0,0.88,r) * smoothstep(0.52,0.72,r);',
+    '  float core = exp(-r*r*2.6)*0.20;',
+    /* 目的地の パッドだけ 強く 脈うつ */
+    '  float hot = 1.0 - smoothstep(1.0, 9.0, distance(vCen, uHot));',
+    '  hot *= uHotAmt;',
+    '  float pulse = 0.55 + 0.45*sin(uTime*3.2 - r*4.5);',
+    '  float a = (ring*0.6 + core) * (0.20 + hot*(0.85 + 0.75*pulse));',
+    /* 女の子から 目的地へ ながれる 光のすじ */
+    '  vec2 gh = uHot - uGirl;',
+    '  float L2 = max(dot(gh,gh), 1.0);',
+    '  float tt = clamp(dot(vCen - uGirl, gh)/L2, 0.0, 1.0);',
+    '  vec2 near = uGirl + gh*tt;',
+    '  float off = length(vCen - near);',
+    '  float path = (1.0 - smoothstep(6.0, 24.0, off)) * uHotAmt;',
+    '  float wave = exp(-pow(fract(tt - uTime*0.30) - 0.5, 2.0)*26.0);',
+    '  a += path * wave * (ring*0.9 + core*2.0) * 1.5;',
+    '  vec3 col = mix(uColor, uHotColor, clamp(hot + path*wave, 0.0, 1.0));',
+    '  gl_FragColor = vec4(col * a * uAlpha, 0.0);',
+    '}'
+  ].join('\n');
+
   /* ============================================================
      Scene
      ============================================================ */
@@ -312,8 +363,6 @@
       starReveal: 0, starAlpha: 1, twinkle: 1,
       mw: 0, planetA: 0, moonA: 0,
       c0: 0, c1: 0, c2: 0, c3: 0,
-      camPitch: -18, camYaw: 0, fov: 62,
-      camY: -10, camZ: 95,
       projGlow: 0.12, reflect: 0, beamAmt: 0,
       skyFade: 0
     },
@@ -336,7 +385,8 @@
     prog.planet = GLC.program(gl, PLANET_VS, PLANET_FS);
     prog.obj = GLC.program(gl, OBJ_VS, OBJ_FS);
     prog.cone = GLC.program(gl, CONE_VS, CONE_FS);
-    if (!prog.dome || !prog.star || !prog.beam || !prog.planet || !prog.obj) return false;
+    prog.pad = GLC.program(gl, PAD_VS, PAD_FS);
+    if (!prog.dome || !prog.star || !prog.beam || !prog.planet || !prog.obj || !prog.pad) return false;
 
     /* ドーム */
     var dg = GLC.sphere(R_DOME, 56, 32, DOME_POLAR, true);
@@ -358,8 +408,6 @@
     buf.coneIdx = GLC.buffer(gl, cg.idx, gl.ELEMENT_ARRAY_BUFFER);
     mesh.coneCount = cg.count;
 
-    buildRoom();
-
     /* 流れ星バッファ（動的） */
     buf.shootPos = gl.createBuffer();
     buf.shootST = gl.createBuffer();
@@ -374,80 +422,46 @@
     return true;
   };
 
-  /* ---------------- 会場ジオメトリ ---------------- */
-  function buildRoom() {
+  /* ---------------- obj パスの 入口（Room / Actor が使う） ----------------
+     共通の ライティング uniform を セットしておき、あとは
+     S.drawObj(バッファ束, モデル行列) を 呼ぶだけで よいようにする。 */
+  var IDENT = U.M.identity();
+
+  S.beginObj = function (VP) {
+    var gl = S.gl, st = S.state, th = S.theme;
+    gl.useProgram(prog.obj.p);
+    gl.depthMask(true);
+    gl.uniformMatrix4fv(prog.obj.u.uVP, false, VP);
+    gl.uniform1f(prog.obj.u.uRoomLight, st.roomLight);
+    gl.uniform1f(prog.obj.u.uReflect, st.reflect);
+    gl.uniform1f(prog.obj.u.uProjGlow, st.projGlow);
+    gl.uniform1f(prog.obj.u.uTime, S.t);
+    var tint = th.mw.color;
+    gl.uniform3f(prog.obj.u.uSkyTint, tint[0] * 0.10, tint[1] * 0.11, tint[2] * 0.14);
+    gl.uniform3f(prog.obj.u.uWarm, 1.0, 0.93, 0.84);
+    gl.uniform3f(prog.obj.u.uTintMul, 1, 1, 1);
+  };
+
+  /* mesh = {pos,nrm,col,par,idx,type,count} の GL バッファ束 */
+  S.drawObj = function (m, model, first, count, tintMul) {
     var gl = S.gl;
-    var P = [], N = [], C = [], PR = [], I = [];
-    var vo = 0;
+    GLC.attrib(gl, prog.obj, 'aPos', m.pos, 3);
+    GLC.attrib(gl, prog.obj, 'aNrm', m.nrm, 3);
+    GLC.attrib(gl, prog.obj, 'aCol', m.col, 3);
+    GLC.attrib(gl, prog.obj, 'aPar', m.par, 2);
+    gl.uniformMatrix4fv(prog.obj.u.uModel, false, model || IDENT);
+    if (tintMul) gl.uniform3fv(prog.obj.u.uTintMul, tintMul);
+    else gl.uniform3f(prog.obj.u.uTintMul, 1, 1, 1);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, m.idx);
+    var bytes = (m.type === gl.UNSIGNED_INT) ? 4 : 2;
+    gl.drawElements(gl.TRIANGLES, count === undefined ? m.count : count,
+                    m.type, (first || 0) * bytes);
+  };
 
-    function push(geo, m, col, emis, kind) {
-      var n = geo.pos.length / 3;
-      for (var i = 0; i < n; i++) {
-        var x = geo.pos[i * 3], y = geo.pos[i * 3 + 1], z = geo.pos[i * 3 + 2];
-        P.push(m[0] * x + m[4] * y + m[8] * z + m[12],
-               m[1] * x + m[5] * y + m[9] * z + m[13],
-               m[2] * x + m[6] * y + m[10] * z + m[14]);
-        var nx = geo.nrm[i * 3], ny = geo.nrm[i * 3 + 1], nz = geo.nrm[i * 3 + 2];
-        var ox = m[0] * nx + m[4] * ny + m[8] * nz;
-        var oy = m[1] * nx + m[5] * ny + m[9] * nz;
-        var oz = m[2] * nx + m[6] * ny + m[10] * nz;
-        var l = Math.sqrt(ox * ox + oy * oy + oz * oz) || 1;
-        N.push(ox / l, oy / l, oz / l);
-        C.push(col[0], col[1], col[2]);
-        PR.push(emis, kind);
-      }
-      for (var j = 0; j < geo.idx.length; j++) I.push(geo.idx[j] + vo);
-      vo += n;
-    }
-
-    var T = U.M.translate, RY = U.M.rotateY, mul = U.M.multiply;
-
-    /* 床 */
-    push(GLC.disk(FLOOR_R, 96), T(0, FLOOR_Y + 0.2, 0), [0.26, 0.22, 0.31], 0, 1);
-
-    /* 座席（同心円） */
-    var seatBase = GLC.box(8.2, 4.6, 8.4);
-    var seatBack = GLC.box(8.2, 10.5, 2.6);
-    var rings = [[54, 20], [76, 27], [98, 34], [120, 41], [142, 48]];
-    var seatCols = [[0.40, 0.21, 0.33], [0.35, 0.19, 0.36], [0.44, 0.24, 0.31]];
-    for (var r = 0; r < rings.length; r++) {
-      var rad = rings[r][0], cnt = rings[r][1];
-      for (var s = 0; s < cnt; s++) {
-        var a = s / cnt * Math.PI * 2 + r * 0.06;
-        var mRot = RY(-a);
-        var col = seatCols[(r + s) % seatCols.length];
-        var lift = FLOOR_Y + r * 2.2;
-        var mb = mul(T(Math.cos(a) * rad, lift + 4.0, Math.sin(a) * rad), mRot);
-        push(seatBase, mb, col, 0, 0);
-        var mk = mul(mul(T(Math.cos(a) * (rad + 4.0), lift + 9.6, Math.sin(a) * (rad + 4.0)), mRot),
-                     U.M.rotateX(U.rad(13)));
-        push(seatBack, mk, [col[0] * 1.18, col[1] * 1.18, col[2] * 1.22], 0, 0);
-      }
-    }
-
-    /* 中央の投影機（ダンベル型のスターボール） */
-    var mtl = [0.34, 0.36, 0.44];
-    push(GLC.cylinder(9, 6.5, 9, 28), T(0, FLOOR_Y + 4.5, 0), [0.22, 0.22, 0.28], 0, 2);
-    push(GLC.cylinder(3.0, 2.6, 15, 20), T(0, FLOOR_Y + 16, 0), mtl, 0.02, 2);
-    push(GLC.sphere(5.4, 24, 16, 180, false), T(0, FLOOR_Y + 26, 0), [0.16, 0.17, 0.22], 0.55, 2);
-    push(GLC.cylinder(1.7, 1.7, 8, 14), T(0, FLOOR_Y + 34.5, 0), mtl, 0.05, 2);
-    push(GLC.sphere(5.4, 24, 16, 180, false), T(0, FLOOR_Y + 43, 0), [0.16, 0.17, 0.22], 0.55, 2);
-    push(GLC.cylinder(2.3, 1.2, 4.5, 14), T(0, FLOOR_Y + 49.5, 0), mtl, 0.35, 2);
-
-    mesh.roomBig = vo > 65000;
-    buf.roomPos = GLC.buffer(gl, new Float32Array(P));
-    buf.roomNrm = GLC.buffer(gl, new Float32Array(N));
-    buf.roomCol = GLC.buffer(gl, new Float32Array(C));
-    buf.roomPar = GLC.buffer(gl, new Float32Array(PR));
-    var idxArr;
-    if (vo > 65000 && gl.getExtension('OES_element_index_uint')) {
-      idxArr = new Uint32Array(I); mesh.roomType = gl.UNSIGNED_INT;
-    } else {
-      idxArr = new Uint16Array(I); mesh.roomType = gl.UNSIGNED_SHORT;
-    }
-    buf.roomIdx = GLC.buffer(gl, idxArr, gl.ELEMENT_ARRAY_BUFFER);
-    mesh.roomCount = I.length;
-  }
+  S.padProgram = function () { return prog.pad; };
+  S.program = function (name) { return prog[name]; };
+  S.floorY = function () { return FLOOR_Y; };
+  S.floorR = function () { return FLOOR_R; };
 
   /* ---------------- テーマ適用（星・星座を作る） ---------------- */
   S.setTheme = function (theme) {
@@ -709,15 +723,8 @@
 
     var W = S.canvas.width, H = S.canvas.height;
     gl.viewport(0, 0, W, H);
-    var aspect = W / H;
-    var fov = U.rad(st.fov / (aspect > 1 ? 1.16 : 1.0));
-    var proj = U.M.perspective(fov, aspect, 2, 460);
-    var eye = [0, st.camY, st.camZ];
-    var view = U.M.multiply(
-      U.M.rotateX(-U.rad(st.camPitch)),
-      U.M.multiply(U.M.rotateY(U.rad(st.camYaw)), U.M.translate(-eye[0], -eye[1], -eye[2]))
-    );
-    var VP = U.M.multiply(proj, view);
+    var VP = Cam.matrices(W, H, 1.5, 480);
+    var eye = Cam.eye;
 
     var bg = [
       U.lerp(0.86, th.sky.zenith[0], st.dim),
@@ -753,25 +760,19 @@
     gl.drawElements(gl.TRIANGLES, mesh.domeCount, gl.UNSIGNED_SHORT, 0);
     GLC.disableAll(gl, prog.dome);
 
-    /* ---- 会場（床・座席・投影機） ---- */
-    gl.useProgram(prog.obj.p);
-    GLC.attrib(gl, prog.obj, 'aPos', buf.roomPos, 3);
-    GLC.attrib(gl, prog.obj, 'aNrm', buf.roomNrm, 3);
-    GLC.attrib(gl, prog.obj, 'aCol', buf.roomCol, 3);
-    GLC.attrib(gl, prog.obj, 'aPar', buf.roomPar, 2);
-    gl.uniformMatrix4fv(prog.obj.u.uVP, false, VP);
-    gl.uniform1f(prog.obj.u.uRoomLight, st.roomLight);
-    gl.uniform1f(prog.obj.u.uReflect, st.reflect);
-    gl.uniform1f(prog.obj.u.uProjGlow, st.projGlow);
-    gl.uniform1f(prog.obj.u.uTime, S.t);
+    /* ---- 会場と 女の子（obj パス） ---- */
     var tint = th.mw.color;
-    gl.uniform3f(prog.obj.u.uSkyTint, tint[0] * 0.10, tint[1] * 0.11, tint[2] * 0.14);
-    gl.uniform3f(prog.obj.u.uWarm, 1.0, 0.93, 0.84);
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buf.roomIdx);
-    gl.drawElements(gl.TRIANGLES, mesh.roomCount, mesh.roomType, 0);
+    S.beginObj(VP);
+    if (global.Room) Room.render(VP);
+    if (global.Actor) Actor.render(VP);
     GLC.disableAll(gl, prog.obj);
 
+    /* ---- レンズの ガラス面 ---- */
+    if (global.Room && Room.renderLens) Room.renderLens(VP);
+
+    /* ---- 床の 足あとパッド（発光） ---- */
     gl.depthMask(false);
+    if (global.Room && Room.renderPads) Room.renderPads(VP);
 
     /* ---- 投影ビーム ---- */
     if (st.beamAmt > 0.002 && prog.cone) {

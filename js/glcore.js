@@ -173,6 +173,88 @@
     };
   };
 
+  /* ---------- メッシュ組み立て ----------
+     push() で ジオメトリを 行列ごと 焼きこみ、
+     返ってくる {first,count} で あとから 部分描画できる。 */
+  function Builder() {
+    this.P = []; this.N = []; this.C = []; this.R = []; this.I = [];
+    this.vo = 0;
+  }
+  Builder.prototype.push = function (geo, m, col, emis, kind) {
+    var first = this.I.length;
+    var n = geo.pos.length / 3;
+    m = m || G.IDENT;
+    for (var i = 0; i < n; i++) {
+      var x = geo.pos[i * 3], y = geo.pos[i * 3 + 1], z = geo.pos[i * 3 + 2];
+      this.P.push(m[0] * x + m[4] * y + m[8] * z + m[12],
+                  m[1] * x + m[5] * y + m[9] * z + m[13],
+                  m[2] * x + m[6] * y + m[10] * z + m[14]);
+      var nx = geo.nrm[i * 3], ny = geo.nrm[i * 3 + 1], nz = geo.nrm[i * 3 + 2];
+      var ox = m[0] * nx + m[4] * ny + m[8] * nz;
+      var oy = m[1] * nx + m[5] * ny + m[9] * nz;
+      var oz = m[2] * nx + m[6] * ny + m[10] * nz;
+      var l = Math.sqrt(ox * ox + oy * oy + oz * oz) || 1;
+      this.N.push(ox / l, oy / l, oz / l);
+      this.C.push(col[0], col[1], col[2]);
+      this.R.push(emis || 0, kind || 0);
+    }
+    for (var j = 0; j < geo.idx.length; j++) this.I.push(geo.idx[j] + this.vo);
+    this.vo += n;
+    return { first: first, count: geo.idx.length };
+  };
+  Builder.prototype.upload = function (gl) {
+    var big = this.vo > 65000;
+    var type = gl.UNSIGNED_SHORT, arr;
+    if (big && gl.getExtension('OES_element_index_uint')) {
+      arr = new Uint32Array(this.I); type = gl.UNSIGNED_INT;
+    } else {
+      arr = new Uint16Array(this.I);
+    }
+    return {
+      pos: G.buffer(gl, new Float32Array(this.P)),
+      nrm: G.buffer(gl, new Float32Array(this.N)),
+      col: G.buffer(gl, new Float32Array(this.C)),
+      par: G.buffer(gl, new Float32Array(this.R)),
+      idx: G.buffer(gl, arr, gl.ELEMENT_ARRAY_BUFFER),
+      type: type, count: this.I.length, verts: this.vo
+    };
+  };
+  G.Builder = Builder;
+  G.IDENT = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+
+  /* 角の丸い箱（クッションや つくえの天板に） */
+  G.roundBox = function (w, h, d, r, seg) {
+    seg = seg || 3;
+    var pos = [], nrm = [], uv = [], idx = [];
+    var rings = seg * 2 + 1, segs = seg * 4;
+    for (var i = 0; i < rings; i++) {
+      var v = i / (rings - 1);
+      var phi = v * Math.PI;
+      var sp = Math.sin(phi), cp = Math.cos(phi);
+      for (var j = 0; j <= segs; j++) {
+        var u = j / segs, th = u * Math.PI * 2;
+        var nx = sp * Math.cos(th), ny = cp, nz = sp * Math.sin(th);
+        /* 球を 立方体側へ 押し出して 角丸の箱にする */
+        var px = Math.sign(nx) * Math.min(Math.abs(nx) / 0.577, 1) * (w / 2 - r) + nx * r;
+        var py = Math.sign(ny) * Math.min(Math.abs(ny) / 0.577, 1) * (h / 2 - r) + ny * r;
+        var pz = Math.sign(nz) * Math.min(Math.abs(nz) / 0.577, 1) * (d / 2 - r) + nz * r;
+        pos.push(px, py, pz);
+        nrm.push(nx, ny, nz);
+        uv.push(u, v);
+      }
+    }
+    for (var a = 0; a < rings - 1; a++) {
+      for (var b = 0; b < segs; b++) {
+        var i0 = a * (segs + 1) + b, i1 = i0 + segs + 1;
+        idx.push(i0, i1, i0 + 1, i0 + 1, i1, i1 + 1);
+      }
+    }
+    return {
+      pos: new Float32Array(pos), nrm: new Float32Array(nrm),
+      uv: new Float32Array(uv), idx: new Uint16Array(idx), count: idx.length
+    };
+  };
+
   /* 複数ジオメトリを行列で焼きこんで結合 */
   G.merge = function (parts) {
     var np = 0, ni = 0;
