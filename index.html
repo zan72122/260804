@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#04131c">
+<meta name="description" content="4さいからの すいぞくかん おそうじ ゲーム。ゆびいっぽんで あそべます。">
+<title>すいすい すいぞくかん おそうじ</title>
+<link rel="stylesheet" href="./css/style.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three/three.module.js"
+  }
+}
+</script>
+</head>
+<body>
+<canvas id="scene"></canvas>
+
+<div id="ui">
+  <!-- 遊び中の表示 -->
+  <div id="hud" class="hidden">
+    <div id="task-card">
+      <span id="task-icon">🧽</span>
+      <p id="task-text">ガラスを ゆびで なでてね</p>
+    </div>
+    <div id="steps"></div>
+    <button id="sound" type="button" aria-label="おとを けす／つける">
+      <span class="sound-on">🔊</span>
+      <span class="sound-off">🔈</span>
+    </button>
+  </div>
+
+  <!-- ゆびのヒント -->
+  <div id="finger" aria-hidden="true">
+    <svg viewBox="0 0 64 84" width="64" height="84">
+      <ellipse cx="32" cy="76" rx="17" ry="6" fill="rgba(0,0,0,0.28)"/>
+      <path d="M24 74 V38 a6 6 0 0 1 12 0 V26 a6 6 0 0 1 12 0 V56 c0 12-6 18-14 18z"
+            fill="#ffe0bd" stroke="#c98a5a" stroke-width="2.5" stroke-linejoin="round"/>
+      <circle cx="30" cy="24" r="6.5" fill="#fff2dd" stroke="#c98a5a" stroke-width="2.5"/>
+    </svg>
+  </div>
+
+  <!-- タイトル -->
+  <div id="title" class="screen">
+    <div class="screen-inner">
+      <div class="title-art" aria-hidden="true">🐠 🫧 🐡</div>
+      <h1>すいすい すいぞくかん</h1>
+      <p class="lead">おそうじ したら<br>おさかなが かえってくるよ</p>
+      <button id="start" class="big" type="button">はじめる</button>
+      <p class="note">ゆび いっぽんで あそべます</p>
+    </div>
+  </div>
+
+  <!-- クリア -->
+  <div id="clear" class="screen gone">
+    <div class="screen-inner">
+      <div class="title-art" aria-hidden="true">✨ 🐠 ✨</div>
+      <h1>ぴかぴか！</h1>
+      <p class="lead">おさかなが かえってきたよ<br>ありがとう！</p>
+      <button id="again" class="big" type="button">もういちど</button>
+    </div>
+  </div>
+
+  <!-- 読み込み -->
+  <div id="loading">
+    <div class="loading-bubble"></div>
+    <p>じゅんび ちゅう…</p>
+  </div>
+</div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
