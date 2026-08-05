@@ -1,0 +1,199 @@
+/* -------------------------------------------------------------------------
+   画面まわり。文字はできるだけ少なく、指の当たり判定は大きく。
+   ------------------------------------------------------------------------- */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #07060a;
+  color: #fff;
+  font-family: "Hiragino Maru Gothic ProN", "ヒラギノ丸ゴ ProN W4", "Hiragino Sans",
+    "Yu Gothic", "Meiryo", system-ui, sans-serif;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior: none;
+  touch-action: none;
+}
+
+#gl {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+#ui {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+           env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* 工程を示すひとこと (数秒で小さくなる) */
+.word {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 14px);
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: clamp(26px, 7vmin, 52px);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #fff;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, .75), 0 0 40px rgba(120, 190, 255, .35);
+  opacity: 0;
+  transform: scale(1.25);
+  transition: opacity .5s ease, transform .9s cubic-bezier(.2, .9, .25, 1), font-size .9s ease;
+}
+.word.show { opacity: 1; transform: scale(1); }
+.word.small { font-size: clamp(15px, 3.2vmin, 22px); opacity: .5; }
+
+/* 色パレット */
+.palette {
+  position: absolute;
+  left: 0; right: 0;
+  bottom: calc(env(safe-area-inset-bottom) + 16px);
+  display: flex;
+  justify-content: center;
+  gap: clamp(8px, 2.2vmin, 18px);
+  pointer-events: auto;
+  transition: opacity .35s ease, transform .35s ease;
+}
+.palette.hidden { opacity: 0; transform: translateY(28px); pointer-events: none; }
+
+.chip {
+  width: clamp(46px, 11vmin, 76px);
+  height: clamp(46px, 11vmin, 76px);
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, .5);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .55), inset 0 -6px 14px rgba(0, 0, 0, .30),
+              inset 0 6px 12px rgba(255, 255, 255, .45);
+  cursor: pointer;
+  transition: transform .18s cubic-bezier(.2, .9, .25, 1), border-color .18s ease;
+  -webkit-appearance: none;
+  appearance: none;
+  padding: 0;
+}
+.chip.on {
+  transform: scale(1.22) translateY(-6px);
+  border-color: #fff;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, .6), 0 0 26px rgba(255, 255, 255, .55),
+              inset 0 -6px 14px rgba(0, 0, 0, .30), inset 0 6px 12px rgba(255, 255, 255, .45);
+}
+
+/* 眺めるステージのボタン */
+.viewbtns {
+  position: absolute;
+  right: calc(env(safe-area-inset-right) + 14px);
+  bottom: calc(env(safe-area-inset-bottom) + 16px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  pointer-events: auto;
+  transition: opacity .4s ease, transform .4s ease;
+}
+.viewbtns.hidden { opacity: 0; transform: translateX(30px); pointer-events: none; }
+
+.rbtn {
+  width: clamp(52px, 12vmin, 74px);
+  height: clamp(52px, 12vmin, 74px);
+  border-radius: 50%;
+  border: none;
+  background: rgba(20, 22, 30, .5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .5), inset 0 0 0 2px rgba(255, 255, 255, .28);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  padding: 0;
+}
+.rbtn svg { width: 62%; height: 62%; }
+.rbtn:active { transform: scale(.92); }
+
+/* タイトル */
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(120% 90% at 50% 42%, rgba(12, 12, 22, .35), rgba(4, 4, 8, .92));
+  transition: opacity .7s ease;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+           env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+.overlay.hidden { opacity: 0; pointer-events: none; }
+
+.titlebox { text-align: center; }
+.titlebox .sub {
+  font-size: clamp(16px, 4.2vmin, 30px);
+  letter-spacing: .18em;
+  color: #ffd9a0;
+  text-shadow: 0 0 22px rgba(255, 170, 80, .5);
+  margin-bottom: .3em;
+}
+.titlebox h1 {
+  font-size: clamp(34px, 11vmin, 84px);
+  letter-spacing: .1em;
+  font-weight: 800;
+  background: linear-gradient(100deg, #ff8f6b, #ffd45e 28%, #7ee0a8 52%, #6fb6ff 74%, #c99bff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 4px 26px rgba(120, 190, 255, .45));
+  margin-bottom: .6em;
+}
+
+.start {
+  width: clamp(96px, 26vmin, 168px);
+  height: clamp(96px, 26vmin, 168px);
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  background: radial-gradient(circle at 38% 32%, #fff7e2, #ffd06a 45%, #ff9d47 78%, #e0722c);
+  box-shadow: 0 0 0 6px rgba(255, 255, 255, .16), 0 14px 44px rgba(255, 150, 60, .45),
+              inset 0 -12px 26px rgba(160, 60, 0, .35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: beat 1.9s ease-in-out infinite;
+}
+@keyframes beat {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.07); }
+}
+.finger {
+  display: block;
+  width: 34%;
+  height: 34%;
+  border-radius: 50% 50% 46% 46%;
+  background: linear-gradient(180deg, #fff, #ffe8c9);
+  box-shadow: inset 0 -6px 10px rgba(190, 120, 60, .35);
+}
+
+.errbox {
+  max-width: 80%;
+  padding: 22px 26px;
+  border-radius: 18px;
+  background: rgba(30, 12, 12, .9);
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .start { animation: none; }
+}

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0b0a10">
+<meta name="description" content="4さいからのステンドグラスづくり。きって、つないで、みがいて、雨戸をあけると部屋が色の光でいっぱいになる WebGL 3D ゲーム。">
+<title>きって！つないで！ひかりの窓</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div id="ui">
+  <div id="stageWord" class="word"></div>
+
+  <div id="palette" class="palette hidden"></div>
+
+  <div id="viewButtons" class="viewbtns hidden">
+    <button class="rbtn" id="btnAgain" aria-label="もういちど">
+      <svg viewBox="0 0 48 48"><path d="M24 10a14 14 0 1 0 13 9" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"/><path d="M38 6v13H25" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <button class="rbtn" id="btnColor" aria-label="いろ">
+      <svg viewBox="0 0 48 48"><circle cx="18" cy="18" r="10" fill="#e0473c"/><circle cx="31" cy="22" r="10" fill="#3b7ed0" opacity=".85"/><circle cx="22" cy="31" r="10" fill="#f3cf46" opacity=".85"/></svg>
+    </button>
+    <button class="rbtn" id="btnTime" aria-label="じかん">
+      <svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="11" fill="none" stroke="currentColor" stroke-width="5"/><path d="M24 17v8l5 4" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  </div>
+</div>
+
+<div id="title" class="overlay">
+  <div class="titlebox">
+    <div class="sub">きって！つないで！</div>
+    <h1>ひかりの窓</h1>
+    <button id="startBtn" class="start">
+      <span class="finger"></span>
+    </button>
+  </div>
+</div>
+
+<div id="err" class="overlay hidden"><div class="errbox"><p id="errMsg"></p></div></div>
+
+<script src="src/math.js"></script>
+<script src="src/gl.js"></script>
+<script src="src/geom.js"></script>
+<script src="src/shaders.js"></script>
+<script src="src/motifs.js"></script>
+<script src="src/world.js"></script>
+<script src="src/renderer.js"></script>
+<script src="src/audio.js"></script>
+<script src="src/game.js"></script>
+<script src="src/main.js"></script>
+</body>
+</html>
