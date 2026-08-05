@@ -171,7 +171,7 @@ html, body {
 /* ---------------- 工程アイコン ---------------- */
 #steps {
   position: absolute;
-  top: calc(var(--safe-t) + 14vmin);
+  top: calc(var(--safe-t) + 25vmin);
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -228,7 +228,7 @@ html, body {
   top: calc(var(--safe-t) + 1.4vmin);
   right: calc(var(--safe-r) + 1.6vmin);
   width: 20vmin; height: 20vmin;
-  min-width: 84px; min-height: 84px;
+  min-width: 72px; min-height: 72px;
   border-radius: 4vmin;
   background: radial-gradient(circle at 50% 60%, rgba(255, 251, 240, 0.95), rgba(244, 226, 196, 0.9));
   box-shadow: var(--shadow);
@@ -241,7 +241,7 @@ html, body {
 #bubble {
   position: absolute;
   left: 50%;
-  top: calc(var(--safe-t) + 24vmin);
+  top: calc(var(--safe-t) + 34vmin);
   transform: translateX(-50%);
   background: rgba(255, 252, 244, 0.94);
   border: 0.6vmin solid #ffca7a;

@@ -109,8 +109,8 @@ class Game {
       this.aborted = false;
       this.hud.showTitle(true);
       this.hud.setGoalImage(null);
-      this.stage.focus(new THREE.Vector3(0, 0.05, 0), 0.72, { yaw: -0.24, pitch: 0.42 });
-      this.robot.lookAt(new THREE.Vector3(0, 0.2, 0.7));
+      this.stage.focus(new THREE.Vector3(0, 0.3, -0.25), 1.15, { yaw: -0.3, pitch: 0.26 });
+      this.robot.lookAt(new THREE.Vector3(0, 0.25, 1.0));
       this.say('');
     });
   }
