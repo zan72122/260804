@@ -136,9 +136,9 @@ export class SFX {
     g.gain.exponentialRampToValueAtTime(0.32, t + 0.12);
     g.gain.setValueAtTime(0.32, t + dur - 0.25);
     g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 520; lp.Q.value = 2;
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 420; lp.Q.value = 2;
     g.connect(lp).connect(this.master);
-    [97, 145.5, 194].forEach((f, i) => {
+    [65, 97.5, 130].forEach((f, i) => {
       const o = c.createOscillator(); o.type = 'sawtooth';
       o.frequency.value = f * (1 + (i - 1) * 0.0015);
       const og = c.createGain(); og.gain.value = i === 2 ? 0.35 : 1;
