@@ -786,21 +786,26 @@
   };
 
   /* ---------------- 描画 ---------------- */
-  /* おそい端末では 解像度を すこし下げて なめらかさを まもる */
+  /* おそい端末では 段階的に 描画を 軽くして なめらかさを まもる。
+     落ち影は 1024² を 焼く 固定費で、会場の 場面では フレームの 4割ちかくを
+     つかう。いっぽう 解像度を さげると 見た目に すぐ ひびく。
+     だから 削る 順番は「影 → 解像度 → 影を切る → 解像度」。 */
   var qAcc = 0, qN = 0, qSteps = 0;
+  var Q_STEPS = [
+    function () { if (global.Shadow && Shadow.ready) Shadow.setSize(512); },
+    function () { S.quality *= 0.80; S.resize(); },
+    function () { if (global.Shadow) Shadow.enabled = false; },
+    function () { S.quality *= 0.78; S.resize(); }
+  ];
   function watchQuality(dt) {
     qAcc += dt; qN++;
-    if (qN < 70) return;
+    /* さいしょの 判定は はやめに、そのあとは ゆっくり 見る */
+    if (qN < (qSteps === 0 ? 40 : 70)) return;
     var avg = qAcc / qN;
     qAcc = 0; qN = 0;
-    if (avg > 0.036 && qSteps < 3) {
+    if (avg > 0.036 && qSteps < Q_STEPS.length) {
+      Q_STEPS[qSteps]();
       qSteps++;
-      S.quality *= 0.78;
-      S.resize();
-      if (global.Shadow && Shadow.ready) {
-        if (qSteps === 1) Shadow.setSize(512);
-        else if (qSteps >= 2) Shadow.enabled = false;
-      }
     }
   }
 
