@@ -7,7 +7,7 @@ export const FLOWER_COLORS = [0xff86b3, 0xffd25e, 0xbd9bff, 0x8fd4ff]; // ピン
 export const FLOWER_TYPE_LIST = ['rose', 'tulip', 'daisy'];
 
 // 花びら形状：原点=付け根、+Y方向に伸び、+Z側へ外反り
-function makePetalGeometry(L, W, { bend = 0.5, cup = 0.5, tip = 0.3, segs = 6, rows = 8 } = {}) {
+function makePetalGeometry(L, W, { bend = 0.5, cup = 0.5, tip = 0.3, segs = 4, rows = 6 } = {}) {
   const geo = new THREE.BufferGeometry();
   const pos = [], uv = [], idx = [];
   for (let r = 0; r <= rows; r++) {
@@ -93,9 +93,9 @@ const TYPE_DEFS = {
   },
 };
 
-const CAPACITY = { rose: 3000, tulip: 900, daisy: 3400 };
-const CENTER_CAP = 220;
-const CALYX_CAP = 220;
+const CAPACITY = { rose: 9200, tulip: 2700, daisy: 10600 };
+const CENTER_CAP = 480;
+const CALYX_CAP = 480;
 
 const _m = new THREE.Matrix4();
 const _mYaw = new THREE.Matrix4();
@@ -157,7 +157,8 @@ export class FlowerSystem {
   }
 
   // parent: Object3D（省略時はワールド直置き）。position/quaternion は parent ローカル。
-  add(type, colorHex, { parent = null, position = new THREE.Vector3(), quaternion = new THREE.Quaternion(), scale = 1, bloom = 0 } = {}) {
+  // dynamic: 親が動き続ける花（吊り飾り等）は毎フレーム行列を更新する。
+  add(type, colorHex, { parent = null, position = new THREE.Vector3(), quaternion = new THREE.Quaternion(), scale = 1, bloom = 0, dynamic = false } = {}) {
     const def = TYPE_DEFS[type];
     const im = this.meshes[type];
     const petals = [];
@@ -192,7 +193,7 @@ export class FlowerSystem {
       parent, position: position.clone(), quaternion: quaternion.clone(),
       scale, bloom, targetBloom: bloom, bloomSpeed: 1.6, bloomDelay: 0,
       popT: -1, visible: true, swayAmp: 0, swayPhase: Math.random() * 6.28,
-      colorHex,
+      colorHex, dynamic, dirty: true,
     };
     this.flowers.push(h);
     return h;
@@ -210,9 +211,13 @@ export class FlowerSystem {
     this.time += dt;
     const t = this.time;
     let bloomedNow = 0;
+    const touched = { rose: false, tulip: false, daisy: false };
+    let touchedExtra = false;
     for (const f of this.flowers) {
+      // 動いていない花は行列を書き直さない（大量の花でも軽い）
+      let animating = f.dirty || f.dynamic || f.swayAmp > 0;
       // 開花進行
-      if (f.bloomDelay > 0) f.bloomDelay -= dt;
+      if (f.bloomDelay > 0) { f.bloomDelay -= dt; animating = true; }
       else if (f.bloom !== f.targetBloom) {
         const dir = Math.sign(f.targetBloom - f.bloom);
         f.bloom += dir * dt * f.bloomSpeed;
@@ -220,22 +225,32 @@ export class FlowerSystem {
           f.bloom = f.targetBloom;
           if (dir > 0 && f.targetBloom >= 1) bloomedNow++;
         }
+        animating = true;
       }
       // 配置時ポップ
       let popScale = 1;
       if (f.popT >= 0) {
         f.popT += dt * 2.6;
+        animating = true;
         if (f.popT >= 1) { f.popT = -1; }
         else {
           const p = f.popT;
           popScale = p < 0.6 ? (p / 0.6) * 1.15 : 1.15 - 0.15 * ((p - 0.6) / 0.4);
         }
       }
+      if (!animating) continue;
+      f.dirty = false;
       this._writeMatrices(f, popScale, t);
+      touched[f.type] = true;
+      touchedExtra = true;
     }
-    for (const type of FLOWER_TYPE_LIST) this.meshes[type].instanceMatrix.needsUpdate = true;
-    this.centerMesh.instanceMatrix.needsUpdate = true;
-    this.calyxMesh.instanceMatrix.needsUpdate = true;
+    for (const type of FLOWER_TYPE_LIST) {
+      if (touched[type]) this.meshes[type].instanceMatrix.needsUpdate = true;
+    }
+    if (touchedExtra) {
+      this.centerMesh.instanceMatrix.needsUpdate = true;
+      this.calyxMesh.instanceMatrix.needsUpdate = true;
+    }
     return bloomedNow;
   }
 

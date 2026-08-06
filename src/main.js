@@ -466,8 +466,13 @@ function makeScissors() {
   return g;
 }
 
-// テーブル装花（1卓分）：花器＋花5本
-function makeTableArrangement(colorHex, popEach = false, popSound = false) {
+// 選んだ色に近いゆらぎ色
+function jitterColor(amount = 0.05) {
+  return new THREE.Color(chosenColor()).offsetHSL((Math.random() - 0.5) * amount, 0, (Math.random() - 0.5) * 0.1).getHex();
+}
+
+// テーブル装花（1卓分）：花器＋花（count本）
+function makeTableArrangement(colorHex, count = 5) {
   const g = new THREE.Group();
   const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.055, 0.075, 14), potMat.clone());
   bowl.material.color.set(0xd8cfc0);
@@ -476,16 +481,77 @@ function makeTableArrangement(colorHex, popEach = false, popSound = false) {
   g.add(bowl);
   const handles = [];
   const dirs = [[0, 1, 0.001], [0.8, 0.75, 0], [-0.8, 0.75, 0], [0, 0.75, 0.8], [0, 0.75, -0.8]];
-  dirs.forEach((d, i) => {
+  if (count > 5) {
+    for (let i = 0; i < count - 5; i++) {
+      const a = (i / (count - 5)) * Math.PI * 2 + Math.PI / 4;
+      dirs.push([Math.cos(a) * 1.0, 0.62, Math.sin(a) * 1.0]);
+    }
+  }
+  dirs.forEach((d) => {
     const dir = new THREE.Vector3(...d).normalize();
     const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
-    const h = flowers.add(chosen.type, colorHex, {
+    const h = flowers.add(chosen.type, jitterColor(), {
       parent: g,
       position: new THREE.Vector3(dir.x * 0.05, 0.075 + dir.y * 0.05, dir.z * 0.05),
       quaternion: q, scale: 1.35, bloom: 0.15,
     });
     handles.push(h);
   });
+  return { group: g, handles };
+}
+
+// 床置きの小さな花束（通路の縁どり）
+const moundMat = new THREE.MeshStandardMaterial({ color: 0x3f6330, roughness: 0.9 });
+function makePosy(pos, scale = 1) {
+  const g = new THREE.Group();
+  g.position.copy(pos);
+  scene.add(g);
+  const mound = new THREE.Mesh(new THREE.SphereGeometry(0.075, 10, 8), moundMat);
+  mound.scale.y = 0.55;
+  mound.position.y = 0.03;
+  mound.castShadow = true;
+  g.add(mound);
+  const dirs = [[0, 1, 0.001], [0.75, 0.75, 0], [-0.75, 0.75, 0], [0, 0.75, 0.75], [0, 0.75, -0.75]];
+  const handles = [];
+  for (const d of dirs) {
+    const dir = new THREE.Vector3(...d).normalize();
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+    const h = flowers.add(chosen.type, jitterColor(), {
+      parent: g, position: dir.clone().multiplyScalar(0.055).add(new THREE.Vector3(0, 0.02, 0)),
+      quaternion: q, scale: 1.25 * scale, bloom: 0.15,
+    });
+    handles.push(h);
+  }
+  return { group: g, handles };
+}
+
+// 床置きの大壺ブーケ（ステージ脇）
+const urnMat = new THREE.MeshStandardMaterial({ color: 0xb9a98e, roughness: 0.5 });
+function makeUrn(x, z = -8.7) {
+  const g = new THREE.Group();
+  g.position.set(x, 0, z);
+  scene.add(g);
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.11, 0.52, 14), urnMat);
+  body.position.y = 0.26;
+  body.castShadow = true;
+  const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.16, 0.06, 14), urnMat);
+  foot.position.y = 0.03;
+  g.add(body, foot);
+  const handles = [];
+  const dirs = [[0, 1, 0.001]];
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2;
+    dirs.push([Math.cos(a) * 0.85, 0.75, Math.sin(a) * 0.85]);
+  }
+  for (const d of dirs) {
+    const dir = new THREE.Vector3(...d).normalize();
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+    const h = flowers.add(chosen.type, jitterColor(), {
+      parent: g, position: dir.clone().multiplyScalar(0.09).add(new THREE.Vector3(0, 0.5, 0)),
+      quaternion: q, scale: 1.6, bloom: 0.15,
+    });
+    handles.push(h);
+  }
   return { group: g, handles };
 }
 
@@ -520,7 +586,7 @@ function makeHangingBall(colorHex, beamPoint) {
     const h = flowers.add(chosen.type, colorHex, {
       parent: core,
       position: dir.clone().multiplyScalar(0.1),
-      quaternion: q, scale: 1.15, bloom: 0.15,
+      quaternion: q, scale: 1.15, bloom: 0.15, dynamic: true,
     });
     handles.push(h);
   }
@@ -561,7 +627,7 @@ function enterPickType() {
       pot.add(leaf);
     }
     const fl = flowers.add(d.type, d.color, {
-      parent: pot, position: new THREE.Vector3(0, 0.32, 0), bloom: 0.9, scale: 1.1,
+      parent: pot, position: new THREE.Vector3(0, 0.32, 0), bloom: 0.9, scale: 1.1, dynamic: true,
     });
     samples.push({ pot, fl, def: d });
     tween(0.5, (k) => pot.scale.setScalar(k), { delay: 0.4 + i * 0.22, done: () => audio.pop() });
@@ -583,7 +649,7 @@ function chooseType(i) {
   burstSparkles(keep.pot.position.clone().add(new THREE.Vector3(0, 0.35, 0)), 24, 0.9);
   samples.forEach((s, j) => {
     if (j === i) return;
-    tween(0.4, (k) => s.pot.scale.setScalar(1 - k), { done: () => { s.fl.visible = false; scene.remove(s.pot); } });
+    tween(0.4, (k) => s.pot.scale.setScalar(1 - k), { done: () => { s.fl.visible = false; s.fl.dirty = true; scene.remove(s.pot); } });
   });
   const from = keep.pot.position.x;
   tween(0.6, (k) => { keep.pot.position.x = from * (1 - k) - 0.95 * k; keep.pot.position.z = benchZ - 0.12 + 0.34 * k; }, { delay: 0.35 });
@@ -603,7 +669,7 @@ function enterPickColor() {
     stem.position.y = 0.3;
     pot.add(stem);
     const fl = flowers.add(chosen.type, c, {
-      parent: pot, position: new THREE.Vector3(0, 0.3, 0), bloom: 0.9, scale: 1.05,
+      parent: pot, position: new THREE.Vector3(0, 0.3, 0), bloom: 0.9, scale: 1.05, dynamic: true,
     });
     colorPots.push({ pot, fl });
     tween(0.45, (k) => pot.scale.setScalar(k), { delay: i * 0.16, done: () => audio.place(i) });
@@ -625,7 +691,7 @@ function chooseColor(i) {
   burstSparkles(colorPots[i].pot.position.clone().add(new THREE.Vector3(0, 0.32, 0)), 26, 1);
   colorPots.forEach((cp, j) => {
     if (j === i) return;
-    tween(0.4, (k) => cp.pot.scale.setScalar(1 - k), { done: () => { cp.fl.visible = false; scene.remove(cp.pot); } });
+    tween(0.4, (k) => cp.pot.scale.setScalar(1 - k), { done: () => { cp.fl.visible = false; cp.fl.dirty = true; scene.remove(cp.pot); } });
   });
   const kp = colorPots[i].pot;
   const fx = kp.position.x;
@@ -677,7 +743,7 @@ function enterStems() {
     stem.position.y = -0.02;
     grp.add(stem);
     const fl = flowers.add(chosen.type, chosenColor(), {
-      parent: grp, position: new THREE.Vector3(0, 0.045, 0.02), bloom: 0.4, scale: 1.35,
+      parent: grp, position: new THREE.Vector3(0, 0.045, 0.02), bloom: 0.4, scale: 1.35, dynamic: true,
     });
     const rig = { grp, stem, fl, len, cut: false, x, rackY, lineY };
     stemRigs.push(rig);
@@ -744,7 +810,7 @@ function enterArch() {
   }, {
     done: () => {
       if (rack) scene.remove(rack);
-      stemRigs.forEach(r => { r.fl.visible = false; scene.remove(r.grp); });
+      stemRigs.forEach(r => { r.fl.visible = false; r.fl.dirty = true; scene.remove(r.grp); });
     },
   });
   cutTo('arch', () => {
@@ -841,7 +907,7 @@ function enterWater() {
       stem.position.y = 0;
       grp.add(stem);
       const fl = flowers.add(chosen.type, chosenColor(), {
-        parent: grp, position: new THREE.Vector3(0, 0.01, 0), bloom: 0.05, scale: 1,
+        parent: grp, position: new THREE.Vector3(0, 0.01, 0), bloom: 0.05, scale: 1, dynamic: true,
       });
       const bud = { grp, fl, done: false, home: grp.position.clone() };
       waterBuds.push(bud);
@@ -924,12 +990,201 @@ function enterHang() {
           burstSparkles(new THREE.Vector3(x, beamY - 1.2, beamZ), 16, 0.8);
           hangPlaced++;
           if (hangPlaced >= 4) {
-            schedule(0.8, () => { audio.chimeSuccess(); schedule(1.0, enterDoors); });
+            schedule(0.8, () => { audio.chimeSuccess(); schedule(1.0, enterFill); });
           }
         },
       });
     });
   });
+}
+
+// -- 7.5 仕上げモンタージュ：主人公の担当分に加えて、残りの花飾りが自動で盛られる --
+function enterFill() {
+  phaseName = 'fill';
+  clearTargets();
+  inputEnabled = false;
+  const popFl = (fl, wp, i) => {
+    fl.popT = 0;
+    audio.place(i);
+    if (wp && i % 2 === 0) burstSparkles(wp, 8, 0.6);
+  };
+
+  // カット1：アーチが花いっぱいに。壺・メインテーブルも仕上がる
+  cutTo('arch', () => {
+    inputEnabled = false;
+    const ts = [0.05, 0.15, 0.28, 0.32, 0.43, 0.47, 0.55, 0.6, 0.68, 0.72, 0.82, 0.86, 0.95,
+      0.12, 0.25, 0.38, 0.52, 0.65, 0.78, 0.9];
+    world.arch.updateWorldMatrix(true, false);
+    ts.forEach((tt, i) => {
+      schedule(0.2 + i * 0.075, () => {
+        const slot = world.archSlotAt(tt + (Math.random() - 0.5) * 0.02);
+        const fl = flowers.add(chosen.type, jitterColor(), {
+          parent: world.arch, position: slot.local, quaternion: slot.quaternion,
+          scale: 1.15 + Math.random() * 0.55, bloom: 0.18,
+        });
+        const wp = slot.local.clone().applyMatrix4(world.arch.matrixWorld);
+        popFl(fl, wp, i);
+      });
+    });
+    // ステージ脇の大壺ブーケ
+    schedule(0.6, () => { const u = makeUrn(-2.9); u.handles.forEach(h => { h.popT = 0; }); audio.pop(); });
+    schedule(1.0, () => { const u = makeUrn(2.9); u.handles.forEach(h => { h.popT = 0; }); audio.pop(); });
+    // メインテーブル（ステージ上）：ガーランド・花瓶・リボン・ステージ縁の花
+    schedule(1.4, () => decorateHeadTable());
+    schedule(2.0, () => audio.gliss(true));
+  });
+
+  // カット2：ゲスト卓・通路・椅子・窓辺・追加の吊り花
+  schedule(3.4, () => cutTo('table', () => {
+    inputEnabled = false;
+    // 主人公の卓に追い花
+    schedule(0.15, () => {
+      if (mainArrangement) {
+        for (let i = 0; i < 4; i++) {
+          const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+          const dir = new THREE.Vector3(Math.cos(a), 0.62, Math.sin(a)).normalize();
+          const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+          const fl = flowers.add(chosen.type, jitterColor(), {
+            parent: mainArrangement.group,
+            position: new THREE.Vector3(dir.x * 0.05, 0.075 + dir.y * 0.05, dir.z * 0.05),
+            quaternion: q, scale: 1.35, bloom: 0.15,
+          });
+          schedule(i * 0.1, () => popFl(fl, null, i));
+        }
+      }
+    });
+    // ほかのゲスト卓（9本アレンジ）
+    [0, 2, 3].forEach((ti, n) => {
+      schedule(0.5 + n * 0.35, () => {
+        const tb = world.tables[ti];
+        const arr = makeTableArrangement(chosenColor(), 9);
+        arr.group.position.set(tb.x, tb.topY, tb.z);
+        arr.group.scale.setScalar(0.01);
+        scene.add(arr.group);
+        tween(0.4, (k) => { arr.group.scale.setScalar(k); arr.handles.forEach(h => { h.dirty = true; }); });
+        audio.place(n + 2);
+        burstSparkles(new THREE.Vector3(tb.x, tb.topY + 0.3, tb.z), 12, 0.8);
+      });
+    });
+    // 通路の縁どり・椅子リボン・窓辺・追加吊りボール
+    schedule(0.9, () => {
+      for (const z of [-7.5, -5, -2.5, 0, 2.5, 4.8]) {
+        for (const sx of [-1.2, 1.2]) {
+          const p = makePosy(new THREE.Vector3(sx + (Math.random() - 0.5) * 0.1, 0, z + (Math.random() - 0.5) * 0.3));
+          p.handles.forEach(h => { h.popT = 0; });
+        }
+      }
+      for (const ch of world.chairSpots) {
+        const bow = makeBow(chosenColor(), 1.35);
+        bow.position.set(0, 1.0, 0.22);
+        ch.add(bow);
+        const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0.4, 1).normalize());
+        const fl = flowers.add(chosen.type, jitterColor(), {
+          parent: ch, position: new THREE.Vector3(0, 0.9, 0.22), quaternion: q, scale: 1.1, bloom: 0.15,
+        });
+        fl.popT = 0;
+      }
+      for (const g of world.windowGroups) {
+        for (const wx of [-0.42, 0, 0.42]) {
+          const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(wx * 0.4, 0.55, 1).normalize());
+          const fl = flowers.add(chosen.type, jitterColor(), {
+            parent: g, position: new THREE.Vector3(wx, -1.2, 0.14), quaternion: q, scale: 1.2, bloom: 0.15,
+          });
+          fl.popT = 0;
+        }
+        const bow = makeBow(chosenColor(), 1.5);
+        bow.position.set(0, -1.02, 0.12);
+        g.add(bow);
+      }
+      // シャンデリアにも花飾り
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2 + Math.PI / 8;
+        const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0),
+          new THREE.Vector3(Math.cos(a), 0.4, Math.sin(a)).normalize());
+        const fl = flowers.add(chosen.type, jitterColor(), {
+          parent: world.chandelier,
+          position: new THREE.Vector3(Math.cos(a) * 0.6, 0, Math.sin(a) * 0.6),
+          quaternion: q, scale: 1.15, bloom: 0.15,
+        });
+        fl.popT = 0;
+      }
+      for (const [bx, bz] of [[-2.6, -8.5], [2.6, -8.5], [-2.6, -0.5], [2.6, -0.5]]) {
+        const ball = makeHangingBall(chosenColor(), new THREE.Vector3(bx, 6.44, bz));
+        hangBalls.push(ball);
+        ball.pivot.scale.setScalar(0.01);
+        tween(0.5, (k) => ball.pivot.scale.setScalar(k), {
+          done: () => { ball.pivot.userData.swayAmp = 0.045; },
+        });
+      }
+      audio.gliss(true);
+    });
+    schedule(2.2, () => audio.chimeSuccess());
+  }));
+
+  schedule(6.6, enterDoors);
+}
+
+// メインテーブルとステージまわりの仕上げ
+function decorateHeadTable() {
+  const ht = world.headTable;
+  for (let i = 0; i < 13; i++) {
+    const x = -1.8 + i * 0.3;
+    const fl = flowers.add(chosen.type, jitterColor(), {
+      parent: ht, position: new THREE.Vector3(x, 0.76, 0.42),
+      quaternion: new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0.5, 1).normalize()),
+      scale: 1.35, bloom: 0.2,
+    });
+    schedule(i * 0.05, () => { fl.popT = 0; });
+  }
+  for (let i = 0; i < 5; i++) {
+    const vase = makeVase();
+    vase.position.set(-1.1 + i * 0.55, 0.74, 0.1);
+    ht.add(vase);
+    const stem = makeStem(0.2);
+    stem.position.set(-1.1 + i * 0.55, 0.74 + 0.26, 0.1);
+    ht.add(stem);
+    const fl = flowers.add(chosen.type, chosenColor(), {
+      parent: ht, position: new THREE.Vector3(-1.1 + i * 0.55, 1.0, 0.1), bloom: 0.1, scale: 1,
+    });
+    fl.popT = 0;
+  }
+  const bowL = makeBow(chosenColor(), 2.2);
+  bowL.position.set(-1.85, 1.1, 0.46);
+  ht.add(bowL);
+  const bowR = makeBow(chosenColor(), 2.2);
+  bowR.position.set(1.85, 1.1, 0.46);
+  ht.add(bowR);
+  // ステージ前縁の花（アーチの左右）
+  for (const x of [-4.2, -3.5, -2.8, 2.8, 3.5, 4.2]) {
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0.6, 1).normalize());
+    const fl = flowers.add(chosen.type, jitterColor(), {
+      position: new THREE.Vector3(x, 0.38, -9.45), quaternion: q, scale: 1.45, bloom: 0.15,
+    });
+    fl.popT = 0;
+  }
+  // 奥の壁に花のスワッグ（垂れ飾り）
+  const swagY = 4.7, swagZ = -11.72, sag = 0.55;
+  const anchors = [-7, -4.7, -2.4, 0, 2.4, 4.7, 7];
+  for (let s = 0; s < anchors.length - 1; s++) {
+    const x0 = anchors[s], x1 = anchors[s + 1];
+    for (let i = 1; i <= 4; i++) {
+      const t = i / 5;
+      const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0),
+        new THREE.Vector3((Math.random() - 0.5) * 0.4, 0.35, 1).normalize());
+      const fl = flowers.add(chosen.type, jitterColor(), {
+        position: new THREE.Vector3(x0 + (x1 - x0) * t, swagY - sag * Math.sin(t * Math.PI), swagZ),
+        quaternion: q, scale: 1.5, bloom: 0.15,
+      });
+      schedule(s * 0.12 + i * 0.03, () => { fl.popT = 0; });
+    }
+  }
+  for (const ax of anchors) {
+    const bow = makeBow(chosenColor(), 1.9);
+    bow.position.set(ax, swagY + 0.05, swagZ);
+    scene.add(bow);
+  }
+  audio.pop();
+  burstSparkles(new THREE.Vector3(0, 1.6, -10.2), 20, 1);
 }
 
 // -- 8. 大扉の前へ --
@@ -1006,57 +1261,10 @@ function startReveal() {
     schedule(0.3, () => audio.fanfare());
   });
 
-  // 会場のまほう仕上げ：ほかのテーブル・メインテーブル・花かご
-  schedule(2.6, () => {
-    [0, 2, 3].forEach((ti, n) => {
-      schedule(n * 0.3, () => {
-        const tb = world.tables[ti];
-        const arr = makeTableArrangement(chosenColor());
-        arr.group.position.set(tb.x, tb.topY, tb.z);
-        arr.group.scale.setScalar(0.01);
-        scene.add(arr.group);
-        tween(0.4, (k) => arr.group.scale.setScalar(k));
-        audio.place(n);
-        burstSparkles(new THREE.Vector3(tb.x, tb.topY + 0.3, tb.z), 14, 0.8);
-      });
-    });
-    // メインテーブル（ステージ上）：ガーランド＋水のつぼみたち
-    schedule(0.9, () => {
-      const ht = world.headTable;
-      for (let i = 0; i < 7; i++) {
-        const x = -1.5 + i * 0.5;
-        flowers.add(chosen.type, chosenColor(), {
-          parent: ht, position: new THREE.Vector3(x, 0.76, 0.42),
-          quaternion: new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0.5, 1).normalize()),
-          scale: 1.5, bloom: 0.2,
-        });
-      }
-      for (let i = 0; i < 5; i++) {
-        const vase = makeVase();
-        vase.position.set(-1.1 + i * 0.55, 0.74, 0.1);
-        ht.add(vase);
-        const stem = makeStem(0.2);
-        stem.position.set(-1.1 + i * 0.55, 0.74 + 0.26, 0.1);
-        ht.add(stem);
-        flowers.add(chosen.type, chosenColor(), {
-          parent: ht, position: new THREE.Vector3(-1.1 + i * 0.55, 1.0, 0.1), bloom: 0.1, scale: 1,
-        });
-      }
-      const bowL = makeBow(chosenColor(), 2.2);
-      bowL.position.set(-1.85, 1.1, 0.46);
-      ht.add(bowL);
-      const bowR = makeBow(chosenColor(), 2.2);
-      bowR.position.set(1.85, 1.1, 0.46);
-      ht.add(bowR);
-      audio.gliss(true);
-      burstSparkles(new THREE.Vector3(0, 1.6, -10.2), 22, 1);
-    });
-  });
-
   // 一斉開花
   schedule(3.6, () => {
-    flowers.setBloomAll(1, 0, 1.8);
-    for (const f of flowers.flowers) { f.bloomSpeed = 1.1; f.swayAmp = Math.max(f.swayAmp, 0.03); }
+    flowers.setBloomAll(1, 0, 2.0);
+    for (const f of flowers.flowers) f.bloomSpeed = 1.1;
   });
 
   // 花びらが舞い、音楽、パーティーへ

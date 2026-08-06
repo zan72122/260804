@@ -178,7 +178,7 @@ export function makeCurtain(width, height, color, foldAmp = 0.18) {
   mesh.userData.setOpen = (t) => {
     mesh.userData.open = t;
     mesh.scale.x = 1 - 0.8 * t;
-    mesh.scale.z = 1 + 0.7 * t; // 寄せた分ひだが少し深く
+    mesh.scale.z = 1 - 0.35 * t; // 寄せた分は平らに畳む（ギザつき防止）
   };
   return mesh;
 }
@@ -343,6 +343,7 @@ export function buildWorld(scene, renderer) {
   world.windowCurtains = [];
   world.windowGlows = [];
   world.windowRays = [];
+  world.windowGroups = [];
   const glowMat = new THREE.MeshBasicMaterial({ color: 0xfff0cf, toneMapped: false });
   for (const sx of [-1, 1]) {
     for (const wz of [-9, -5, -1]) {
@@ -382,7 +383,7 @@ export function buildWorld(scene, renderer) {
       const cr = makeCurtain(0.95, 3.1, 0xe8d8bd, 0.07);
       cr.scale.x = -1;
       cr.position.set(0.92, 1.58, 0.1);
-      cr.userData.setOpen = (t) => { cr.userData.open = t; cr.scale.x = -(1 - 0.8 * t); cr.scale.z = 1 + 0.7 * t; };
+      cr.userData.setOpen = (t) => { cr.userData.open = t; cr.scale.x = -(1 - 0.8 * t); cr.scale.z = 1 - 0.35 * t; };
       g.add(cl, cr);
       world.windowCurtains.push(cl, cr);
       // 光条（フィナーレ用）
@@ -396,6 +397,7 @@ export function buildWorld(scene, renderer) {
       scene.add(ray);
       world.windowRays.push(ray);
       scene.add(g);
+      world.windowGroups.push(g);
     }
   }
 
@@ -408,7 +410,7 @@ export function buildWorld(scene, renderer) {
   world.dividerR = makeCurtain(8.6, 6.4, 0xa85a72, 0.24);
   world.dividerR.scale.x = -1;
   world.dividerR.position.set(8.3, 6.4, 2);
-  world.dividerR.userData.setOpen = (t) => { world.dividerR.userData.open = t; world.dividerR.scale.x = -(1 - 0.8 * t); world.dividerR.scale.z = 1 + 0.7 * t; };
+  world.dividerR.userData.setOpen = (t) => { world.dividerR.userData.open = t; world.dividerR.scale.x = -(1 - 0.8 * t); world.dividerR.scale.z = 1 - 0.35 * t; };
   scene.add(world.dividerL, world.dividerR);
 
   // ステージ
@@ -466,6 +468,7 @@ export function buildWorld(scene, renderer) {
     base.position.y = 0.025;
     grp.add(base);
     // 椅子3脚
+    if (!world.chairSpots) world.chairSpots = [];
     for (let ci = 0; ci < 3; ci++) {
       const a = (ci / 3) * Math.PI * 2 + tx * 0.7;
       const ch = new THREE.Group();
@@ -481,6 +484,7 @@ export function buildWorld(scene, renderer) {
       leg2.position.set(0.18, 0.23, 0);
       ch.add(seat, back, leg1, leg2);
       grp.add(ch);
+      world.chairSpots.push(ch);
     }
     scene.add(grp);
     world.tables.push({ group: grp, x: tx, z: tz, topY: 0.752 });
@@ -531,21 +535,22 @@ export function buildWorld(scene, renderer) {
   arch.add(leaves);
   scene.add(arch);
   world.arch = arch;
-  // 花の取り付け位置（ワールド座標とアーチ外向きの姿勢）
-  world.archSlots = [];
-  for (const t of [0.1, 0.22, 0.36, 0.5, 0.64, 0.78, 0.9]) {
+  // 花の取り付け位置（アーチのローカル座標と外向きの姿勢）
+  function archSlotAt(t) {
     const p = archPoint(t);
     const outward = new THREE.Vector3(p.x, Math.max(0.2, p.y - legH), 0).normalize();
     if (t < 0.25 || t > 0.75) outward.set(Math.sign(p.x) * 0.7, 0.2, 0.7).normalize();
     else outward.z = 0.75;
     outward.normalize();
     const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), outward);
-    world.archSlots.push({
+    return {
       local: p.clone().add(outward.clone().multiplyScalar(0.09)),
       quaternion: q,
       parent: arch,
-    });
+    };
   }
+  world.archSlotAt = archSlotAt;
+  world.archSlots = [0.1, 0.22, 0.36, 0.5, 0.64, 0.78, 0.9].map(archSlotAt);
 
   // シャンデリア
   const chand = new THREE.Group();
@@ -569,6 +574,7 @@ export function buildWorld(scene, renderer) {
     world.chandBulbs.push(bulbMat);
   }
   scene.add(chand);
+  world.chandelier = chand;
 
   // ストリングライト（フィナーレで点灯）
   const bulbGeo = new THREE.SphereGeometry(0.03, 8, 6);

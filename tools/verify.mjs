@@ -36,7 +36,7 @@ async function shotOnce(tag) {
 }
 
 const t0 = Date.now();
-const LIMIT = 420000;
+const LIMIT = 620000;
 let revealShot = false;
 while (Date.now() - t0 < LIMIT) {
   const s = await st();
@@ -44,6 +44,17 @@ while (Date.now() - t0 < LIMIT) {
   if (s.phase === 'party') {
     await shotOnce('party');
     break;
+  }
+  if (s.phase === 'fill') {
+    if (!seen.has('fill-1')) {
+      await page.waitForTimeout(2500);
+      await shotOnce('fill-1');
+    } else if (!seen.has('fill-2')) {
+      await page.waitForTimeout(5500);
+      await shotOnce('fill-2');
+    }
+    await page.waitForTimeout(600);
+    continue;
   }
   if (s.phase === 'reveal') {
     if (!revealShot) {
