@@ -334,9 +334,12 @@
     /* --- 床 --- */
     b.push(GLC.disk(FR, 96), T(0, FY + 0.2, 0), COL.floor, 0, 1, MAT.felt);
 
-    /* --- 客席（作業エリアを あけた 扇形） --- */
+    /* --- 客席（作業エリアを あけた 扇形） ---
+       座面と 背は フェルト、脚と 肘掛けは 塗装した 金物。 */
     var seatBase = GLC.roundBox(8.2, 4.6, 8.4, 1.6, 2);
     var seatBack = GLC.roundBox(8.2, 10.5, 2.8, 1.2, 2);
+    var seatLeg  = GLC.box(3.4, 3.8, 6.4);            // 座面を ささえる 脚柱
+    var seatArm  = GLC.box(1.5, 4.4, 7.6);            // 肘掛け（座面の 横から 立ちあがる）
     var rings = [[54, 20], [76, 27], [98, 34], [120, 41], [142, 48]];
     var cols = [COL.seatA, COL.seatB, COL.seatC];
     for (var ri = 0; ri < rings.length; ri++) {
@@ -349,10 +352,19 @@
         var col = cols[(ri + s) % 3];
         var lift = FY + ri * 2.2;
         var rot = RY(-a - Math.PI / 2);
-        b.push(seatBase, mul(T(Math.cos(a) * rad, lift + 4.0, Math.sin(a) * rad), rot), col, 0, 0);
+        var sc = [Math.cos(a) * rad, 0, Math.sin(a) * rad];
+        b.push(seatBase, mul(T(sc[0], lift + 4.0, sc[2]), rot), col, 0, 0, MAT.felt);
         b.push(seatBack,
           mul(mul(T(Math.cos(a) * (rad + 4.0), lift + 9.6, Math.sin(a) * (rad + 4.0)), rot), RX(U.rad(13))),
-          [col[0] * 1.18, col[1] * 1.18, col[2] * 1.22], 0, 0);
+          [col[0] * 1.18, col[1] * 1.18, col[2] * 1.22], 0, 0, MAT.felt);
+        /* 脚（床から 座面へ） */
+        b.push(seatLeg, mul(T(sc[0], lift + 1.9, sc[2]), rot), COL.dark, 0, 0, MAT.metal);
+        /* 肘掛け（両がわ） */
+        for (var ar = -1; ar <= 1; ar += 2) {
+          var ax = -Math.sin(a) * 4.5 * ar, az = Math.cos(a) * 4.5 * ar;
+          b.push(seatArm, mul(T(sc[0] + ax, lift + 6.4, sc[2] + az), rot),
+            [col[0] * 0.62, col[1] * 0.62, col[2] * 0.66], 0, 0, MAT.resin);
+        }
       }
     }
 
@@ -509,7 +521,35 @@
     for (var d = 0; d < 4; d++) {
       var off = (d - 1.5) * 13;
       R.shelfSlots.push([hpos[0] + hx[0] * off, FY + 11.5, hpos[2] + hx[2] * off]);
+      /* 各マスの 下がわ、前縁に 真鍮の ラベル札 */
+      b.push(GLC.roundBox(7.0, 2.0, 0.45, 0.22, 2),
+        mul(T(hpos[0] + hx[0] * off - Math.cos(ha) * 8.2, FY + 3.0,
+              hpos[2] + hx[2] * off - Math.sin(ha) * 8.2), hrot), COL.brass, 0.06, 3, MAT.metal);
     }
+    /* --- 上段の 引き出し 3杯（天板の 上に のった 小箪笥） --- */
+    for (var dr = 0; dr < 3; dr++) {
+      var dx = (dr - 1) * 20;
+      var dy = FY + 26.2;
+      var dc = [hpos[0] + hx[0] * dx - Math.cos(ha) * 1.0, dy, hpos[2] + hx[2] * dx - Math.sin(ha) * 1.0];
+      b.push(GLC.roundBox(19.4, 8.6, 13.0, 0.9, 2), mul(T(dc[0], dc[1], dc[2]), hrot),
+        COL.wood, 0, 3, MAT.wood);
+      /* 引き出しの 前板（すこし 前へ 出して 継ぎ目を 見せる） */
+      b.push(GLC.roundBox(17.6, 6.8, 1.4, 0.5, 2),
+        mul(T(dc[0] - Math.cos(ha) * 7.0, dy, dc[2] - Math.sin(ha) * 7.0), hrot),
+        COL.woodHi, 0, 3, MAT.wood);
+      /* 真鍮の 引き手（ちいさな 半円） */
+      b.push(GLC.torus(1.9, 0.34, 14, 6),
+        mul(mul(T(dc[0] - Math.cos(ha) * 8.0, dy - 0.6, dc[2] - Math.sin(ha) * 8.0), hrot), RX(U.rad(90))),
+        COL.brass, 0.08, 3, MAT.metal);
+    }
+    /* --- 天板の 縁飾りと 幅木 --- */
+    b.push(GLC.roundBox(64, 1.8, 17.5, 0.6, 2),
+      mul(T(hpos[0], FY + 31.4, hpos[2]), hrot), COL.woodHi, 0, 3, MAT.wood);
+    b.push(GLC.box(60, 2.6, 14), mul(T(hpos[0], FY + 1.3, hpos[2]), hrot), COL.dark, 0, 3, MAT.wood);
+    /* 前縁に 真鍮の 見切り */
+    b.push(GLC.box(62, 0.7, 0.7),
+      mul(T(hpos[0] - Math.cos(ha) * 8.0, FY + 21.4, hpos[2] - Math.sin(ha) * 8.0), hrot),
+      COL.brass, 0.05, 3, MAT.metal);
     R.focus.shelf = [hpos[0], FY + 14, hpos[2]];
     R.shelfDir = [-Math.cos(ha), 0, -Math.sin(ha)];   // 棚が 向いている ほう（部屋の中心へ）
 
@@ -527,7 +567,45 @@
       var rz = (k - 1) * 7.5;
       var rc = [cpos[0] + Math.cos(ca) * rz, FY + 18.6, cpos[2] + Math.sin(ca) * rz];
       b.push(GLC.box(38, 1.2, 2.6), mul(T(rc[0], rc[1], rc[2]), crot), [0.05, 0.05, 0.07], 0, 4, MAT.resin);
+      /* レールの わきに 目盛り（真鍮の きざみ、5つおきに 長い） */
+      for (var tk = 0; tk <= 12; tk++) {
+        var tlen = (tk % 3 === 0) ? 1.9 : 1.0;
+        b.push(GLC.box(0.5, 0.4, tlen),
+          mul(T(rc[0] + cx[0] * (tk - 6) * 2.9 + Math.cos(ca) * (2.0 + tlen / 2), rc[1] + 0.2,
+                rc[2] + cx[2] * (tk - 6) * 2.9 + Math.sin(ca) * (2.0 + tlen / 2)), crot),
+          COL.brass, 0.04, 4, MAT.metal);
+      }
       R.rails.push({ c: rc, x: cx, half: 17 });
+    }
+    /* --- 卓の 前だれ と 真鍮の 見切り --- */
+    b.push(GLC.roundBox(54, 11, 2.6, 0.8, 2),
+      mul(T(cpos[0] - Math.cos(ca) * 11.4, FY + 8.5, cpos[2] - Math.sin(ca) * 11.4), crot),
+      [COL.panel[0] * 0.82, COL.panel[1] * 0.82, COL.panel[2] * 0.86], 0, 4, MAT.paint);
+    b.push(GLC.box(62, 0.9, 0.9),
+      mul(T(cpos[0] - Math.cos(ca) * 13.0, FY + 18.4, cpos[2] - Math.sin(ca) * 13.0), crot),
+      COL.brass, 0.05, 4, MAT.metal);
+    /* --- 奥の 計器板（すこし 手前へ 倒れている） --- */
+    var bbC = [cpos[0] + Math.cos(ca) * 11.0, FY + 24.0, cpos[2] + Math.sin(ca) * 11.0];
+    var bbM = mul(mul(T(bbC[0], bbC[1], bbC[2]), crot), RX(U.rad(-14)));
+    b.push(GLC.roundBox(50, 13.5, 2.4, 0.8, 2), bbM, COL.panel, 0, 4, MAT.paint);
+    b.push(GLC.box(50, 0.8, 0.8), mul(bbM, T(0, 7.0, 0.9)), COL.brass, 0.05, 4, MAT.metal);
+    /* まるい 計器 2つ（真鍮の わく ＋ 暗い ガラス ＋ 針） */
+    for (var gi = -1; gi <= 1; gi += 2) {
+      var gm = mul(bbM, T(gi * 17.0, 1.4, 1.3));
+      b.push(GLC.disc(4.3, 0, 0.6, 20), mul(gm, RX(U.rad(90))), [0.06, 0.07, 0.10], 0.10, 4, MAT.glass);
+      b.push(GLC.torus(4.35, 0.55, 20, 7), mul(gm, RX(U.rad(90))), COL.brass, 0.07, 4, MAT.metal);
+      b.push(GLC.box(0.45, 3.2, 0.4), mul(mul(gm, RZ(U.rad(gi * 34))), T(0, 1.6, 0.5)),
+        [0.92, 0.66, 0.32], 0.55, 4, MAT.paint);
+    }
+    /* ほそながい 小窓（緑に ひかる） */
+    b.push(GLC.roundBox(13.5, 3.2, 0.7, 0.3, 2), mul(bbM, T(0, 3.2, 1.2)),
+      [0.24, 0.52, 0.40], 0.40, 4, MAT.glass);
+    /* 小さな トグルスイッチ 4つ */
+    for (var sw = 0; sw < 4; sw++) {
+      var sm = mul(bbM, T((sw - 1.5) * 6.2, -4.2, 1.2));
+      b.push(GLC.cylinder(1.5, 1.5, 0.9, 12), mul(sm, RX(U.rad(90))), COL.dark, 0, 4, MAT.resin);
+      b.push(GLC.cylinder(0.42, 0.30, 2.6, 8),
+        mul(mul(sm, RX(U.rad(sw % 2 ? 118 : 62))), T(0, 1.3, 0)), COL.brass, 0.06, 4, MAT.metal);
     }
     R.focus.console = [cpos[0], FY + 20, cpos[2]];
     R.consoleDir = [-Math.cos(ca), 0, -Math.sin(ca)];
@@ -549,6 +627,41 @@
         [0.02, 0.02, 0.02], 0, 4, MAT.resin);
       R.sockets.push({ c: sc, used: false, lamp: [sc[0], sc[1] + 7.5, sc[2]] });
     }
+    /* --- ヒンジの ふた（開けて 上へ たたんである） --- */
+    var pHinge = mul(T(ppos[0] - Math.cos(pa) * 4.2, FY + 22.6, ppos[2] - Math.sin(pa) * 4.2), prot);
+    b.push(GLC.roundBox(44, 19, 1.6, 0.7, 2), mul(mul(pHinge, RX(U.rad(160))), T(0, -9.6, 0.9)),
+      [COL.panel[0] * 1.12, COL.panel[1] * 1.12, COL.panel[2] * 1.18], 0, 4, MAT.paint);
+    /* ふたの 裏の 補強リブ */
+    for (var rb2 = -1; rb2 <= 1; rb2++) {
+      b.push(GLC.box(1.4, 15, 1.0), mul(mul(pHinge, RX(U.rad(160))), T(rb2 * 13, -9.6, 0.0)),
+        COL.metal, 0, 4, MAT.metal);
+    }
+    /* ちょうつがい 2つ と 掛け金 */
+    for (var hg = -1; hg <= 1; hg += 2) {
+      b.push(GLC.cylinder(1.0, 1.0, 5.0, 10), mul(mul(pHinge, T(hg * 15, 0, 0)), RZ(U.rad(90))),
+        COL.brass, 0.06, 4, MAT.metal);
+    }
+    b.push(GLC.roundBox(3.0, 4.2, 1.2, 0.4, 2),
+      mul(T(ppos[0] + px[0] * 6.6 - Math.cos(pa) * 4.4, FY + 8.2,
+            ppos[2] + px[2] * 6.6 - Math.sin(pa) * 4.4), prot),
+      COL.brass, 0.06, 4, MAT.metal);
+    /* --- 警告のしま（斜めの きいろと くろ） --- */
+    for (var wz = 0; wz < 11; wz++) {
+      b.push(GLC.box(2.6, 3.4, 0.5),
+        mul(mul(T(ppos[0] + px[0] * (wz - 5) * 3.7 - Math.cos(pa) * 4.35, FY + 4.2,
+                  ppos[2] + px[2] * (wz - 5) * 3.7 - Math.sin(pa) * 4.35), prot), RZ(U.rad(32))),
+        wz % 2 ? [0.86, 0.68, 0.14] : [0.10, 0.10, 0.12], wz % 2 ? 0.10 : 0, 4, MAT.paint);
+    }
+    /* --- 床への 配管（金属の くだ と 押さえ金物） --- */
+    b.push(GLC.cylinder(1.8, 1.8, 12, 12),
+      T(ppos[0] + px[0] * 20 - Math.cos(pa) * 2.0, FY + 6, ppos[2] + px[2] * 20 - Math.sin(pa) * 2.0),
+      COL.metal, 0, 4, MAT.metal);
+    b.push(GLC.lathe([[3.0, 0], [3.0, 0], [3.0, 1.2], [1.9, 1.2]], 14),
+      T(ppos[0] + px[0] * 20 - Math.cos(pa) * 2.0, FY + 0.3, ppos[2] + px[2] * 20 - Math.sin(pa) * 2.0),
+      COL.dark, 0, 4, MAT.metal);
+    b.push(GLC.torus(2.1, 0.4, 14, 6),
+      T(ppos[0] + px[0] * 20 - Math.cos(pa) * 2.0, FY + 10.5, ppos[2] + px[2] * 20 - Math.sin(pa) * 2.0),
+      COL.brass, 0.06, 4, MAT.metal);
     R.focus.power = [ppos[0] - Math.cos(pa) * 6, FY + 12, ppos[2] - Math.sin(pa) * 6];
     R.powerDir = [-Math.cos(pa), 0, -Math.sin(pa)];
     R.cableHome = [];
@@ -572,6 +685,48 @@
     R.leverAxis = [-Math.sin(va), 0, Math.cos(va)];   // レバーは この軸まわりに 倒れる
     R.leverDir = [-Math.cos(va), 0, -Math.sin(va)];
     R.focus.lever = [vpos[0], FY + 26, vpos[2]];
+
+    /* --- レバー台の 作りこみ ---
+       支点は レバーと 同じ 局所系（+Z=手前、+X=倒れる軸、+Y=上）。 */
+    var vM = mul(T(R.leverPivot[0], R.leverPivot[1], R.leverPivot[2]), vrot);
+    /* 床の フランジ と 支柱の 継ぎ手 */
+    b.push(GLC.lathe([[9.5, 0], [9.5, 0], [9.2, 1.1], [7.4, 1.6], [7.4, 1.6], [7.0, 2.2]], 20),
+      T(vpos[0], FY, vpos[2]), COL.dark, 0, 4, MAT.metal);
+    b.push(GLC.torus(7.1, 0.6, 20, 7), T(vpos[0], FY + 16.4, vpos[2]), COL.brass, 0.06, 4, MAT.metal);
+    /* 天板の 前縁に 真鍮の 見切り と 銘板 */
+    b.push(GLC.box(34, 0.9, 0.9),
+      mul(T(vpos[0] - Math.cos(va) * 11.0, FY + 19.2, vpos[2] - Math.sin(va) * 11.0), vrot),
+      COL.brass, 0.05, 4, MAT.metal);
+    b.push(GLC.roundBox(11.0, 3.0, 0.5, 0.25, 2),
+      mul(T(vpos[0] - Math.cos(va) * 10.6, FY + 16.0, vpos[2] - Math.sin(va) * 10.6), vrot),
+      COL.brass, 0.08, 4, MAT.metal);
+    /* 真鍮の 支点（両がわの ほおあて ＋ 軸） */
+    for (var pv = -1; pv <= 1; pv += 2) {
+      b.push(GLC.disc(3.4, 0, 0.8, 18), mul(mul(vM, T(pv * 4.4, 0, 0)), RZ(U.rad(-90))),
+        COL.brass, 0.07, 4, MAT.metal);
+      b.push(GLC.torus(3.45, 0.32, 18, 6), mul(mul(vM, T(pv * 4.4, 0, 0)), RZ(U.rad(-90))),
+        COL.metal, 0.02, 4, MAT.metal);
+    }
+    b.push(GLC.cylinder(1.05, 1.05, 11.4, 12), mul(vM, RZ(U.rad(90))), COL.brass, 0.10, 4, MAT.metal);
+    /* ロック爪の 歯（レバーの ふり幅ぶんだけ 並ぶ） */
+    var LOCK_X = 6.6;
+    for (var tt = 0; tt <= 11; tt++) {
+      var ta = U.rad(-26 + tt * 6.4);
+      b.push(GLC.box(1.5, 1.15, 0.7),
+        mul(mul(vM, T(LOCK_X, Math.cos(ta) * 8.3, Math.sin(ta) * 8.3)), RX(ta)),
+        COL.brass, 0.03, 4, MAT.metal);
+    }
+    /* 歯を のせる 弧の レール */
+    for (var qr = 0; qr <= 13; qr++) {
+      var qa = U.rad(-28 + qr * 5.6);
+      b.push(GLC.box(1.3, 1.2, 1.6),
+        mul(mul(vM, T(LOCK_X, Math.cos(qa) * 7.2, Math.sin(qa) * 7.2)), RX(qa)),
+        COL.dark, 0, 4, MAT.metal);
+    }
+    /* 爪本体（バネで 歯に あたっている 小さな うで） */
+    b.push(GLC.roundBox(1.4, 5.0, 1.3, 0.45, 2),
+      mul(mul(vM, T(LOCK_X, 11.2, 5.9)), RX(U.rad(28))), COL.metal, 0.02, 4, MAT.metal);
+    b.push(GLC.sphere(0.85, 10, 8, 180, false), mul(vM, T(LOCK_X, 13.4, 7.1)), COL.red, 0.12, 4, MAT.paint);
 
     /* ============ 当たり判定 ============ */
     R.colliders = [
