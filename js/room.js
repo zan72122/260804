@@ -24,9 +24,16 @@
     slot:     { az: 54, r: 20.5 },
     console:  { az: 62, r: 122, off: -15 },
     power:    { az: 101, r: 158, off: -12 },
-    lever:    { az: 88, r: 104 }
+    lever:    { az: 88, r: 104, off: 7 }
   };
   R.ST = ST;
+  var STAND_GAP = 1.6;        // 機械の 手前に あける すきま
+  /* 主投影レバー ── 4さいの 子の 肩は 床から 約19、手の とどく 半径は 約10。
+     支点を 台の 手前ばしに 置き、うでを みじかくして、
+     にぎりが かならず その 球の 中に 入るように してある。 */
+  var LEVER_L = 5.6;          // 支点から にぎりまで
+  var LEVER_A0 = -0.08;       // 上げきり（ほぼ 垂直）
+  var LEVER_A1 = 1.05;        // 下げきり（手前に 倒れる）
 
   function at(az, r, y) {
     var a = U.rad(az);
@@ -34,7 +41,10 @@
   }
   R.at = at;
 
-  /* 持ち場の 立ち位置（世界座標） */
+  /* 持ち場の 立ち位置（世界座標）
+     機械の 当たり判定に めりこんだ 立ち位置を そのまま 返すと、
+     そこを 目ざして 歩いた 彼女が 押し出しと ひっぱりあって
+     その場で 足踏みを つづけてしまう。だから ここで 必ず 外へ 逃がす。 */
   R.stand = function (key) {
     var s = ST[key];
     var p = at(s.az, s.r, 0);
@@ -43,12 +53,23 @@
       p[0] += -Math.sin(a) * s.off;
       p[2] += Math.cos(a) * s.off;
     }
+    if (R.colliders) {
+      /* すこし 余裕を もたせる ── 当たり判定に ぴったり つけて 立たせると
+         機械に からだを 押しつけて いるように 見える */
+      var o = R.pushOut(p[0], p[2], R.BODY_R + STAND_GAP);
+      p[0] = o[0]; p[2] = o[1];
+    }
     return p;
   };
-  /* 持ち場で 向くべき 方位（度）: 中心を向く／壁を向く */
+  /* 持ち場で 向くべき 方位（度）: 中心を向く／壁を向く。
+     レバーだけは 台の 横に 立つので、まっすぐ レバーを 向く。 */
   R.facing = function (key) {
     var s = ST[key];
     if (key === 'lens' || key === 'slot') return s.az + 180;   // 投影機のほうへ
+    if (key === 'lever' && R.leverPivot) {
+      var p = R.stand(key);
+      return Math.atan2(R.leverPivot[2] - p[2], R.leverPivot[0] - p[0]) * 180 / Math.PI;
+    }
     return s.az;                                               // 壁のほうへ
   };
 
@@ -680,11 +701,16 @@
     var vrot = RY(-va - Math.PI / 2);
     b.push(GLC.roundBox(34, 5, 22, 1.6, 2), mul(T(vpos[0], FY + 17, vpos[2]), vrot), COL.panel, 0, 4, MAT.paint);
     b.push(GLC.cylinder(6, 7, 17, 14), T(vpos[0], FY + 8.5, vpos[2]), COL.metal, 0, 4, MAT.metal);
-    b.push(GLC.roundBox(7, 3, 16, 1.0, 2), mul(T(vpos[0], FY + 20, vpos[2]), vrot), [0.06, 0.06, 0.09], 0, 4, MAT.resin);
-    R.leverPivot = [vpos[0], FY + 20, vpos[2]];
+    /* 支点は 台の 中央では なく 手前ばしに ある。
+       操作する ものは 立つ人の 側に ある ── そうでないと 手が とどかない。 */
+    var vFwd = [-Math.cos(va), 0, -Math.sin(va)];
+    var vPiv = [vpos[0] + vFwd[0] * 8.2, FY + 20.5, vpos[2] + vFwd[2] * 8.2];
+    b.push(GLC.roundBox(7.4, 3.2, 7.2, 1.0, 2), mul(T(vPiv[0], FY + 20, vPiv[2]), vrot),
+      [0.06, 0.06, 0.09], 0, 4, MAT.resin);
+    R.leverPivot = vPiv;
     R.leverAxis = [-Math.sin(va), 0, Math.cos(va)];   // レバーは この軸まわりに 倒れる
-    R.leverDir = [-Math.cos(va), 0, -Math.sin(va)];
-    R.focus.lever = [vpos[0], FY + 26, vpos[2]];
+    R.leverDir = vFwd;
+    R.focus.lever = [vPiv[0], FY + 25, vPiv[2]];
 
     /* --- レバー台の 作りこみ ---
        支点は レバーと 同じ 局所系（+Z=手前、+X=倒れる軸、+Y=上）。 */
@@ -702,31 +728,32 @@
       COL.brass, 0.08, 4, MAT.metal);
     /* 真鍮の 支点（両がわの ほおあて ＋ 軸） */
     for (var pv = -1; pv <= 1; pv += 2) {
-      b.push(GLC.disc(3.4, 0, 0.8, 18), mul(mul(vM, T(pv * 4.4, 0, 0)), RZ(U.rad(-90))),
+      b.push(GLC.disc(2.5, 0, 0.8, 18), mul(mul(vM, T(pv * 4.4, 0, 0)), RZ(U.rad(-90))),
         COL.brass, 0.07, 4, MAT.metal);
-      b.push(GLC.torus(3.45, 0.32, 18, 6), mul(mul(vM, T(pv * 4.4, 0, 0)), RZ(U.rad(-90))),
+      b.push(GLC.torus(2.55, 0.30, 18, 6), mul(mul(vM, T(pv * 4.4, 0, 0)), RZ(U.rad(-90))),
         COL.metal, 0.02, 4, MAT.metal);
     }
     b.push(GLC.cylinder(1.05, 1.05, 11.4, 12), mul(vM, RZ(U.rad(90))), COL.brass, 0.10, 4, MAT.metal);
     /* ロック爪の 歯（レバーの ふり幅ぶんだけ 並ぶ） */
-    var LOCK_X = 6.6;
+    var LOCK_X = 6.0, LOCK_R = 4.5;
+    var LA0 = U.deg(LEVER_A0) - 4, LA1 = U.deg(LEVER_A1) + 4;
     for (var tt = 0; tt <= 11; tt++) {
-      var ta = U.rad(-26 + tt * 6.4);
-      b.push(GLC.box(1.5, 1.15, 0.7),
-        mul(mul(vM, T(LOCK_X, Math.cos(ta) * 8.3, Math.sin(ta) * 8.3)), RX(ta)),
+      var ta = U.rad(LA0 + (LA1 - LA0) * tt / 11);
+      b.push(GLC.box(1.4, 1.05, 0.65),
+        mul(mul(vM, T(LOCK_X, Math.cos(ta) * LOCK_R, Math.sin(ta) * LOCK_R)), RX(ta)),
         COL.brass, 0.03, 4, MAT.metal);
     }
     /* 歯を のせる 弧の レール */
     for (var qr = 0; qr <= 13; qr++) {
-      var qa = U.rad(-28 + qr * 5.6);
-      b.push(GLC.box(1.3, 1.2, 1.6),
-        mul(mul(vM, T(LOCK_X, Math.cos(qa) * 7.2, Math.sin(qa) * 7.2)), RX(qa)),
+      var qa = U.rad(LA0 - 2 + (LA1 - LA0 + 4) * qr / 13);
+      b.push(GLC.box(1.2, 1.1, 1.5),
+        mul(mul(vM, T(LOCK_X, Math.cos(qa) * (LOCK_R - 1.1), Math.sin(qa) * (LOCK_R - 1.1))), RX(qa)),
         COL.dark, 0, 4, MAT.metal);
     }
     /* 爪本体（バネで 歯に あたっている 小さな うで） */
-    b.push(GLC.roundBox(1.4, 5.0, 1.3, 0.45, 2),
-      mul(mul(vM, T(LOCK_X, 11.2, 5.9)), RX(U.rad(28))), COL.metal, 0.02, 4, MAT.metal);
-    b.push(GLC.sphere(0.85, 10, 8, 180, false), mul(vM, T(LOCK_X, 13.4, 7.1)), COL.red, 0.12, 4, MAT.paint);
+    b.push(GLC.roundBox(1.2, 4.0, 1.1, 0.4, 2),
+      mul(mul(vM, T(LOCK_X, 6.7, -3.0)), RX(U.rad(-24))), COL.metal, 0.02, 4, MAT.metal);
+    b.push(GLC.sphere(0.75, 10, 8, 180, false), mul(vM, T(LOCK_X, 8.4, -3.8)), COL.red, 0.12, 4, MAT.paint);
 
     /* ============ 当たり判定 ============ */
     R.colliders = [
@@ -734,7 +761,7 @@
       { kind: 'box', x: hpos[0], z: hpos[2], hw: 32, hd: 9, yaw: ha },       // 棚
       { kind: 'box', x: cpos[0], z: cpos[2], hw: 32, hd: 14, yaw: ca },      // コンソール
       { kind: 'box', x: ppos[0], z: ppos[2], hw: 24, hd: 5, yaw: pa },       // 配電盤
-      { kind: 'box', x: vpos[0], z: vpos[2], hw: 18, hd: 12, yaw: va },      // レバー台
+      { kind: 'box', x: vpos[0], z: vpos[2], hw: 18, hd: 11, yaw: va },      // レバー台
       { kind: 'ring', r0: 46, r1: 154, az0: 144, az1: 396 },                 // 客席のかたまり
       { kind: 'wall', r: 186 }                                               // ドームの 壁
     ];
@@ -757,9 +784,10 @@
     idx.discLabel = b.push(GLC.disc(2.6, 1.2, 0.72, 24), U.M.identity(), [1, 1, 1], 0.22, 3, MAT.paint);
 
     /* レバー（原点を 支点に、+Y へ のびる） */
-    idx.leverArm = b.push(GLC.cylinder(1.5, 1.2, 15, 12), T(0, 7.5, 0), COL.metal, 0, 4, MAT.metal);
-    idx.leverGrip = b.push(GLC.roundBox(6.5, 6, 6.5, 2.2, 3), T(0, 16, 0), COL.red, 0.15, 4, MAT.paint);
-    idx.leverTip = b.push(GLC.sphere(1.6, 12, 8, 180, false), T(0, 19.5, 0), COL.brass, 0.5, 4, MAT.metal);
+    /* うでの ながさは 子どもの 手が とどく 高さで きめてある（LEVER_L 参照） */
+    idx.leverArm = b.push(GLC.cylinder(1.6, 1.3, LEVER_L, 12), T(0, LEVER_L / 2, 0), COL.metal, 0, 4, MAT.metal);
+    idx.leverGrip = b.push(GLC.roundBox(6.2, 5.6, 6.2, 2.0, 3), T(0, LEVER_L + 1.2, 0), COL.red, 0.15, 4, MAT.paint);
+    idx.leverTip = b.push(GLC.sphere(1.5, 12, 8, 180, false), T(0, LEVER_L + 4.2, 0), COL.brass, 0.5, 4, MAT.metal);
 
     /* 惑星ノブ */
     idx.knob = b.push(GLC.sphere(5.8, 18, 12, 180, false), U.M.identity(), [1, 1, 1], 0.10, 4, MAT.paint);
@@ -804,9 +832,10 @@
       var step = Math.max(9, 1500 / r);
       for (var deg = 42; deg <= 138; deg += step) {
         var p = at(deg, r, 0);
-        var ok = true;
-        for (var i = 0; i < padList.length; i++) {
-          if (Math.hypot(padList[i].p[0] - p[0], padList[i].p[2] - p[2]) < 24) { ok = false; break; }
+        /* 機械の 中に 光る 足あとが 出ていたら、そこは 立てない */
+        var ok = !R.blockedAt(p[0], p[2]);
+        for (var i = 0; ok && i < padList.length; i++) {
+          if (Math.hypot(padList[i].p[0] - p[0], padList[i].p[2] - p[2]) < 24) ok = false;
         }
         if (ok) addPad(p, null);
       }
@@ -937,12 +966,8 @@
     return true;
   };
 
-  /* 立ち位置は 当たり判定の 外へ 逃がす */
-  R.standSafe = function (key) {
-    var p = R.stand(key);
-    var o = R.pushOut(p[0], p[2]);
-    return [o[0], p[1], o[1]];
-  };
+  /* R.stand が すでに 押し出しずみ。名まえだけ のこす */
+  R.standSafe = R.stand;
 
   /* 指の位置に いちばん近い パッドを 返す（あたりは 大きめ） */
   R.padAt = function (sx, sy) {
@@ -1092,15 +1117,16 @@
     }
 
     /* --- 主レバー --- */
-    var ang = U.lerp(-0.42, 0.72, st.lever);
+    var ang = U.lerp(LEVER_A0, LEVER_A1, st.lever);
     var lm2 = U.M.trs(R.leverPivot, Math.atan2(R.leverDir[0], R.leverDir[2]), 1, ang);
     Scene.drawObj(parts, lm2, idx.leverArm.first, idx.leverArm.count);
     Scene.drawObj(parts, lm2, idx.leverGrip.first, idx.leverGrip.count);
     Scene.drawObj(parts, lm2, idx.leverTip.first, idx.leverTip.count);
+    var gl2 = LEVER_L + 1.2;
     R.leverGripPos = [
-      lm2[4] * 16 + lm2[12],
-      lm2[5] * 16 + lm2[13],
-      lm2[6] * 16 + lm2[14]
+      lm2[4] * gl2 + lm2[12],
+      lm2[5] * gl2 + lm2[13],
+      lm2[6] * gl2 + lm2[14]
     ];
   };
 

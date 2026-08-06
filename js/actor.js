@@ -53,6 +53,7 @@
   /* 歩く 目的地 */
   var path = null;            // {to:[x,z], onDone}
   var WALK_SPEED = 48;
+  var STALL_T = 0.45;         // これだけ 近づけなければ その 経由点は あきらめる
 
   A.init = function () {
     gl = Scene.gl;
@@ -141,12 +142,13 @@
      移動
      ============================================================ */
   A.walkTo = function (xz, onDone) {
-    path = { pts: [[xz[0], xz[2] === undefined ? xz[1] : xz[2]]], i: 0, onDone: onDone || null };
+    path = { pts: [[xz[0], xz[2] === undefined ? xz[1] : xz[2]]], i: 0,
+             onDone: onDone || null, best: Infinity, stall: 0 };
   };
   /* 経由点の 列を たどって 歩く */
   A.walkPath = function (pts, onDone) {
     if (!pts || !pts.length) { if (onDone) onDone(); return; }
-    path = { pts: pts.slice(), i: 0, onDone: onDone || null };
+    path = { pts: pts.slice(), i: 0, onDone: onDone || null, best: Infinity, stall: 0 };
   };
   A.stop = function () { path = null; A.speed = 0; };
   A.isWalking = function () { return !!path; };
@@ -189,9 +191,14 @@
       var dx = tgt[0] - A.pos[0], dz = tgt[1] - A.pos[2];
       var d = Math.hypot(dx, dz);
       var step = WALK_SPEED * dt;
-      if (d <= step || d < 0.6) {
-        A.pos[0] = tgt[0]; A.pos[2] = tgt[1];
+      /* 目的地に 近づけなく なったら（押し出しと ひっぱりあって いるなど）、
+         そこを あきらめて 次へ すすむ。足踏みは ぜったいに つづかない。 */
+      if (d < path.best - 0.25) { path.best = d; path.stall = 0; }
+      else path.stall += dt;
+      if (d <= step || d < 0.6 || path.stall > STALL_T) {
+        if (path.stall <= STALL_T) { A.pos[0] = tgt[0]; A.pos[2] = tgt[1]; }
         path.i++;
+        path.best = Infinity; path.stall = 0;
         if (path.i >= path.pts.length) {
           var cb = path.onDone; path = null;
           A.speed = 0;

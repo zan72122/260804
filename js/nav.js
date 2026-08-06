@@ -50,6 +50,13 @@
     var fx = from[0], fz = from[2] === undefined ? from[1] : from[2];
     var tx = to[0], tz = to[2] === undefined ? to[1] : to[2];
 
+    /* 目的地が 機械の 中なら、まず 外へ 逃がす。
+       ふさがった 点を 目ざすと 押し出しと ひっぱりあって 足踏みに なる。 */
+    if (Room.blockedAt(tx, tz)) {
+      var o = Room.pushOut(tx, tz);
+      tx = o[0]; tz = o[1];
+    }
+
     if (Room.segmentClear(fx, fz, tx, tz)) return [[tx, tz]];
     if (!nodes.length) return [[tx, tz]];
 

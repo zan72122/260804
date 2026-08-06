@@ -26,6 +26,7 @@
     return t === 0 ? 0 : t === 1 ? 1 : Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * c4) + 1;
   };
   U.rad = function (d) { return d * Math.PI / 180; };
+  U.deg = function (r) { return r * 180 / Math.PI; };
 
   /* 種つき乱数（テーマごとに同じ星空が出る） */
   U.rng = function (seed) {

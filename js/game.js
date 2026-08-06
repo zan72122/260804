@@ -15,6 +15,7 @@
   var legs = ['lens', 'shelf', 'slot', 'console', 'power', 'lever'];
   var leg = -1;
   var idle = 0;
+  var nudge = 0;             // もちばへの「あと ひと足」を 何回 やったか
   var shootTimer = 0;
   var lookSky = { az: 90, alt: 45, k: 0 };
   var finaleT = 0;
@@ -74,8 +75,9 @@
     if (i >= legs.length) return;
     mode = 'goto';
     idle = 0;
+    nudge = 0;
     var key = legs[i];
-    var p = Room.standSafe(key);
+    var p = Room.stand(key);
     Room.state.hotPad = [p[0], p[2]];
     Room.state.hotAmt = 1;
     Room.state.padAlpha = 1;
@@ -104,6 +106,7 @@
   /* ---------------- ゆび ---------------- */
   G.down = function (x, y) {
     idle = 0;
+    nudge = 0;
     if (mode === 'title') { begin(); return; }
     if (mode === 'finale') return;
 
@@ -319,12 +322,15 @@
 
     if (mode === 'finale') finaleT += dt;
 
-    /* もちばに 着いたら（すこし ずれていても）しごとが 始まる */
+    /* もちばに 着いたら（すこし ずれていても）しごとが 始まる。
+       あと ひと足の ところで 止まったら もういちど 歩かせるが、
+       それでも 縮まらなければ その場で 始める ── 近づけないのに
+       歩き直しつづけると、その場で 足踏みして 見える。 */
     if (mode === 'goto' && leg >= 0 && leg < legs.length && !Actor.isWalking()) {
-      var tp = Room.standSafe(legs[leg]);
+      var tp = Room.stand(legs[leg]);
       var dd = Math.hypot(Actor.pos[0] - tp[0], Actor.pos[2] - tp[2]);
-      if (dd < 3.5) arrive();
-      else if (dd < 18) walkVia(tp, null);
+      if (dd < 4.5 || nudge >= 2) arrive();
+      else if (dd < 18) { nudge++; walkVia(tp, null); }
     }
 
     /* 迷ったら 指さす */

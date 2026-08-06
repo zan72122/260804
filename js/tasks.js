@@ -440,11 +440,12 @@
   var levGrab = false, levStartY = 0, levStart = 0, levMoved = 0, levLocked = false;
   var levAuto = -1;
   var JOB_LEVER = {
-    key: 'lever', side: 34, pitch: 22, dist: 48, fov: 58,
+    /* 彼女は 台の 横に 立つので、外がわの 肩ごしに 大きく まわりこむ */
+    key: 'lever', side: 74, pitch: 24, dist: 62, fov: 58,
     begin: function () {
       levGrab = false; levLocked = false; levAuto = -1;
       RM.state.lever = 0;
-      A.lean = 0.15;
+      A.lean = 0.85;              // 台ごしに 身をのりだして にぎる
       A.gripLever = true;
     },
     end: function () { A.lean = 0; A.gripLever = false; A.reachL = null; A.reachR = null; },
