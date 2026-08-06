@@ -16,6 +16,9 @@
   var THIGH = 5.6, SHIN = 5.2;
   var SHO_X = 3.7, HIP_X = 1.9;
 
+  /* 素材: 0=塗装 1=金属 2=木 3=布 */
+  var M = { skin: 0, cloth: 3, metal: 1 };
+
   var C = {
     skin:   [0.98, 0.82, 0.72],
     hair:   [0.36, 0.20, 0.14],
@@ -88,26 +91,26 @@
     });
     b.push(GLC.sphere(0.42, 8, 6, 180, false), mul(T(0, 4.62, 4.55), S(1.5, 0.7, 0.5)), [0.80, 0.44, 0.42], 0, 5);
     /* 髪かざりの 星 */
-    b.push(GLC.sphere(1.0, 8, 6, 180, false), T(3.5, 9.2, 1.1), C.star, 0.9, 5);
+    b.push(GLC.sphere(1.0, 8, 6, 180, false), T(3.5, 9.2, 1.1), C.star, 0.9, 5, M.metal);
     idx.head = { first: head0, count: b.I.length - head0 };
 
     /* ---- どうたい（腰を 原点に、+Y へ） ---- */
     var tor0 = b.I.length;
-    b.push(GLC.cylinder(3.9, 3.5, SHO_Y, 16), T(0, SHO_Y / 2, 0), C.suit, 0, 5);
-    b.push(GLC.cylinder(4.2, 3.9, 1.4, 16), T(0, 0.4, 0), C.suitHi, 0, 5);          // 腰まわり
-    b.push(GLC.cylinder(3.6, 4.3, 1.2, 16), T(0, SHO_Y + 0.2, 0), C.suitHi, 0, 5);  // 肩
+    b.push(GLC.cylinder(3.9, 3.5, SHO_Y, 16), T(0, SHO_Y / 2, 0), C.suit, 0, 5, M.cloth);
+    b.push(GLC.cylinder(4.2, 3.9, 1.4, 16), T(0, 0.4, 0), C.suitHi, 0, 5, M.cloth);          // 腰まわり
+    b.push(GLC.cylinder(3.6, 4.3, 1.2, 16), T(0, SHO_Y + 0.2, 0), C.suitHi, 0, 5, M.cloth);  // 肩
     /* スカート（ひろがる すそ） */
-    b.push(GLC.cylinder(3.9, 5.5, 3.8, 18), T(0, -0.2, 0), C.suitHi, 0, 5);
+    b.push(GLC.cylinder(3.9, 5.5, 3.8, 18), T(0, -0.2, 0), C.suitHi, 0, 5, M.cloth);
     /* エプロン（むねあて＋ひも） */
-    b.push(GLC.roundBox(5.0, 6.4, 0.8, 0.5, 2), T(0, 4.4, 3.62), C.apron, 0, 5);
-    b.push(GLC.roundBox(6.8, 3.2, 0.8, 0.5, 2), T(0, 0.9, 3.85), C.apron, 0, 5);
+    b.push(GLC.roundBox(5.0, 6.4, 0.8, 0.5, 2), T(0, 4.4, 3.62), C.apron, 0, 5, M.cloth);
+    b.push(GLC.roundBox(6.8, 3.2, 0.8, 0.5, 2), T(0, 0.9, 3.85), C.apron, 0, 5, M.cloth);
     [-1, 1].forEach(function (s) {
-      b.push(GLC.box(0.9, 4.6, 0.7), mul(T(s * 1.9, 6.7, 3.42), RX(U.rad(6))), C.apron, 0, 5);
+      b.push(GLC.box(0.9, 4.6, 0.7), mul(T(s * 1.9, 6.7, 3.42), RX(U.rad(6))), C.apron, 0, 5, M.cloth);
     });
     /* えり */
-    b.push(GLC.cylinder(2.5, 2.5, 1.0, 12), T(0, SHO_Y + 0.9, 0), C.apron, 0, 5);
+    b.push(GLC.cylinder(2.5, 2.5, 1.0, 12), T(0, SHO_Y + 0.9, 0), C.apron, 0, 5, M.cloth);
     /* むねの きらきらバッジ */
-    b.push(GLC.sphere(0.8, 8, 6, 180, false), T(2.1, 6.4, 3.62), C.star, 0.9, 5);
+    b.push(GLC.sphere(0.8, 8, 6, 180, false), T(2.1, 6.4, 3.62), C.star, 0.9, 5, M.metal);
     idx.torso = { first: tor0, count: b.I.length - tor0 };
 
     /* ---- 骨（原点から -Y に のびる） ---- */
@@ -127,7 +130,7 @@
     idx.hand = { first: h0, count: b.I.length - h0 };
 
     var f0 = b.I.length;
-    b.push(GLC.roundBox(3.4, 2.4, 5.6, 1.0, 2), T(0, -0.9, 1.1), C.boot, 0, 5);
+    b.push(GLC.roundBox(3.4, 2.4, 5.6, 1.0, 2), T(0, -0.9, 1.1), C.boot, 0, 5, M.skin);
     idx.foot = { first: f0, count: b.I.length - f0 };
 
     mesh = b.upload(gl);
@@ -138,10 +141,16 @@
      移動
      ============================================================ */
   A.walkTo = function (xz, onDone) {
-    path = { to: [xz[0], xz[2] === undefined ? xz[1] : xz[2]], onDone: onDone || null };
+    path = { pts: [[xz[0], xz[2] === undefined ? xz[1] : xz[2]]], i: 0, onDone: onDone || null };
+  };
+  /* 経由点の 列を たどって 歩く */
+  A.walkPath = function (pts, onDone) {
+    if (!pts || !pts.length) { if (onDone) onDone(); return; }
+    path = { pts: pts.slice(), i: 0, onDone: onDone || null };
   };
   A.stop = function () { path = null; A.speed = 0; };
   A.isWalking = function () { return !!path; };
+  A.pathLeft = function () { return path ? path.pts.length - path.i : 0; };
 
   A.placeAt = function (p, yawDeg) {
     A.pos = [p[0], p[1], p[2]];
@@ -176,14 +185,18 @@
     A.t += dt;
 
     if (path) {
-      var dx = path.to[0] - A.pos[0], dz = path.to[1] - A.pos[2];
+      var tgt = path.pts[path.i];
+      var dx = tgt[0] - A.pos[0], dz = tgt[1] - A.pos[2];
       var d = Math.hypot(dx, dz);
       var step = WALK_SPEED * dt;
       if (d <= step || d < 0.6) {
-        A.pos[0] = path.to[0]; A.pos[2] = path.to[1];
-        var cb = path.onDone; path = null;
-        A.speed = 0;
-        if (cb) cb();
+        A.pos[0] = tgt[0]; A.pos[2] = tgt[1];
+        path.i++;
+        if (path.i >= path.pts.length) {
+          var cb = path.onDone; path = null;
+          A.speed = 0;
+          if (cb) cb();
+        }
       } else {
         A.pos[0] += dx / d * step;
         A.pos[2] += dz / d * step;
@@ -195,6 +208,12 @@
       if (A.targetYaw !== null) {
         A.yaw = U.approachAngle(A.yaw, A.targetYaw, 6, dt);
       }
+    }
+
+    /* 安全網 ── 何が あっても 機械の 中には いない */
+    if (global.Room && Room.pushOut) {
+      var safe = Room.pushOut(A.pos[0], A.pos[2]);
+      A.pos[0] = safe[0]; A.pos[2] = safe[1];
     }
 
     if (A.speed > 1) A.walkPhase += dt * 1.55;
@@ -260,7 +279,7 @@
     var sIdx = 0;
     for (var q = -1; q <= 1; q += 2) {
       var shoP = [sho[0] + rt[0] * SHO_X * q, sho[1] - 0.4, sho[2] + rt[2] * SHO_X * q];
-      var target = (q < 0) ? A.reachL : A.reachR;
+      var target = reachPoint((q < 0) ? A.reachL : A.reachR);
       var elbow, wrist;
 
       if (A.cheer > 0.05 && !target) {
@@ -273,11 +292,15 @@
         ];
       }
       if (A.carry > 0.5) {
-        /* 両手で ディスクを 抱える */
+        /* ディスクの ふちを 両手で つかむ */
+        var cm = carryFrame(hip, f, rt);
+        /* ふちの すこし 下がわを、盤面の うしろから つかむ */
+        var e2 = U.V.norm(U.V.cross(rt, cm.n));      // 盤面の中の「上」
+        var gc = Math.cos(U.rad(24)) * cm.grip, gs = Math.sin(U.rad(24)) * cm.grip;
         target = [
-          sho[0] + rt[0] * 4.2 * q + f[0] * 5.6,
-          sho[1] - 2.6,
-          sho[2] + rt[2] * 4.2 * q + f[2] * 5.6
+          cm.c[0] + rt[0] * gc * q - e2[0] * gs - cm.n[0] * 2.4,
+          cm.c[1] + rt[1] * gc * q - e2[1] * gs - cm.n[1] * 2.4,
+          cm.c[2] + rt[2] * gc * q - e2[2] * gs - cm.n[2] * 2.4
         ];
       }
       if (A.point && q > 0) {
@@ -307,6 +330,16 @@
     return { hip: hip, sho: sho, up: up, f: f, rt: rt, legs: legs, arms: arms, lean: leanA };
   }
 
+  /* reach の 目標を 世界座標に する。
+     面の 法線が ついていれば、その ぶんだけ 手前で 止める。 */
+  function reachPoint(t) {
+    if (!t) return null;
+    if (t.length === 3) return t;
+    var g = (t.gap === undefined) ? 2.0 : t.gap;
+    return [t.p[0] + t.n[0] * g, t.p[1] + t.n[1] * g, t.p[2] + t.n[2] * g];
+  }
+  A.reachPoint = reachPoint;
+
   /* 前方 f を 基準に、角度 a だけ 前へ ふった「下向き」の 方向 */
   function dirFrom(f, a) {
     return [Math.sin(a) * f[0], -Math.cos(a), Math.sin(a) * f[2]];
@@ -314,17 +347,33 @@
 
   A.pose = pose;
 
-  /* いま 抱えている ディスクの 行列 */
+  /* 運んでいる ディスクの 位置と 向き。
+     体の 前・へその 高さ。歩くと わずかに ゆれる。 */
+  A.DISC_R = 5.0;
+  function carryFrame(hip, f, rt) {
+    var sway = Math.sin(A.walkPhase * Math.PI * 2) * (A.speed > 1 ? 0.9 : 0);
+    var bob = Math.sin(A.walkPhase * Math.PI * 4) * (A.speed > 1 ? 0.5 : 0);
+    var c = [
+      hip[0] + f[0] * 8.4 + rt[0] * sway,
+      hip[1] + 3.6 + bob,
+      hip[2] + f[2] * 8.4 + rt[2] * sway
+    ];
+    /* 面は すこし 上を むいて、子どもが のぞきこむ 角度 */
+    var tilt = U.rad(20);
+    var n = U.V.norm([
+      f[0] * Math.cos(tilt) + 0,
+      Math.sin(tilt),
+      f[2] * Math.cos(tilt)
+    ]);
+    return { c: c, n: n, grip: A.DISC_R + 1.1, sway: sway };
+  }
+
   A.carryMatrix = function () {
-    var p = pose();
-    var mid = [(p.arms[0].wrist[0] + p.arms[1].wrist[0]) / 2,
-               (p.arms[0].wrist[1] + p.arms[1].wrist[1]) / 2 + 1.2,
-               (p.arms[0].wrist[2] + p.arms[1].wrist[2]) / 2];
-    var yaw = U.rad(A.yaw);
-    return U.M.multiply(
-      U.M.trs(mid, -yaw + Math.PI / 2, 1),
-      U.M.rotateX(U.rad(72))
-    );
+    var f = fwd(), rt = right();
+    var hip = [A.pos[0], A.pos[1] + hipY(), A.pos[2]];
+    var cm = carryFrame(hip, f, rt);
+    /* GLC.disc は 軸が +Y。法線 n に 軸を むける */
+    return U.M.multiply(U.M.orient(cm.c, cm.n, [0, 1, 0]), U.M.rotateX(U.rad(90)));
   };
   A.handPos = function (which) {
     var p = pose();

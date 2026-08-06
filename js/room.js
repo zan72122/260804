@@ -19,9 +19,9 @@
      作業エリアは az 40°〜140°、客席は その反対がわ */
   var ST = {
     entrance: { az: 112, r: 120 },
-    lens:     { az: 96, r: 27 },
+    lens:     { az: 96, r: 20.5 },
     shelf:    { az: 126, r: 128 },
-    slot:     { az: 54, r: 27 },
+    slot:     { az: 54, r: 20.5 },
     console:  { az: 62, r: 122, off: -15 },
     power:    { az: 101, r: 158, off: -12 },
     lever:    { az: 88, r: 104 }
@@ -58,6 +58,10 @@
   /* ---------------- ビルド ---------------- */
   var hall = null, parts = null, pads = null;
   var idx = {};                 // 可動パーツの index 範囲
+
+  /* 素材: 0=塗装 1=金属/真鍮 2=ニスの木 3=フェルト/布 4=樹脂 5=ガラス */
+  var MAT = { paint: 0, metal: 1, wood: 2, felt: 3, resin: 4, glass: 5 };
+  R.MAT = MAT;
 
   var COL = {
     floor:  [0.26, 0.22, 0.31],
@@ -252,7 +256,7 @@
     cPos = new Float32Array(n * 3);
     cNrm = new Float32Array(n * 3);
     cCol = new Float32Array(n * 3);
-    cPar = new Float32Array(n * 2);
+    cPar = new Float32Array(n * 3);
     var I = [];
     for (var c = 0; c < 3; c++) {
       var base = c * (CSEG + 1) * (CSIDE + 1);
@@ -267,6 +271,7 @@
         cCol[(base + q) * 3] = PLUG_COL[c][0] * 0.55;
         cCol[(base + q) * 3 + 1] = PLUG_COL[c][1] * 0.55;
         cCol[(base + q) * 3 + 2] = PLUG_COL[c][2] * 0.55;
+        cPar[(base + q) * 3 + 2] = MAT.resin;
       }
     }
     cableBuf = {
@@ -327,7 +332,7 @@
     var b = new GLC.Builder();
 
     /* --- 床 --- */
-    b.push(GLC.disk(FR, 96), T(0, FY + 0.2, 0), COL.floor, 0, 1);
+    b.push(GLC.disk(FR, 96), T(0, FY + 0.2, 0), COL.floor, 0, 1, MAT.felt);
 
     /* --- 客席（作業エリアを あけた 扇形） --- */
     var seatBase = GLC.roundBox(8.2, 4.6, 8.4, 1.6, 2);
@@ -351,63 +356,159 @@
       }
     }
 
-    /* --- 中央の 投影機（スターボール） --- */
-    b.push(GLC.cylinder(9, 6.5, 9, 28), T(0, FY + 4.5, 0), COL.drum, 0, 2);
-    b.push(GLC.cylinder(3.0, 2.6, 15, 20), T(0, FY + 16, 0), COL.metal, 0.02, 2);
-    b.push(GLC.sphere(5.4, 24, 16, 180, false), T(0, FY + 26, 0), COL.dark, 0.55, 2);
-    b.push(GLC.cylinder(1.7, 1.7, 8, 14), T(0, FY + 34.5, 0), COL.metal, 0.05, 2);
-    b.push(GLC.sphere(5.4, 24, 16, 180, false), T(0, FY + 43, 0), COL.dark, 0.55, 2);
-    b.push(GLC.cylinder(2.3, 1.2, 4.5, 14), T(0, FY + 49.5, 0), COL.metal, 0.35, 2);
+    /* ============================================================
+       中央の 投影機（この 部屋の 主役）
+       ── 鋳物の 台座、段つきの 支柱、星球 2つ、対物レンズ
+       ============================================================ */
+    var SEG = 30;
+    /* 脚 3本 */
+    for (var lg = 0; lg < 3; lg++) {
+      var lga = lg / 3 * Math.PI * 2 + 0.4;
+      b.push(GLC.lathe([[3.2, 0], [3.2, 0], [3.0, 1.0], [1.9, 1.4], [1.9, 3.0]], 12),
+        T(Math.cos(lga) * 9.5, FY, Math.sin(lga) * 9.5), COL.dark, 0, 2, MAT.resin);
+    }
+    /* 鋳物の 台座（段と 面取りを もった 回転体） */
+    b.push(GLC.lathe([
+      [0, FY + 2.2], [10.2, FY + 2.2],
+      [10.2, FY + 2.2], [10.8, FY + 3.0],
+      [10.8, FY + 3.0], [10.8, FY + 4.6],
+      [10.8, FY + 4.6], [10.1, FY + 5.4],
+      [10.1, FY + 5.4], [9.7, FY + 9.4],
+      [9.7, FY + 9.4], [9.2, FY + 11.0],
+      [9.2, FY + 11.0], [6.4, FY + 12.4],
+      [6.4, FY + 12.4], [4.4, FY + 13.6]
+    ], SEG, false, false), null, COL.drum, 0, 2, MAT.paint);
+    /* 台座の 天板 */
+    b.push(GLC.disc(4.6, 0, 0.7, SEG), T(0, FY + 13.7, 0), COL.metal, 0.02, 2, MAT.metal);
+    /* 放熱スリット */
+    for (var sl = 0; sl < 14; sl++) {
+      var sa2 = sl / 14 * Math.PI * 2;
+      b.push(GLC.box(1.5, 3.4, 0.9),
+        mul(T(Math.cos(sa2) * 9.9, FY + 7.4, Math.sin(sa2) * 9.9), RY(-sa2 - Math.PI / 2)),
+        [0.05, 0.05, 0.07], 0, 2, MAT.resin);
+    }
+    /* 台座の 締めリングと 銘板 */
+    b.push(GLC.torus(10.4, 0.45, SEG, 8), T(0, FY + 5.0, 0), COL.brass, 0.05, 2, MAT.metal);
+    b.push(GLC.roundBox(6.4, 2.2, 0.5, 0.25, 2),
+      mul(T(Math.cos(U.rad(75)) * 10.2, FY + 8.2, Math.sin(U.rad(75)) * 10.2), RY(-U.rad(75) - Math.PI / 2)),
+      COL.brass, 0.08, 2, MAT.metal);
+    /* パイロットランプ 2つ */
+    [[62, [0.9, 0.25, 0.22]], [88, [0.35, 0.85, 0.45]]].forEach(function (pl) {
+      var pa2 = U.rad(pl[0]);
+      b.push(GLC.sphere(0.85, 10, 8, 180, false),
+        T(Math.cos(pa2) * 10.0, FY + 10.4, Math.sin(pa2) * 10.0), pl[1], 0.85, 2, MAT.glass);
+    });
+
+    /* 支柱（段つき） */
+    b.push(GLC.lathe([
+      [3.4, FY + 13.6], [3.4, FY + 13.6],
+      [2.9, FY + 15.0], [2.9, FY + 17.4],
+      [2.9, FY + 17.4], [3.5, FY + 18.0],
+      [3.5, FY + 18.0], [3.5, FY + 19.2],
+      [3.5, FY + 19.2], [2.7, FY + 19.9],
+      [2.7, FY + 21.6]
+    ], 20, false, false), null, COL.metal, 0.02, 2, MAT.metal);
+    /* 高さ調整の カラー */
+    b.push(GLC.torus(3.0, 0.5, 20, 8), T(0, FY + 20.6, 0), COL.brass, 0.06, 2, MAT.metal);
+
+    /* --- 下の 星球 --- */
+    var BALL_LO = FY + 26.6, BALL_HI = FY + 44.0;
+    b.push(GLC.sphere(5.4, 26, 18, 180, false), T(0, BALL_LO, 0), COL.dark, 0.55, 2, MAT.paint);
+    b.push(GLC.torus(5.42, 0.30, 26, 7), T(0, BALL_LO, 0), COL.brass, 0.10, 2, MAT.metal);
+    b.push(GLC.lathe([[2.9, BALL_LO - 5.6], [2.9, BALL_LO - 5.6], [2.4, BALL_LO - 4.6]], 16, true, false),
+      null, COL.metal, 0.02, 2, MAT.metal);
+    /* --- 中つぎの 軸 --- */
+    b.push(GLC.lathe([
+      [1.9, BALL_LO + 4.2], [1.9, BALL_LO + 4.2],
+      [1.5, BALL_LO + 5.4], [1.5, BALL_HI - 5.4],
+      [1.5, BALL_HI - 5.4], [1.9, BALL_HI - 4.2]
+    ], 16, true, true), null, COL.metal, 0.05, 2, MAT.metal);
+    b.push(GLC.torus(1.75, 0.34, 16, 7), T(0, (BALL_LO + BALL_HI) / 2, 0), COL.brass, 0.08, 2, MAT.metal);
+    /* --- 上の 星球 --- */
+    b.push(GLC.sphere(5.4, 26, 18, 180, false), T(0, BALL_HI, 0), COL.dark, 0.55, 2, MAT.paint);
+    b.push(GLC.torus(5.42, 0.30, 26, 7), T(0, BALL_HI, 0), COL.brass, 0.10, 2, MAT.metal);
+    /* --- てっぺんの 飾り --- */
+    b.push(GLC.lathe([
+      [2.4, BALL_HI + 4.6], [2.4, BALL_HI + 4.6],
+      [2.9, BALL_HI + 5.2], [2.9, BALL_HI + 5.2],
+      [1.5, BALL_HI + 7.4], [0.5, BALL_HI + 8.4]
+    ], 16), null, COL.brass, 0.4, 2, MAT.metal);
 
     /* ============ ① 対物レンズ（下球の 横に つき出た 鏡筒） ============ */
-    var la = U.rad(ST.lens.az), lr = 6.0;
+    var la = U.rad(ST.lens.az);
     var lensDir = [Math.cos(la), 0, Math.sin(la)];
-    var lensBase = [lensDir[0] * lr, FY + 24, lensDir[2] * lr];
-    var lensRot = mul(RY(-la), RZ(U.rad(90)));     // 円柱を 横向きに
-    /* 鏡筒 */
-    b.push(GLC.cylinder(3.6, 4.4, 9, 20),
-      mul(T(lensBase[0] + lensDir[0] * 4, lensBase[1], lensBase[2] + lensDir[2] * 4), lensRot),
-      COL.metal, 0.02, 2);
-    /* 縁のリング */
-    b.push(GLC.cylinder(4.8, 4.8, 1.6, 20),
-      mul(T(lensBase[0] + lensDir[0] * 8.6, lensBase[1], lensBase[2] + lensDir[2] * 8.6), lensRot),
-      COL.brass, 0.05, 2);
-    R.focus.lens = [lensBase[0] + lensDir[0] * 9.4, lensBase[1], lensBase[2] + lensDir[2] * 9.4];
+    var lensY = FY + 24.5;
+    /* 鏡筒は +Z 方向に つくって、レンズの 向きへ 回す */
+    var lensM = U.M.orient([lensDir[0] * 4.6, lensY, lensDir[2] * 4.6], lensDir, [0, 1, 0]);
+    var barrelM = mul(lensM, RX(U.rad(90)));        // lathe の 軸(+Y) を +Z（レンズの向き）へ
+    b.push(GLC.lathe([
+      [3.1, 0], [3.1, 0],
+      [3.5, 1.0], [3.5, 3.4],
+      [3.5, 3.4], [3.1, 3.9],
+      [3.1, 3.9], [3.1, 5.6],
+      [3.1, 5.6], [4.3, 6.2],
+      [4.3, 6.2], [4.3, 7.2]
+    ], 24, false, false), barrelM, COL.metal, 0.02, 2, MAT.metal);
+    /* ローレット刻みの 絞りリング */
+    b.push(GLC.torus(3.75, 0.62, 26, 8),
+      mul(barrelM, T(0, 4.7, 0)), COL.brass, 0.06, 2, MAT.metal);
+    for (var kn = 0; kn < 20; kn++) {
+      var ka = kn / 20 * Math.PI * 2;
+      b.push(GLC.box(0.34, 0.34, 1.5),
+        mul(mul(barrelM, T(Math.cos(ka) * 4.2, 4.7, Math.sin(ka) * 4.2)), RY(-ka)),
+        COL.brass, 0.04, 2, MAT.metal);
+    }
+    /* フードの 縁（真鍮） */
+    b.push(GLC.torus(4.35, 0.36, 26, 8),
+      mul(barrelM, T(0, 7.2, 0)), COL.brass, 0.08, 2, MAT.metal);
+    R.focus.lens = [lensDir[0] * (4.6 + 7.0), lensY, lensDir[2] * (4.6 + 7.0)];
     R.lensDir = lensDir;
-    R.lensRadius = 4.2;
+    R.lensRadius = 4.05;
+    /* 外した レンズキャップが 台座の 上に おいてある */
+    b.push(GLC.lathe([[3.4, 0], [3.4, 0], [3.6, 0.5], [3.6, 1.6], [3.6, 1.6], [3.2, 2.0]], 18),
+      mul(T(Math.cos(U.rad(120)) * 2.6, FY + 14.4, Math.sin(U.rad(120)) * 2.6), RX(U.rad(12))),
+      COL.dark, 0, 2, MAT.resin);
 
     /* ============ ③ ディスク挿入口（ドラムの 反対がわ） ============ */
     var sa = U.rad(ST.slot.az);
     var sdir = [Math.cos(sa), 0, Math.sin(sa)];
-    var sHousing = [sdir[0] * 8.5, FY + 15, sdir[2] * 8.5];
-    b.push(GLC.roundBox(15, 12, 7, 1.6, 2),
-      mul(T(sHousing[0], sHousing[1], sHousing[2]), RY(-sa - Math.PI / 2)), COL.panel, 0, 2);
-    /* 差込口の 暗い みぞ */
-    b.push(GLC.box(11.5, 1.8, 1.2),
-      mul(T(sHousing[0] + sdir[0] * 3.4, sHousing[1] + 1.5, sHousing[2] + sdir[2] * 3.4), RY(-sa - Math.PI / 2)),
-      [0.02, 0.02, 0.03], 0, 2);
-    R.focus.slot = [sHousing[0] + sdir[0] * 4.0, sHousing[1] + 1.5, sHousing[2] + sdir[2] * 4.0];
+    var sHousing = [sdir[0] * 8.6, FY + 15.4, sdir[2] * 8.6];
+    var sRot = RY(-sa - Math.PI / 2);
+    b.push(GLC.roundBox(13.5, 9.5, 5.5, 1.1, 2),
+      mul(T(sHousing[0], sHousing[1], sHousing[2]), sRot), COL.panel, 0, 2, MAT.paint);
+    /* 差込口の 暗い みぞ と 真鍮の 口金 */
+    b.push(GLC.box(11.2, 1.5, 1.0),
+      mul(T(sHousing[0] + sdir[0] * 2.7, sHousing[1] + 0.6, sHousing[2] + sdir[2] * 2.7), sRot),
+      [0.015, 0.015, 0.02], 0, 2, MAT.resin);
+    b.push(GLC.roundBox(12.4, 3.0, 0.7, 0.3, 2),
+      mul(T(sHousing[0] + sdir[0] * 2.9, sHousing[1] + 0.6, sHousing[2] + sdir[2] * 2.9), sRot),
+      COL.brass, 0.05, 2, MAT.metal);
+    /* 小さな 表示窓 */
+    b.push(GLC.roundBox(3.2, 1.6, 0.5, 0.2, 2),
+      mul(T(sHousing[0] + sdir[0] * 2.9, sHousing[1] + 3.4, sHousing[2] + sdir[2] * 2.9), sRot),
+      [0.30, 0.55, 0.45], 0.5, 2, MAT.glass);
+    R.focus.slot = [sHousing[0] + sdir[0] * 3.6, sHousing[1] + 0.6, sHousing[2] + sdir[2] * 3.6];
     R.slotDir = sdir;
 
     /* ============ ② ディスク棚（壁ぎわ） ============ */
     var ha = U.rad(ST.shelf.az), hr = ST.shelf.r + 22;
     var hpos = [Math.cos(ha) * hr, FY, Math.sin(ha) * hr];
     var hrot = RY(-ha - Math.PI / 2);
-    b.push(GLC.roundBox(84, 4, 20, 1.2, 2), mul(T(hpos[0], FY + 21, hpos[2]), hrot), COL.wood, 0, 3);
-    b.push(GLC.roundBox(84, 4, 20, 1.2, 2), mul(T(hpos[0], FY + 3, hpos[2]), hrot), COL.wood, 0, 3);
-    b.push(GLC.box(4, 24, 20), mul(T(hpos[0], FY + 11, hpos[2]), hrot), COL.woodHi, 0, 3);
+    b.push(GLC.roundBox(62, 3.4, 16, 1.0, 2), mul(T(hpos[0], FY + 20, hpos[2]), hrot), COL.wood, 0, 3, MAT.wood);
+    b.push(GLC.roundBox(62, 3.4, 16, 1.0, 2), mul(T(hpos[0], FY + 3, hpos[2]), hrot), COL.wood, 0, 3, MAT.wood);
+    b.push(GLC.box(2.6, 17, 16), mul(T(hpos[0], FY + 11.5, hpos[2]), hrot), COL.woodHi, 0, 3, MAT.wood);
     /* 側板（棚のはしを 局所 X 方向に） */
     var hx = [-Math.sin(ha), 0, Math.cos(ha)];
     for (var e = -1; e <= 1; e += 2) {
-      b.push(GLC.box(4, 24, 20),
-        mul(T(hpos[0] + hx[0] * 42 * e, FY + 11, hpos[2] + hx[2] * 42 * e), hrot), COL.woodHi, 0, 3);
+      b.push(GLC.box(2.6, 17, 16),
+        mul(T(hpos[0] + hx[0] * 30 * e, FY + 11.5, hpos[2] + hx[2] * 30 * e), hrot), COL.woodHi, 0, 3, MAT.wood);
     }
-    b.push(GLC.box(84, 26, 3),
-      mul(T(hpos[0] + Math.cos(ha) * 9, FY + 11, hpos[2] + Math.sin(ha) * 9), hrot), COL.wood, 0, 3);
+    b.push(GLC.box(62, 19, 2.4),
+      mul(T(hpos[0] + Math.cos(ha) * 7, FY + 11.5, hpos[2] + Math.sin(ha) * 7), hrot), COL.wood, 0, 3, MAT.wood);
     R.shelfSlots = [];
     for (var d = 0; d < 4; d++) {
-      var off = (d - 1.5) * 20;
-      R.shelfSlots.push([hpos[0] + hx[0] * off, FY + 13, hpos[2] + hx[2] * off]);
+      var off = (d - 1.5) * 13;
+      R.shelfSlots.push([hpos[0] + hx[0] * off, FY + 11.5, hpos[2] + hx[2] * off]);
     }
     R.focus.shelf = [hpos[0], FY + 14, hpos[2]];
     R.shelfDir = [-Math.cos(ha), 0, -Math.sin(ha)];   // 棚が 向いている ほう（部屋の中心へ）
@@ -417,15 +518,15 @@
     var cpos = [Math.cos(ca) * cr, FY, Math.sin(ca) * cr];
     var crot = RY(-ca - Math.PI / 2);
     var cx = [-Math.sin(ca), 0, Math.cos(ca)];
-    b.push(GLC.roundBox(62, 5, 26, 1.8, 2), mul(T(cpos[0], FY + 16, cpos[2]), crot), COL.panel, 0, 4);
-    b.push(GLC.cylinder(4, 5, 16, 12), T(cpos[0] + cx[0] * 24, FY + 8, cpos[2] + cx[2] * 24), COL.metal, 0, 4);
-    b.push(GLC.cylinder(4, 5, 16, 12), T(cpos[0] - cx[0] * 24, FY + 8, cpos[2] - cx[2] * 24), COL.metal, 0, 4);
+    b.push(GLC.roundBox(62, 5, 26, 1.8, 2), mul(T(cpos[0], FY + 16, cpos[2]), crot), COL.panel, 0, 4, MAT.paint);
+    b.push(GLC.cylinder(4, 5, 16, 12), T(cpos[0] + cx[0] * 24, FY + 8, cpos[2] + cx[2] * 24), COL.metal, 0, 4, MAT.metal);
+    b.push(GLC.cylinder(4, 5, 16, 12), T(cpos[0] - cx[0] * 24, FY + 8, cpos[2] - cx[2] * 24), COL.metal, 0, 4, MAT.metal);
     /* 3本の レール（みぞ） */
     R.rails = [];
     for (var k = 0; k < 3; k++) {
       var rz = (k - 1) * 7.5;
       var rc = [cpos[0] + Math.cos(ca) * rz, FY + 18.6, cpos[2] + Math.sin(ca) * rz];
-      b.push(GLC.box(38, 1.2, 2.6), mul(T(rc[0], rc[1], rc[2]), crot), [0.05, 0.05, 0.07], 0, 4);
+      b.push(GLC.box(38, 1.2, 2.6), mul(T(rc[0], rc[1], rc[2]), crot), [0.05, 0.05, 0.07], 0, 4, MAT.resin);
       R.rails.push({ c: rc, x: cx, half: 17 });
     }
     R.focus.console = [cpos[0], FY + 20, cpos[2]];
@@ -436,16 +537,16 @@
     var ppos = [Math.cos(pa) * pr, FY, Math.sin(pa) * pr];
     var prot = RY(-pa - Math.PI / 2);
     var px = [-Math.sin(pa), 0, Math.cos(pa)];
-    b.push(GLC.roundBox(46, 22, 8, 1.6, 2), mul(T(ppos[0], FY + 12, ppos[2]), prot), COL.panel, 0, 4);
+    b.push(GLC.roundBox(46, 22, 8, 1.6, 2), mul(T(ppos[0], FY + 12, ppos[2]), prot), COL.panel, 0, 4, MAT.paint);
     b.push(GLC.box(42, 2, 1.5),
-      mul(T(ppos[0] - Math.cos(pa) * 4, FY + 22, ppos[2] - Math.sin(pa) * 4), prot), COL.metal, 0, 4);
+      mul(T(ppos[0] - Math.cos(pa) * 4, FY + 22, ppos[2] - Math.sin(pa) * 4), prot), COL.metal, 0, 4, MAT.metal);
     R.sockets = [];
     for (var q = 0; q < 3; q++) {
       var so = (q - 1) * 13;
       var sc = [ppos[0] + px[0] * so - Math.cos(pa) * 4.6, FY + 12, ppos[2] + px[2] * so - Math.sin(pa) * 4.6];
-      b.push(GLC.roundBox(9, 9, 2.5, 1.0, 2), mul(T(sc[0], sc[1], sc[2]), prot), [0.10, 0.10, 0.14], 0, 4);
+      b.push(GLC.roundBox(9, 9, 2.5, 1.0, 2), mul(T(sc[0], sc[1], sc[2]), prot), [0.10, 0.10, 0.14], 0, 4, MAT.resin);
       b.push(GLC.box(5, 1.6, 1.2), mul(T(sc[0] - Math.cos(pa) * 1.0, sc[1], sc[2] - Math.sin(pa) * 1.0), prot),
-        [0.02, 0.02, 0.02], 0, 4);
+        [0.02, 0.02, 0.02], 0, 4, MAT.resin);
       R.sockets.push({ c: sc, used: false, lamp: [sc[0], sc[1] + 7.5, sc[2]] });
     }
     R.focus.power = [ppos[0] - Math.cos(pa) * 6, FY + 12, ppos[2] - Math.sin(pa) * 6];
@@ -464,13 +565,24 @@
     var va = U.rad(ST.lever.az), vr = ST.lever.r + 15;
     var vpos = [Math.cos(va) * vr, FY, Math.sin(va) * vr];
     var vrot = RY(-va - Math.PI / 2);
-    b.push(GLC.roundBox(34, 5, 22, 1.6, 2), mul(T(vpos[0], FY + 17, vpos[2]), vrot), COL.panel, 0, 4);
-    b.push(GLC.cylinder(6, 7, 17, 14), T(vpos[0], FY + 8.5, vpos[2]), COL.metal, 0, 4);
-    b.push(GLC.roundBox(7, 3, 16, 1.0, 2), mul(T(vpos[0], FY + 20, vpos[2]), vrot), [0.06, 0.06, 0.09], 0, 4);
+    b.push(GLC.roundBox(34, 5, 22, 1.6, 2), mul(T(vpos[0], FY + 17, vpos[2]), vrot), COL.panel, 0, 4, MAT.paint);
+    b.push(GLC.cylinder(6, 7, 17, 14), T(vpos[0], FY + 8.5, vpos[2]), COL.metal, 0, 4, MAT.metal);
+    b.push(GLC.roundBox(7, 3, 16, 1.0, 2), mul(T(vpos[0], FY + 20, vpos[2]), vrot), [0.06, 0.06, 0.09], 0, 4, MAT.resin);
     R.leverPivot = [vpos[0], FY + 20, vpos[2]];
     R.leverAxis = [-Math.sin(va), 0, Math.cos(va)];   // レバーは この軸まわりに 倒れる
     R.leverDir = [-Math.cos(va), 0, -Math.sin(va)];
     R.focus.lever = [vpos[0], FY + 26, vpos[2]];
+
+    /* ============ 当たり判定 ============ */
+    R.colliders = [
+      { kind: 'cyl', x: 0, z: 0, r: 11.5 },                                  // 投影機
+      { kind: 'box', x: hpos[0], z: hpos[2], hw: 32, hd: 9, yaw: ha },       // 棚
+      { kind: 'box', x: cpos[0], z: cpos[2], hw: 32, hd: 14, yaw: ca },      // コンソール
+      { kind: 'box', x: ppos[0], z: ppos[2], hw: 24, hd: 5, yaw: pa },       // 配電盤
+      { kind: 'box', x: vpos[0], z: vpos[2], hw: 18, hd: 12, yaw: va },      // レバー台
+      { kind: 'ring', r0: 46, r1: 154, az0: 144, az1: 396 },                 // 客席のかたまり
+      { kind: 'wall', r: 186 }                                               // ドームの 壁
+    ];
 
     hall = b.upload(gl);
     R.hallVerts = b.vo;
@@ -482,30 +594,32 @@
   function buildParts() {
     var b = new GLC.Builder();
 
-    /* ディスク（テーマ色は uTintMul で 変える） */
-    idx.disc = b.push(GLC.cylinder(9.5, 9.5, 1.5, 26), U.M.identity(), [1, 1, 1], 0, 3);
-    idx.discFace = b.push(GLC.cylinder(9.0, 3.0, 0.6, 22), T(0, 0.9, 0), [1, 1, 1], 0.25, 3);
-    idx.discHole = b.push(GLC.cylinder(2.2, 2.2, 2.0, 12), U.M.identity(), [0.08, 0.08, 0.12], 0, 3);
+    /* ディスク（本物の 円盤。うわ面・した面・外周・中心穴）
+       半径 5.0（＝直径 40cm）。テーマ色は uTintMul で 変える。 */
+    idx.disc = b.push(GLC.disc(5.0, 1.15, 0.55, 30), U.M.identity(), [1, 1, 1], 0, 3, MAT.paint);
+    idx.discRim = b.push(GLC.torus(5.05, 0.34, 30, 8), U.M.identity(), COL.brass, 0.10, 3, MAT.metal);
+    idx.discHub = b.push(GLC.torus(1.45, 0.30, 20, 7), U.M.identity(), COL.brass, 0.10, 3, MAT.metal);
+    idx.discLabel = b.push(GLC.disc(2.6, 1.2, 0.72, 24), U.M.identity(), [1, 1, 1], 0.22, 3, MAT.paint);
 
     /* レバー（原点を 支点に、+Y へ のびる） */
-    idx.leverArm = b.push(GLC.cylinder(1.5, 1.2, 15, 12), T(0, 7.5, 0), COL.metal, 0, 4);
-    idx.leverGrip = b.push(GLC.roundBox(6.5, 6, 6.5, 2.2, 3), T(0, 16, 0), COL.red, 0.15, 4);
-    idx.leverTip = b.push(GLC.sphere(1.6, 12, 8, 180, false), T(0, 19.5, 0), COL.brass, 0.5, 4);
+    idx.leverArm = b.push(GLC.cylinder(1.5, 1.2, 15, 12), T(0, 7.5, 0), COL.metal, 0, 4, MAT.metal);
+    idx.leverGrip = b.push(GLC.roundBox(6.5, 6, 6.5, 2.2, 3), T(0, 16, 0), COL.red, 0.15, 4, MAT.paint);
+    idx.leverTip = b.push(GLC.sphere(1.6, 12, 8, 180, false), T(0, 19.5, 0), COL.brass, 0.5, 4, MAT.metal);
 
     /* 惑星ノブ */
-    idx.knob = b.push(GLC.sphere(5.8, 18, 12, 180, false), U.M.identity(), [1, 1, 1], 0.10, 4);
-    idx.knobStem = b.push(GLC.cylinder(1.6, 1.4, 3.4, 10), T(0, -3.6, 0), COL.metal, 0, 4);
-    idx.knobRing = b.push(GLC.cylinder(8.8, 8.8, 0.5, 20), T(0, 0.6, 0), [1, 1, 1], 0.3, 4);
+    idx.knob = b.push(GLC.sphere(5.8, 18, 12, 180, false), U.M.identity(), [1, 1, 1], 0.10, 4, MAT.paint);
+    idx.knobStem = b.push(GLC.cylinder(1.6, 1.4, 3.4, 10), T(0, -3.6, 0), COL.metal, 0, 4, MAT.metal);
+    idx.knobRing = b.push(GLC.cylinder(8.8, 8.8, 0.5, 20), T(0, 0.6, 0), [1, 1, 1], 0.3, 4, MAT.metal);
 
     /* ケーブルの コネクタ */
-    idx.plug = b.push(GLC.roundBox(8.2, 8.2, 9.5, 1.8, 2), U.M.identity(), [1, 1, 1], 0, 4);
-    idx.plugPin = b.push(GLC.box(4.4, 1.6, 3), T(0, 0, -6), COL.brass, 0.2, 4);
+    idx.plug = b.push(GLC.roundBox(8.2, 8.2, 9.5, 1.8, 2), U.M.identity(), [1, 1, 1], 0, 4, MAT.resin);
+    idx.plugPin = b.push(GLC.box(4.4, 1.6, 3), T(0, 0, -6), COL.brass, 0.2, 4, MAT.metal);
 
     /* みがき用の クロス */
-    idx.cloth = b.push(GLC.roundBox(7, 1.6, 7, 0.7, 2), U.M.identity(), [0.94, 0.90, 0.72], 0, 3);
+    idx.cloth = b.push(GLC.roundBox(6, 1.4, 6, 0.6, 2), U.M.identity(), [0.94, 0.90, 0.72], 0, 3, MAT.felt);
 
     /* ランプ（点いたら 光る 小球） */
-    idx.lamp = b.push(GLC.sphere(1.7, 12, 8, 180, false), U.M.identity(), [1, 1, 1], 1.0, 4);
+    idx.lamp = b.push(GLC.sphere(1.7, 12, 8, 180, false), U.M.identity(), [1, 1, 1], 1.0, 4, MAT.glass);
 
     parts = b.upload(gl);
     R.idx = idx;
@@ -572,6 +686,108 @@
       count: I.length
     };
   }
+
+  /* ============================================================
+     当たり判定 ── めり込ませない
+     ============================================================ */
+  R.BODY_R = 4.2;
+
+  /* p=[x,?,z] が どれかの 当たり判定の 中（半径 rad ぶん ふくらませた）に あれば
+     いちばん 近い 外へ 押し出した [x,z] を 返す。なければ null。 */
+  var PUSH_EPS = 0.4;              // ぴったり境界だと 判定が ゆれるので 少し 外へ
+
+  function pushOne(c, x, z, rad) {
+    rad = rad + PUSH_EPS;
+    if (c.kind === 'cyl') {
+      var dx = x - c.x, dz = z - c.z;
+      var d = Math.hypot(dx, dz);
+      var need = c.r + rad;
+      if (d >= need) return null;
+      if (d < 1e-4) return [c.x + need, c.z];
+      return [c.x + dx / d * need, c.z + dz / d * need];
+    }
+    if (c.kind === 'box') {
+      var ca2 = Math.cos(c.yaw), sa2 = Math.sin(c.yaw);
+      /* 局所X = 接線方向、局所Z = 半径方向 */
+      var ex = [-sa2, ca2], ez = [ca2, sa2];
+      var rx = x - c.x, rz = z - c.z;
+      var lx = rx * ex[0] + rz * ex[1];
+      var lz = rx * ez[0] + rz * ez[1];
+      var hw = c.hw + rad, hd = c.hd + rad;
+      if (Math.abs(lx) >= hw || Math.abs(lz) >= hd) return null;
+      var px = hw - Math.abs(lx), pz = hd - Math.abs(lz);
+      if (px < pz) lx = (lx < 0 ? -hw : hw);
+      else lz = (lz < 0 ? -hd : hd);
+      return [c.x + ex[0] * lx + ez[0] * lz, c.z + ex[1] * lx + ez[1] * lz];
+    }
+    if (c.kind === 'ring') {
+      var rr = Math.hypot(x, z);
+      if (rr < 1e-4) return null;
+      var deg = Math.atan2(z, x) * 180 / Math.PI;
+      var a = deg; while (a < c.az0) a += 360; while (a > c.az0 + 360) a -= 360;
+      if (a > c.az1) return null;
+      if (rr < c.r0 - rad || rr > c.r1 + rad) return null;
+      /* 内へ 出るか、角度の はしから 出るか、近いほうへ */
+      var dIn = rr - (c.r0 - rad);
+      var dA0 = U.rad(a - c.az0) * rr;
+      var dA1 = U.rad(c.az1 - a) * rr;
+      if (dIn <= dA0 && dIn <= dA1) {
+        var k = (c.r0 - rad) / rr;
+        return [x * k, z * k];
+      }
+      var na = U.rad((dA0 < dA1) ? c.az0 - 0.5 : c.az1 + 0.5);
+      return [Math.cos(na) * rr, Math.sin(na) * rr];
+    }
+    if (c.kind === 'wall') {
+      var wr = Math.hypot(x, z);
+      var lim = c.r - rad;
+      if (wr <= lim) return null;
+      return [x / wr * lim, z / wr * lim];
+    }
+    return null;
+  }
+
+  /* 何度か くり返して、どの 当たり判定にも 入らない 位置へ */
+  R.pushOut = function (x, z, rad) {
+    if (!R.colliders) return [x, z];
+    var r = (rad === undefined) ? R.BODY_R : rad;
+    for (var pass = 0; pass < 4; pass++) {
+      var moved = false;
+      for (var i = 0; i < R.colliders.length; i++) {
+        var out = pushOne(R.colliders[i], x, z, r);
+        if (out) { x = out[0]; z = out[1]; moved = true; }
+      }
+      if (!moved) break;
+    }
+    return [x, z];
+  };
+
+  R.blockedAt = function (x, z, rad) {
+    if (!R.colliders) return false;
+    var r = (rad === undefined) ? R.BODY_R : rad;
+    for (var i = 0; i < R.colliders.length; i++) {
+      if (pushOne(R.colliders[i], x, z, r - PUSH_EPS)) return true;
+    }
+    return false;
+  };
+
+  /* 線分が 通れるか（等間隔に 見ていく） */
+  R.segmentClear = function (ax, az2, bx, bz, rad) {
+    var d = Math.hypot(bx - ax, bz - az2);
+    var n = Math.max(2, Math.ceil(d / 5));
+    for (var i = 0; i <= n; i++) {
+      var t = i / n;
+      if (R.blockedAt(ax + (bx - ax) * t, az2 + (bz - az2) * t, rad)) return false;
+    }
+    return true;
+  };
+
+  /* 立ち位置は 当たり判定の 外へ 逃がす */
+  R.standSafe = function (key) {
+    var p = R.stand(key);
+    var o = R.pushOut(p[0], p[2]);
+    return [o[0], p[1], o[1]];
+  };
 
   /* 指の位置に いちばん近い パッドを 返す（あたりは 大きめ） */
   R.padAt = function (sx, sy) {
@@ -736,9 +952,10 @@
 
   function drawDisc(m, col) {
     Scene.drawObj(parts, m, idx.disc.first, idx.disc.count, col);
-    Scene.drawObj(parts, m, idx.discFace.first, idx.discFace.count,
-      [col[0] * 1.4, col[1] * 1.4, col[2] * 1.4]);
-    Scene.drawObj(parts, m, idx.discHole.first, idx.discHole.count);
+    Scene.drawObj(parts, m, idx.discLabel.first, idx.discLabel.count,
+      [col[0] * 1.5 + 0.15, col[1] * 1.5 + 0.15, col[2] * 1.5 + 0.15]);
+    Scene.drawObj(parts, m, idx.discRim.first, idx.discRim.count);
+    Scene.drawObj(parts, m, idx.discHub.first, idx.discHub.count);
   }
   R.drawDisc = drawDisc;
   R.drawPart = function (name, m, tint) {

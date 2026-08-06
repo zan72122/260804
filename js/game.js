@@ -29,9 +29,10 @@
     Room.setThemeColors(THEMES);
     Room.state.knobColors = theme.planets.map(function (p) { return p.color; });
     Actor.init();
+    Nav.build();
     Tasks.init();
 
-    var e = Room.stand('entrance');
+    var e = Room.standSafe('entrance');
     Actor.placeAt(e, 292);
     Room.state.girlXZ = [e[0], e[2]];
 
@@ -61,6 +62,12 @@
     });
   };
 
+  /* 家具を よけて 歩く */
+  function walkVia(target, onDone) {
+    var pts = Nav.path([Actor.pos[0], Actor.pos[2]], [target[0], target[2]]);
+    Actor.walkPath(pts, onDone);
+  }
+
   /* ---------------- 進行 ---------------- */
   function gotoLeg(i) {
     leg = i;
@@ -68,7 +75,7 @@
     mode = 'goto';
     idle = 0;
     var key = legs[i];
-    var p = Room.stand(key);
+    var p = Room.standSafe(key);
     Room.state.hotPad = [p[0], p[2]];
     Room.state.hotAmt = 1;
     Room.state.padAlpha = 1;
@@ -107,13 +114,13 @@
     if (!pad) return;
     if (mode === 'outro') {
       Actor.targetYaw = null;
-      Actor.walkTo(pad.p, function () { checkOutro(pad); });
+      walkVia(pad.p, function () { checkOutro(pad); });
       if (global.Snd) Snd.tap();
       return;
     }
     if (mode === 'work') {
       /* もちばの パッドで なければ しごとを 中断して 歩きだす */
-      var here = Room.stand(legs[leg]);
+      var here = Room.standSafe(legs[leg]);
       if (Math.hypot(pad.p[0] - here[0], pad.p[2] - here[2]) < 6) return;
       Tasks.end();
       mode = 'goto';
@@ -121,7 +128,7 @@
       Room.state.hotAmt = 1;
     }
     Actor.targetYaw = null;
-    Actor.walkTo(pad.p, null);
+    walkVia(pad.p, null);
     if (global.Snd) Snd.tap();
   };
   G.move = function (x, y) { idle = 0; if (mode === 'work') Tasks.move(x, y); };
@@ -167,7 +174,7 @@
 
     /* ドームの まんなかへ 歩いていって、見あげる */
     var open = Room.at(90, 62, 0);
-    Actor.walkTo(open, function () {
+    walkVia(open, function () {
       Actor.targetYaw = 268;
       tw.to(Actor, 'lookUp', 1, 2.2, U.easeInOutCubic);
     });
@@ -314,10 +321,10 @@
 
     /* もちばに 着いたら（すこし ずれていても）しごとが 始まる */
     if (mode === 'goto' && leg >= 0 && leg < legs.length && !Actor.isWalking()) {
-      var tp = Room.stand(legs[leg]);
+      var tp = Room.standSafe(legs[leg]);
       var dd = Math.hypot(Actor.pos[0] - tp[0], Actor.pos[2] - tp[2]);
       if (dd < 3.5) arrive();
-      else if (dd < 18) Actor.walkTo(tp, null);
+      else if (dd < 18) walkVia(tp, null);
     }
 
     /* 迷ったら 指さす */

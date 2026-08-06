@@ -70,7 +70,7 @@
       lensDone = false; lensLast = null; lensDist = 0;
       RM.lensReset();
       A.lean = 0.45;
-      A.reachR = RM.focus.lens;
+      A.reachR = { p: RM.focus.lens, n: RM.lensDir, gap: 2.6 };
       A.holdCloth = true;
     },
     end: function () { A.lean = 0; A.reachR = null; A.holdCloth = false; },
@@ -113,7 +113,7 @@
 
   function rub(h) {
     RM.lensWipe(h.u, h.v, 0.19);
-    A.reachR = h.p;
+    A.reachR = { p: h.p, n: RM.lensDir, gap: 2.6 };
     if (!lensDone && RM.lensProgress() > 0.62) {
       lensDone = true;
       if (global.Snd) { Snd.polishOff(); Snd.chime(659.25); }
@@ -132,7 +132,7 @@
      ========================================================= */
   var shelfPicked = -1;
   var JOB_SHELF = {
-    key: 'shelf', side: 15, pitch: 22, dist: 148, fov: 62,
+    key: 'shelf', side: 16, pitch: 20, dist: 96, fov: 60,
     begin: function () {
       shelfPicked = -1;
       A.lean = 0.12;
@@ -145,7 +145,7 @@
       var items = [];
       for (var i = 0; i < 4; i++) {
         if (RM.state.discTaken === i) continue;
-        items.push({ c: RM.shelfSlots[i], r: 11, i: i });
+        items.push({ c: RM.shelfSlots[i], r: 6.5, i: i });
       }
       var best = Pick.pickBest(x, y, items);
       if (!best) return false;
@@ -156,7 +156,7 @@
 
   function take(i) {
     shelfPicked = i;
-    A.reachR = RM.shelfSlots[i];
+    A.reachR = { p: RM.shelfSlots[i], n: RM.shelfDir, gap: 2.2 };
     if (global.Snd) Snd.tap();
     setTimeout(function () {
       RM.state.discTaken = i;
@@ -187,7 +187,7 @@
       /* 差込口を たたいても 入る（ゆびが あまくても だいじょうぶ） */
       var items = [
         { c: RM.focus.slot, r: 13, k: 'slot' },
-        { c: discWorld(), r: 13, k: 'disc' }
+        { c: discWorld(), r: 8, k: 'disc' }
       ];
       var best = Pick.pickBest(x, y, items);
       if (!best) return false;
@@ -278,7 +278,7 @@
       var best = Pick.pickBest(x, y, items);
       if (!best) return false;
       knobGrab = best.i;
-      A.reachR = knobPos(knobGrab);
+      A.reachR = { p: knobPos(knobGrab), n: [0, 1, 0], gap: 1.9 };
       if (global.Snd) Snd.tap();
       return true;
     },
@@ -290,7 +290,7 @@
       /* レール（直線）に いちばん近い 点 */
       var t = closestOnLine(ray, rail.c, rail.x, rail.half);
       RM.state.knobT[knobGrab] = U.clamp(t * 0.5 + 0.5, 0.02, 0.98);
-      A.reachR = knobPos(knobGrab);
+      A.reachR = { p: knobPos(knobGrab), n: [0, 1, 0], gap: 1.9 };
       return true;
     },
     up: function () {
@@ -364,7 +364,7 @@
       plugStart = [x, y];
       RM.state.plugState[plugGrab] = 1;
       RM.state.plugDrag[plugGrab] = plugPos(plugGrab);
-      A.reachR = RM.state.plugDrag[plugGrab];
+      A.reachR = { p: plugPos(plugGrab), n: [0, 1, 0], gap: 2.0 };
       if (global.Snd) Snd.tap();
       return true;
     },
@@ -381,7 +381,7 @@
         p = [U.lerp(p[0], s.s.c[0], k), U.lerp(p[1], s.s.c[1], k), U.lerp(p[2], s.s.c[2], k)];
       }
       RM.state.plugDrag[plugGrab] = p;
-      A.reachR = p;
+      A.reachR = { p: p, n: [0, 1, 0], gap: 2.0 };
       if (s.d < 11) connect(plugGrab, s.s);
       return true;
     },

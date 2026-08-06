@@ -154,18 +154,150 @@
     };
   };
 
-  /* 円柱 */
-  G.cylinder = function (r0, r1, h, segs) {
-    var pos = [], nrm = [], uv = [], idx = [], k = 0;
-    for (var i = 0; i < segs; i++) {
-      var a0 = i / segs * Math.PI * 2, a1 = (i + 1) / segs * Math.PI * 2;
-      var c0 = Math.cos(a0), s0 = Math.sin(a0), c1 = Math.cos(a1), s1 = Math.sin(a1);
-      pos.push(c0 * r0, -h / 2, s0 * r0, c1 * r0, -h / 2, s1 * r0,
-               c1 * r1, h / 2, s1 * r1, c0 * r1, h / 2, s0 * r1);
-      nrm.push(c0, 0.25, s0, c1, 0.25, s1, c1, 0.25, s1, c0, 0.25, s0);
-      uv.push(0, 0, 1, 0, 1, 1, 0, 1);
-      idx.push(k, k + 1, k + 2, k, k + 2, k + 3);
-      k += 4;
+  /* ---------- 回転体（すべての 丸いものの 土台） ----------
+     profile = [[半径, 高さ], ...] を 下から 上へ ならべる。
+     法線は となりの 断面から 出すので、テーパでも 正しく 光る。
+     capBottom / capTop で フタを つける（既定は つける）。 */
+  G.lathe = function (profile, segs, capBottom, capTop) {
+    segs = segs || 20;
+    if (capBottom === undefined) capBottom = true;
+    if (capTop === undefined) capTop = true;
+    var pos = [], nrm = [], uv = [], idx = [], vo = 0;
+    var n = profile.length;
+
+    /* 区間ごとの 法線（半径方向, 高さ方向）。
+       同じ点を 2回 ならべると そこが 稜線（ハードエッジ）に なる。 */
+    var segN = [];
+    for (var i = 0; i < n - 1; i++) {
+      var dr = profile[i + 1][0] - profile[i][0];
+      var dh = profile[i + 1][1] - profile[i][1];
+      var sl = Math.hypot(dr, dh);
+      segN.push(sl < 1e-6 ? null : [dh / sl, -dr / sl]);
+    }
+    var VN = [];
+    for (var j = 0; j < n; j++) {
+      var pa = (j > 0) ? segN[j - 1] : null;
+      var pb = (j < n - 1) ? segN[j] : null;
+      var nv = (pa && pb) ? [pa[0] + pb[0], pa[1] + pb[1]] : (pa || pb || [1, 0]);
+      var nl = Math.hypot(nv[0], nv[1]) || 1;
+      VN.push([nv[0] / nl, nv[1] / nl]);
+    }
+
+    /* --- 側面 --- */
+    for (var r = 0; r < n; r++) {
+      for (var s = 0; s <= segs; s++) {
+        var th = s / segs * Math.PI * 2;
+        var c = Math.cos(th), si = Math.sin(th);
+        pos.push(c * profile[r][0], profile[r][1], si * profile[r][0]);
+        nrm.push(c * VN[r][0], VN[r][1], si * VN[r][0]);
+        uv.push(s / segs, r / Math.max(1, n - 1));
+      }
+    }
+    for (var rr = 0; rr < n - 1; rr++) {
+      for (var ss = 0; ss < segs; ss++) {
+        var A = rr * (segs + 1) + ss, B = A + segs + 1;
+        idx.push(A, B, A + 1, A + 1, B, B + 1);
+      }
+    }
+    vo = n * (segs + 1);
+
+    /* --- フタ --- */
+    function cap(rad, y, dir) {
+      if (rad <= 1e-5) return;
+      var base = vo;
+      pos.push(0, y, 0); nrm.push(0, dir, 0); uv.push(0.5, 0.5); vo++;
+      for (var s2 = 0; s2 <= segs; s2++) {
+        var t2 = s2 / segs * Math.PI * 2;
+        pos.push(Math.cos(t2) * rad, y, Math.sin(t2) * rad);
+        nrm.push(0, dir, 0);
+        uv.push(0.5 + Math.cos(t2) * 0.5, 0.5 + Math.sin(t2) * 0.5);
+        vo++;
+        if (s2 > 0) {
+          if (dir > 0) idx.push(base, base + s2, base + s2 + 1);
+          else idx.push(base, base + s2 + 1, base + s2);
+        }
+      }
+    }
+    if (capBottom) cap(profile[0][0], profile[0][1], -1);
+    if (capTop) cap(profile[n - 1][0], profile[n - 1][1], 1);
+
+    return {
+      pos: new Float32Array(pos), nrm: new Float32Array(nrm),
+      uv: new Float32Array(uv), idx: new Uint16Array(idx), count: idx.length
+    };
+  };
+
+  /* 円柱・円錐（中心が 原点、フタつき） */
+  G.cylinder = function (r0, r1, h, segs, open) {
+    return G.lathe([[r0, -h / 2], [r1, h / 2]], segs || 16, !open, !open);
+  };
+
+  /* 厚みのある 円盤（上面・下面・外周・中心穴つき）。軸は Y。 */
+  G.disc = function (rOut, rIn, thick, segs) {
+    segs = segs || 28;
+    var pos = [], nrm = [], uv = [], idx = [], vo = 0;
+    var hy = thick / 2;
+    function ring(rad, y, nx, nyv) {
+      var base = vo;
+      for (var s = 0; s <= segs; s++) {
+        var th = s / segs * Math.PI * 2;
+        var c = Math.cos(th), si = Math.sin(th);
+        pos.push(c * rad, y, si * rad);
+        nrm.push(c * nx, nyv, si * nx);
+        uv.push(s / segs, rad);
+        vo++;
+      }
+      return base;
+    }
+    function bridge(a, b, flip) {
+      for (var s = 0; s < segs; s++) {
+        if (flip) idx.push(a + s, b + s, a + s + 1, a + s + 1, b + s, b + s + 1);
+        else idx.push(a + s, a + s + 1, b + s, a + s + 1, b + s + 1, b + s);
+      }
+    }
+    var hasHole = rIn > 1e-4;
+    /* 上面 */
+    var tOut = ring(rOut, hy, 0, 1);
+    var tIn = ring(Math.max(rIn, 0.0001), hy, 0, 1);
+    bridge(tIn, tOut, false);
+    /* 下面 */
+    var bOut = ring(rOut, -hy, 0, -1);
+    var bIn = ring(Math.max(rIn, 0.0001), -hy, 0, -1);
+    bridge(bOut, bIn, false);
+    /* 外周 */
+    var eT = ring(rOut, hy, 1, 0), eB = ring(rOut, -hy, 1, 0);
+    bridge(eB, eT, false);
+    /* 内周 */
+    if (hasHole) {
+      var iT = ring(rIn, hy, -1, 0), iB = ring(rIn, -hy, -1, 0);
+      bridge(iT, iB, false);
+    }
+    return {
+      pos: new Float32Array(pos), nrm: new Float32Array(nrm),
+      uv: new Float32Array(uv), idx: new Uint16Array(idx), count: idx.length
+    };
+  };
+
+  /* ドーナツ（真鍮リング・ハンドル）。軸は Y。 */
+  G.torus = function (R, r, segs, rings) {
+    segs = segs || 20; rings = rings || 10;
+    var pos = [], nrm = [], uv = [], idx = [];
+    for (var i = 0; i <= segs; i++) {
+      var u = i / segs * Math.PI * 2;
+      var cu = Math.cos(u), su = Math.sin(u);
+      for (var j = 0; j <= rings; j++) {
+        var v = j / rings * Math.PI * 2;
+        var cv = Math.cos(v), sv = Math.sin(v);
+        pos.push(cu * (R + r * cv), r * sv, su * (R + r * cv));
+        nrm.push(cu * cv, sv, su * cv);
+        uv.push(i / segs, j / rings);
+      }
+    }
+    for (var a = 0; a < segs; a++) {
+      for (var b = 0; b < rings; b++) {
+        var p0 = a * (rings + 1) + b, p1 = p0 + rings + 1;
+        idx.push(p0, p1, p0 + 1, p0 + 1, p1, p1 + 1);
+      }
     }
     return {
       pos: new Float32Array(pos), nrm: new Float32Array(nrm),
@@ -180,7 +312,7 @@
     this.P = []; this.N = []; this.C = []; this.R = []; this.I = [];
     this.vo = 0;
   }
-  Builder.prototype.push = function (geo, m, col, emis, kind) {
+  Builder.prototype.push = function (geo, m, col, emis, kind, mat) {
     var first = this.I.length;
     var n = geo.pos.length / 3;
     m = m || G.IDENT;
@@ -196,7 +328,7 @@
       var l = Math.sqrt(ox * ox + oy * oy + oz * oz) || 1;
       this.N.push(ox / l, oy / l, oz / l);
       this.C.push(col[0], col[1], col[2]);
-      this.R.push(emis || 0, kind || 0);
+      this.R.push(emis || 0, kind || 0, mat || 0);
     }
     for (var j = 0; j < geo.idx.length; j++) this.I.push(geo.idx[j] + this.vo);
     this.vo += n;

@@ -236,56 +236,120 @@
 
   /* ---------- 会場のもの（床・座席・投影機） ---------- */
   var OBJ_VS = [
-    'attribute vec3 aPos; attribute vec3 aNrm; attribute vec3 aCol; attribute vec2 aPar;',
-    'uniform mat4 uVP, uModel;',
+    'attribute vec3 aPos; attribute vec3 aNrm; attribute vec3 aCol; attribute vec3 aPar;',
+    'uniform mat4 uVP, uModel, uLightVP;',
     'uniform vec3 uTintMul;',
-    'varying vec3 vN, vC, vP; varying vec2 vPar;',
+    'varying vec3 vN, vC, vP; varying vec3 vPar; varying vec4 vShadow;',
     'void main(){',
     '  vec4 wp = uModel * vec4(aPos,1.0);',
     '  vP = wp.xyz;',
     '  vN = normalize((uModel * vec4(aNrm,0.0)).xyz);',
     '  vC = aCol * uTintMul;',
     '  vPar = aPar;',
+    '  vShadow = uLightVP * wp;',
     '  gl_Position = uVP * wp;',
     '}'
   ].join('\n');
 
   var OBJ_FS = [
-    'precision mediump float;',
-    'varying vec3 vN, vC, vP; varying vec2 vPar;',
-    'uniform float uRoomLight, uReflect, uProjGlow, uTime;',
-    'uniform vec3 uSkyTint, uWarm;',
+    'precision highp float;',
+    'varying vec3 vN, vC, vP; varying vec3 vPar; varying vec4 vShadow;',
+    'uniform float uRoomLight, uReflect, uProjGlow, uTime, uShadowOn, uShadowTexel;',
+    'uniform vec3 uSkyTint, uWarm, uEyePos;',
+    'uniform sampler2D uShadowMap;',
+    'float hash21(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.545); }',
+    'float vn2(vec2 p){',
+    '  vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f);',
+    '  return mix(mix(hash21(i),hash21(i+vec2(1,0)),f.x),',
+    '             mix(hash21(i+vec2(0,1)),hash21(i+vec2(1,1)),f.x),f.y);',
+    '}',
+    'float unpackDepth(vec4 c){',
+    '  return dot(c, vec4(1.0, 1.0/255.0, 1.0/65025.0, 1.0/16581375.0));',
+    '}',
     'void main(){',
     '  vec3 n = normalize(vN);',
     '  vec3 L = normalize(vec3(0.25,1.0,0.12));',
+    '  vec3 V = normalize(uEyePos - vP);',
+    '  vec3 H = normalize(L + V);',
     '  float dif = max(dot(n,L),0.0);',
     '  float up = max(n.y,0.0);',
+    '  float mat = vPar.z;',
+    '  vec3 base = vC;',
+
+    /* ---- 素材ごとの 手ざわり ---- */
+    '  float gloss = 26.0, spec = 0.10, envAmt = 0.05;',
+    '  if(mat > 0.5 && mat < 1.5){',            /* 真鍮・金属 */
+    '    gloss = 46.0; spec = 0.85; envAmt = 0.42;',
+    '    base *= 0.92 + 0.16*vn2(vP.xz*0.9 + vP.y*0.7);',
+    '  } else if(mat > 1.5 && mat < 2.5){',     /* ニスの 木 */
+    '    gloss = 34.0; spec = 0.34; envAmt = 0.10;',
+    '    float g = vn2(vec2(vP.x*0.28 + vP.z*0.10, vP.y*2.6));',
+    '    float ring = 0.5 + 0.5*sin((vP.y*1.1 + g*5.5)*6.0);',
+    '    base *= 0.84 + 0.30*ring*g + 0.10*g;',
+    '  } else if(mat > 2.5 && mat < 3.5){',     /* フェルト */
+    '    gloss = 4.0; spec = 0.0; envAmt = 0.02;',
+    '    base *= 0.90 + 0.16*vn2(vP.xz*4.5 + vP.y*3.0);',
+    '    base += vC * pow(1.0 - max(dot(n,V),0.0), 3.0) * 0.30;',
+    '  } else if(mat > 3.5 && mat < 4.5){',     /* 樹脂・ゴム */
+    '    gloss = 12.0; spec = 0.06; envAmt = 0.02;',
+    '  } else if(mat > 4.5 && mat < 5.5){',     /* ガラス */
+    '    gloss = 70.0; spec = 1.0; envAmt = 0.75;',
+    '  } else {',                               /* つやのある 塗装 */
+    '    gloss = 30.0; spec = 0.30; envAmt = 0.08;',
+    '    float wear = smoothstep(0.55, 1.0, vn2(vP.xz*2.2 + vP.y*1.7));',
+    '    base = mix(base, base*1.35 + 0.05, wear*0.30);',
+    '  }',
+
+    /* ---- 落ち影 ---- */
+    '  float sh = 1.0;',
+    '  if(uShadowOn > 0.5){',
+    '    vec3 sp = vShadow.xyz / vShadow.w * 0.5 + 0.5;',
+    '    if(sp.x > 0.005 && sp.x < 0.995 && sp.y > 0.005 && sp.y < 0.995 && sp.z < 1.0){',
+    '      float bias = 0.0016 + 0.0055*(1.0 - dif);',
+    '      float o = uShadowTexel;',
+    '      float acc = 0.0;',
+    '      for(int i=-1;i<=1;i++){',
+    '        for(int j=-1;j<=1;j++){',
+    '          float d = unpackDepth(texture2D(uShadowMap, sp.xy + vec2(float(i),float(j))*o));',
+    '          acc += (sp.z - bias > d) ? 0.0 : 1.0;',
+    '        }',
+    '      }',
+    '      sh = acc / 9.0;',
+    '      sh = mix(1.0, sh, uRoomLight);',
+    '    }',
+    '  }',
+
+    /* ---- 光 ---- */
     '  float bounce = 0.44 + 0.30*max(-n.y,0.0) + 0.26*max(n.y,0.0);',
-    '  vec3 col = vC*(bounce + 0.85*dif)*uWarm*uRoomLight;',
-    /* 空からの淡い反射 */
+    '  vec3 col = base*(bounce + 0.85*dif*mix(0.25,1.0,sh))*uWarm*uRoomLight;',
+    '  float sp2 = pow(max(dot(n,H),0.0), gloss) * spec * uRoomLight * sh;',
+    '  col += mix(vec3(1.0), uWarm, 0.4) * sp2;',
+    /* 疑似的な 映りこみ（上は 天井の 明るさ、下は 床の 色） */
+    '  vec3 env = mix(vec3(0.10,0.09,0.12), vec3(0.86,0.84,0.82)*uRoomLight + uSkyTint*4.0*uReflect, up*0.5+0.5);',
+    '  col += base * env * envAmt;',
+    /* 空からの 淡い 反射 */
     '  col += vC*uSkyTint*uReflect*(0.30+0.85*up)*2.1;',
-    /* 床の中心グロー */
-    '  float d = length(vP.xz);',
+
+    /* 床の 中心グロー */
+    '  float d2 = length(vP.xz);',
     '  if(vPar.y>0.5 && vPar.y<1.5){',
-    '    float g = exp(-pow(d/70.0,2.0));',
-    '    col += uSkyTint*uReflect*g*1.5;',
-    '    col += uWarm*uRoomLight*g*0.16;',
-    '    float ring = 0.5+0.5*sin(d*0.20);',
-    '    col *= 0.88+0.12*ring;',
+    '    float g2 = exp(-pow(d2/70.0,2.0));',
+    '    col += uSkyTint*uReflect*g2*1.5;',
+    '    col += uWarm*uRoomLight*g2*0.16;',
+    '    col *= 0.90+0.10*(0.5+0.5*sin(d2*0.20));',
     '  }',
     /* 投影機：星をあける ちいさな穴が きらり */
     '  if(vPar.y > 1.5 && vPar.y < 2.5 && vPar.x > 0.01){',
     '    float la = asin(clamp(n.y,-1.0,1.0));',
     '    float aa = atan(n.z, n.x);',
-    '    vec2 g = fract(vec2(aa*2.9, la*5.4)) - 0.5;',
-    '    float hole = 1.0 - smoothstep(0.10, 0.24, length(g));',
+    '    vec2 g3 = fract(vec2(aa*2.9, la*5.4)) - 0.5;',
+    '    float hole = 1.0 - smoothstep(0.10, 0.24, length(g3));',
     '    col += vec3(1.0,0.96,0.86) * hole * vPar.x * (0.22 + uProjGlow*1.5);',
-    '    col += mix(uSkyTint*4.0, vec3(0.9,0.93,1.0), 0.5) * pow(1.0-abs(dot(n, normalize(vec3(0.0,0.4,1.0)))), 3.0) * 0.35;',
     '  }',
     /* 発光 */
     '  col += mix(uSkyTint*3.0, vec3(1.0,0.95,0.85), 0.35) * vPar.x * uProjGlow * 0.55;',
-    /* 遠景の落ち込み */
-    '  col *= 1.0 - 0.45*smoothstep(60.0,190.0,d)*(1.0-uReflect*0.5);',
+    /* 遠景の 落ち込み */
+    '  col *= 1.0 - 0.45*smoothstep(60.0,190.0,d2)*(1.0-uReflect*0.5);',
     '  gl_FragColor = vec4(col, 1.0);',
     '}'
   ].join('\n');
@@ -418,6 +482,8 @@
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     gl.clearColor(0.02, 0.02, 0.05, 1);
 
+    if (global.Shadow) Shadow.init(gl);
+
     S.ok = true;
     return true;
   };
@@ -429,6 +495,7 @@
 
   S.beginObj = function (VP) {
     var gl = S.gl, st = S.state, th = S.theme;
+    curProg = prog.obj;
     gl.useProgram(prog.obj.p);
     gl.depthMask(true);
     gl.uniformMatrix4fv(prog.obj.u.uVP, false, VP);
@@ -440,24 +507,42 @@
     gl.uniform3f(prog.obj.u.uSkyTint, tint[0] * 0.10, tint[1] * 0.11, tint[2] * 0.14);
     gl.uniform3f(prog.obj.u.uWarm, 1.0, 0.93, 0.84);
     gl.uniform3f(prog.obj.u.uTintMul, 1, 1, 1);
+    gl.uniform3fv(prog.obj.u.uEyePos, Cam.eye);
+    var useShadow = global.Shadow && Shadow.enabled && Shadow.ready &&
+                    Shadow.lightVP && st.roomLight > 0.03;
+    gl.uniform1f(prog.obj.u.uShadowOn, useShadow ? 1 : 0);
+    if (useShadow) {
+      gl.uniformMatrix4fv(prog.obj.u.uLightVP, false, Shadow.lightVP);
+      gl.uniform1f(prog.obj.u.uShadowTexel, 1.0 / Shadow.size);
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, Shadow.tex);
+      gl.uniform1i(prog.obj.u.uShadowMap, 1);
+    } else {
+      gl.uniformMatrix4fv(prog.obj.u.uLightVP, false, IDENT);
+    }
   };
 
   /* mesh = {pos,nrm,col,par,idx,type,count} の GL バッファ束 */
+  var curProg = null;
   S.drawObj = function (m, model, first, count, tintMul) {
     var gl = S.gl;
-    GLC.attrib(gl, prog.obj, 'aPos', m.pos, 3);
-    GLC.attrib(gl, prog.obj, 'aNrm', m.nrm, 3);
-    GLC.attrib(gl, prog.obj, 'aCol', m.col, 3);
-    GLC.attrib(gl, prog.obj, 'aPar', m.par, 2);
-    gl.uniformMatrix4fv(prog.obj.u.uModel, false, model || IDENT);
-    if (tintMul) gl.uniform3fv(prog.obj.u.uTintMul, tintMul);
-    else gl.uniform3f(prog.obj.u.uTintMul, 1, 1, 1);
+    if (!curProg) curProg = prog.obj;
+    GLC.attrib(gl, curProg, 'aPos', m.pos, 3);
+    GLC.attrib(gl, curProg, 'aNrm', m.nrm, 3);
+    GLC.attrib(gl, curProg, 'aCol', m.col, 3);
+    GLC.attrib(gl, curProg, 'aPar', m.par, 3);
+    gl.uniformMatrix4fv(curProg.u.uModel, false, model || IDENT);
+    if (curProg.u.uTintMul) {
+      if (tintMul) gl.uniform3fv(curProg.u.uTintMul, tintMul);
+      else gl.uniform3f(curProg.u.uTintMul, 1, 1, 1);
+    }
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, m.idx);
     var bytes = (m.type === gl.UNSIGNED_INT) ? 4 : 2;
     gl.drawElements(gl.TRIANGLES, count === undefined ? m.count : count,
                     m.type, (first || 0) * bytes);
   };
 
+  S.useProgram = function (p) { curProg = p || prog.obj; };
   S.padProgram = function () { return prog.pad; };
   S.program = function (name) { return prog[name]; };
   S.floorY = function () { return FLOOR_Y; };
@@ -712,6 +797,10 @@
       qSteps++;
       S.quality *= 0.78;
       S.resize();
+      if (global.Shadow && Shadow.ready) {
+        if (qSteps === 1) Shadow.setSize(512);
+        else if (qSteps >= 2) Shadow.enabled = false;
+      }
     }
   }
 
@@ -759,6 +848,17 @@
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buf.domeIdx);
     gl.drawElements(gl.TRIANGLES, mesh.domeCount, gl.UNSIGNED_SHORT, 0);
     GLC.disableAll(gl, prog.dome);
+
+    /* ---- 落ち影を 焼く（暗転しきったら 走らない） ---- */
+    if (global.Shadow && Shadow.enabled && Shadow.ready && st.roomLight > 0.03) {
+      Shadow.render(function () {
+        if (global.Room) Room.render(null, true);
+        if (global.Actor) Actor.render(null);
+      }, FLOOR_Y + 20);
+      gl.viewport(0, 0, W, H);
+    } else if (global.Shadow) {
+      Shadow.lightVP = null;
+    }
 
     /* ---- 会場と 女の子（obj パス） ---- */
     var tint = th.mw.color;
