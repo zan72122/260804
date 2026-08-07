@@ -31,6 +31,11 @@ export const STAGE_ORDER = [
  * ================================================================== */
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
+
+// Jib angle that stows the ladle over by the furnace.  The jib's pivot happens
+// to stand about one ladle-radius from the casting axis, so most angles sweep
+// the ladle straight across the bell -- this one is the far side.
+const LADLE_PARK = 2.35;
 const _v = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3();
 
 /**
@@ -938,7 +943,7 @@ const pour = {
     this.age = 0;
     this._offered = false;
 
-    W.ladleRig.rotation.y = 1.15;
+    W.ladleRig.rotation.y = LADLE_PARK;
     W.ladleMelt.visible = true;
     W.ladleMelt.material.color.setHex(METALS[g.state.metal].molten);
     W.lever.rotation.z = 0;
@@ -1001,7 +1006,7 @@ const pour = {
 
     // the ladle swings across from the furnace before anything can happen
     this.swing = Math.min(1, this.swing + dt / 1.8);
-    W.ladleRig.rotation.y = lerp(1.15, 0, smoothstep(0, 1, this.swing));
+    W.ladleRig.rotation.y = lerp(LADLE_PARK, 0, smoothstep(0, 1, this.swing));
     if (this.swing < 1) { audio.chain(0.2); } else audio.chain(0);
 
     // ---- the lever: hold and drag down, let go and it springs back ----
@@ -1125,7 +1130,7 @@ const cool = {
     // swing the empty ladle back to the furnace so it is not hanging over the
     // flask when the mould comes off
     this.park = Math.min(1, this.park + dt / 2.2);
-    g.world.ladleRig.rotation.y = smoothstep(0, 1, this.park) * 1.15;
+    g.world.ladleRig.rotation.y = smoothstep(0, 1, this.park) * LADLE_PARK;
     g.world.ladle.rotation.z = lerp(g.world.ladle.rotation.z, 0, 1 - Math.exp(-2 * dt));
     // Heat spilling out onto the sand around the pit.  Aimed at the ground,
     // not at the flask: a lamp pointed at the shell would read as a spotlight,
@@ -1167,6 +1172,10 @@ const breakup = {
     rm.sprueCup.visible = false;
     rm.sprueMelt.visible = false;
     for (const h of rm.hoops) h.visible = false;
+    // nothing may hang over the bell as it appears
+    g.world.ladleRig.rotation.y = LADLE_PARK;
+    g.world.ladle.rotation.z = 0;
+    g.world.ladleMelt.visible = false;
     this.chunks = rm.buildChunks(5, 12);
     this.cracks = new CrackField(rm.group, S);
     this.cracks.setHeat(0.55);
@@ -1389,7 +1398,7 @@ const lift = {
     g.hud.setHint('wait', null, 99);
     rm.spindle.visible = false;
     rm.basePlate.visible = true;
-    W.ladleRig.rotation.y = 1.25;      // swing the ladle clear of the bell
+    W.ladleRig.rotation.y = LADLE_PARK; // swing the ladle clear of the bell
     W.ladle.rotation.z = 0;
   },
   exit(g) { audio.chain(0); getBeacon(g).hide(); },
@@ -1415,11 +1424,17 @@ const lift = {
   up(g) {
     if (!this.grabbed) return;
     this.grabbed = false;
-    const rm = g.rigMold;
+    const rm = g.rigMold, S = this.S;
     const p = this.clapper.position;
-    const d = Math.hypot(p.x, p.z);
-    // generous: anywhere near the bell counts as "inside"
-    if (d < 1.35 && p.y > 0.35) {
+    // Judge the drop by what the child can SEE, not by world distance.  The
+    // drag runs on a plane facing the camera, so the clapper stays at its own
+    // depth however far it is dragged -- measuring in metres from the axis
+    // would mean it could never be let go anywhere near the bell.
+    const c = g.screen(_v.set(0, rm.group.position.y + rm.bellGroup.position.y + S.height * 0.5, 0), {});
+    const s = g.screen(p, {});
+    const reach = Math.min(g._w, g._h) * 0.34;
+    const near = Math.hypot(c.x - s.x, c.y - s.y) < reach;
+    if (near && p.y > 0.35) {
       this.phase = 'place';
       this.placeT = 0;
       this.placeFrom = p.clone();
@@ -1440,7 +1455,7 @@ const lift = {
       const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(n, this.clapper.position);
       const p = g.hitPlane(plane, _v2);
       if (p) {
-        this.clapper.position.set(clamp(p.x, -3.2, 3.2), clamp(p.y, 0.42, S.height + 0.6), clamp(p.z, -2.0, 3.0));
+        this.clapper.position.set(clamp(p.x, -3.2, 3.2), clamp(p.y, 0.42, S.height + 1.6), clamp(p.z, -2.0, 3.0));
       }
     }
   },
@@ -1511,7 +1526,7 @@ const lift = {
 
     if (this.phase === 'clapper' && this.clapper && !this.grabbed) {
       // bob gently on the sand so it reads as pick-up-able
-      this.clapper.position.y = damp(this.clapper.position.y, this.clapper.userData.arm + this.clapper.userData.ball * 0.9, 5, dt);
+      this.clapper.position.y = damp(this.clapper.position.y, this.clapper.userData.arm + this.clapper.userData.ball * 2.6, 5, dt);
       this.clapper.rotation.z = Math.sin(g.clock * 1.7) * 0.06;
       getBeacon(g).show(this.clapper.position, 1.2);
       g.hud.moveHint(this.clapper.position);
@@ -1537,11 +1552,13 @@ const lift = {
     const S = this.S;
     // long enough that its ball can actually reach the sound bow
     const arm = S.height * 0.62;
-    const ball = clamp(S.rim * 0.17, 0.12, 0.20);
+    const ball = clamp(S.rim * 0.25, 0.17, 0.28);
     const c = makeClapper(g.state.metal, { arm, ball });
-    // stands on the sand, leaning, waiting to be picked up
-    c.position.set(1.7, arm + ball * 0.9, 1.5);
-    c.rotation.z = 0.14;
+    // Stands on the sand beside the pit, leaning, waiting to be picked up.
+    // Its tip is a full ball-and-flight below the eye, so it has to be set
+    // that high or it would be buried to the knee in the floor.
+    c.position.set(2.05, arm + ball * 2.6, 1.55);
+    c.rotation.z = 0.16;
     g.scene.add(c);
     this.clapper = c;
     g.state.clapper = c;
@@ -1662,6 +1679,16 @@ const ring = {
       this.waves.push({ mesh: m, t: -1 });
     }
 
+    // The finished bell should be the brightest thing in the room.  Everything
+    // before this was work; this is the reward, and it gets its own light.
+    this.key = new THREE.SpotLight(0xfff2dc, 130, 16, 0.6, 0.55, 1.3);
+    this.key.position.set(2.4, this.pivotY + 2.2, 4.2);
+    this.key.target.position.set(0, this.pivotY - S.height * 0.5, 0);
+    g.scene.add(this.key); g.scene.add(this.key.target);
+    this.backLight = new THREE.PointLight(0xa8c6ff, 34, 12, 2);
+    this.backLight.position.set(-1.9, this.pivotY - 0.4, -2.6);
+    g.scene.add(this.backLight);
+
     this._shot(g);
     g.hud.setProgress(1, STEP_ICONS.ring);
     g.hud.setHint('dragDown', this.handle.position.clone(), 1.2);
@@ -1677,6 +1704,8 @@ const ring = {
     }
     g.scene.remove(this.swing);
     g.scene.remove(this.handle);
+    g.scene.remove(this.key); g.scene.remove(this.key.target);
+    g.scene.remove(this.backLight);
     if (this.rope) g.scene.remove(this.rope.mesh);
     for (const w of this.waves) g.scene.remove(w.mesh);
   },

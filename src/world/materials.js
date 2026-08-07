@@ -171,12 +171,13 @@ export function buildEnvMap(renderer) {
     g.fillStyle = rg; g.beginPath(); g.arc(0, 0, Math.max(rx, ry), 0, Math.PI * 2); g.fill(); g.restore();
   };
 
-  // tall cool windows along the back wall
+  // Tall cool windows along the back wall.  Kept soft on purpose: a hard-edged
+  // rectangle here shows up on the finished bell as a painted white stripe
+  // instead of a reflection.
   for (let i = 0; i < 4; i++) {
     const x = 40 + i * 118;
-    blob(x, 92, 44, 78, 'rgba(226,240,255,1)', 1.0);
-    g.globalAlpha = 0.92; g.fillStyle = '#eaf3ff';
-    g.fillRect(x - 15, 48, 30, 92); g.globalAlpha = 1;
+    blob(x, 92, 52, 86, 'rgba(226,240,255,1)', 1.0);
+    blob(x, 88, 26, 54, 'rgba(240,248,255,1)', 0.75);
   }
   // furnace mouth -- the dominant warm source
   blob(300, 150, 84, 60, 'rgba(255,168,84,1)', 1.0);
