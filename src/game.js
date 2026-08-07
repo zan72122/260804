@@ -209,16 +209,23 @@
         camTgt[i] = damp(camTgt[i], camGoalT[i], camLambda, dt);
       }
     }
+    /* 実際に使う視点。camPos 自体は書き換えない */
+    let ex = camPos[0], ey = camPos[1], ez = camPos[2];
+    const asp = R.aspect || 1;
+    if (asp < 1) {
+      /* 縦画面は水平画角を保つため被写体が小さくなる。注視点へ少しだけ寄せて補う */
+      const dx = camTgt[0] - ex, dy = camTgt[1] - ey, dz = camTgt[2] - ez;
+      const d = Math.hypot(dx, dy, dz) || 1;
+      const step = Math.min(d * 0.14 * (1 - asp), 1.1);
+      ex += dx / d * step; ey += dy / d * step; ez += dz / d * step;
+    }
     let sh = st.camShake;
     if (sh > 0) {
       st.camShake = Math.max(0, sh - dt * 1.7);
       const k = sh * sh * 0.30;
-      R.camPos[0] = camPos[0] + (Math.random() - .5) * k;
-      R.camPos[1] = camPos[1] + (Math.random() - .5) * k;
-      R.camPos[2] = camPos[2] + (Math.random() - .5) * k;
-    } else {
-      R.camPos[0] = camPos[0]; R.camPos[1] = camPos[1]; R.camPos[2] = camPos[2];
+      ex += (Math.random() - .5) * k; ey += (Math.random() - .5) * k; ez += (Math.random() - .5) * k;
     }
+    R.camPos[0] = ex; R.camPos[1] = ey; R.camPos[2] = ez;
     R.camTarget[0] = camTgt[0]; R.camTarget[1] = camTgt[1]; R.camTarget[2] = camTgt[2];
     /* 影のボリュームは「注視点」と「機体」の両方を覆う */
     const px = st.plane.x, pz = st.plane.z - 16;
@@ -257,6 +264,9 @@
     for (const p of pts) idx.push(G.vert(ag, p[0], 0, p[2], 0, 1, 0, 0, 0));
     G.tri(ag, idx[0], idx[1], idx[2]); G.tri(ag, idx[0], idx[2], idx[6]); G.tri(ag, idx[6], idx[2], idx[5]);
     G.quad(ag, idx[2], idx[3], idx[4], idx[5]);
+    /* 立てて手前を向かせた矢印（+X を指す） */
+    G.rot(ag, 0, PI / 2, 0);
+    G.rot(ag, -PI / 2, 0, 0);
     guides.arrowMesh = R.mesh(ag);
     /* 停止マーカー（太い横棒） */
     guides.barMesh = R.mesh(G.box(9.0, 0.06, 0.55));
@@ -403,6 +413,25 @@
     hose.visible = false; hose.cast = false; world.add(hose);
 
     buildGuides();
+  }
+
+  /* ---- 塗装（別の機体に見せる） ---- */
+  const liveryCache = [];
+  function setLivery(i) {
+    const T = AG.T;
+    i = ((i % T.PALETTES.length) + T.PALETTES.length) % T.PALETTES.length;
+    st.liveryIdx = i;
+    if (!liveryCache[i]) {
+      const pal = T.PALETTES[i];
+      liveryCache[i] = {
+        fuse: R.texture(T.fuselage(pal)),
+        fin: R.texture(T.fin(pal)),
+        accent: Mo.C(pal.a),
+      };
+    }
+    MAT.fuse.map = liveryCache[i].fuse;
+    MAT.finM.map = liveryCache[i].fin;
+    MAT.navy.color = liveryCache[i].accent;
   }
 
   /* たるんだケーブル形状 */
@@ -632,9 +661,9 @@
     enter() {
       setSteps(-1);
       resetScene();
-      st.plane.z = -74; st.plane.x = -1.2;
+      st.plane.z = -27; st.plane.x = -1.9;
       st.beaconOn = true; st.lightsOn = true; st.taxiLights = true;
-      setCam([17, 8.5, 26], [-6, 5, -22], true);
+      setCam([16.5, 5.2, 9], [-3.0, 5.6, -25], true);
       Au.ambient(1);
       showMenu('くうこう<br>グランドハンドリング',
         'ひこうきを むかえて おくりだそう',
@@ -648,8 +677,8 @@
       st.engineSpin += dt * 3.4;
       applyPlane();
       Au.engine(0.35, 0.85);
-      camGoalP[0] = 17 + Math.sin(R.time * 0.10) * 5;
-      camGoalP[2] = 26 + Math.cos(R.time * 0.10) * 3;
+      camGoalP[0] = 16.5 + Math.sin(R.time * 0.09) * 4;
+      camGoalP[2] = 9 + Math.cos(R.time * 0.09) * 3.0;
     },
   };
 
@@ -727,7 +756,7 @@
           if (inZone) { doStop(); }
           else { st.slowSignal = true; }
         }
-        if (dist < 1.0) { st.autoStopT += dt; if (st.autoStopT > 1.6) doStop(); }
+        if (dist < 1.4) { st.autoStopT += dt; if (st.autoStopT > 0.7) doStop(); }
 
         /* エンジン音 */
         const near = clamp(1 - dist / 90, 0, 1);
@@ -768,14 +797,15 @@
       guides.stopBar.mat.emissive = dist < 5.2 ? MAT.guideOK.emissive : MAT.guideDir.emissive;
 
       if (!p.stopped && !aligned) {
-        const dirRight = off < 0;
+        const dirRight = off < 0;      /* 機体が左にずれていれば右へ寄せる */
         const a = dirRight ? guides.arrowR : guides.arrowL;
         const b = dirRight ? guides.arrowL : guides.arrowR;
         a.visible = true; b.visible = false;
-        a.setPos(p.x + (dirRight ? 3.4 : -3.4), 0.05, clamp(p.z + 6, STOP_Z - 2, -6));
-        a.setRot(0, dirRight ? PI / 2 : -PI / 2, 0);
-        a.setScale(1.5 + Math.sin(R.time * 6) * 0.12);
-        pulseMat(a, 0.62, 7);
+        a.setPos(dirRight ? 4.2 : -4.2, 2.1, -7.5);
+        a.setRot(0, 0, dirRight ? 0 : PI);
+        const k = 1.15 + Math.sin(R.time * 6) * 0.10;
+        a.setScale(k, k, k);
+        pulseMat(a, 0.66, 7);
       } else {
         guides.arrowL.visible = guides.arrowR.visible = false;
       }
@@ -1258,7 +1288,7 @@
       st.lightsOn = true; st.beaconOn = true;
       st.bridgeRetract = st.bridgeExt;   /* ブリッジを引き離す */
       /* トラクターを機首前方へ */
-      tractor.setPos(10.5, 0, 4.5);
+      tractor.setPos(10.8, 0, -2.4);
       tractor.setRot(0, PI * 0.15, 0);
       tractor.userData.bar.visible = true;
       /* 作業を終えた車両は退去、ケーブル類も外す */
@@ -1267,8 +1297,8 @@
       loader.setPos(30, 0, -8); dolly.setPos(34, 0, -6);
       fueler.setPos(28, 0, -34);
       if (st.cargoHole) st.cargoHole.visible = false;
-      marshal.setPos(7.5, 0, -6.5);
-      marshal.setRot(0, -1.75, 0);
+      marshal.setPos(6.8, 0, 1.2);
+      marshal.setRot(0, -1.35, 0);
       /* 輪止めを外す（自動） */
       for (const c of chocks) c.visible = false;
       hint('🚜', 'トラクターを ひこうきの まえあしへ');
@@ -1361,6 +1391,13 @@
           }
         }
 
+        /* 機体が遠ざかりすぎないよう、カメラを少しだけ追従させる */
+        localToWorld(ac, [0, 3.2, -11], tmp2);
+        camGoalT[0] = damp(camGoalT[0], tmp2[0], 1.0, dt);
+        camGoalT[2] = damp(camGoalT[2], tmp2[2], 1.0, dt);
+        camGoalP[0] = damp(camGoalP[0], tmp2[0] + 9.0, 0.55, dt);
+        camGoalP[2] = damp(camGoalP[2], tmp2[2] + 25.0, 0.55, dt);
+
         if (st.push < PUSH_MAX * 0.25 && st.push > 0.4) hint('👏', 'おおきな ひこうきが うごいた！');
         else if (st.push > PUSH_MAX * 0.55) hint('🚜', 'もう すこし！');
 
@@ -1374,6 +1411,10 @@
             Au.latch();
             toast('はずれた！');
             tractor.userData.bar.visible = false;
+            /* マーシャラーが見送り位置へ */
+            localToWorld(ac, [10.5, 0, 5.0], tmp);
+            marshal.setPos(tmp[0], 0, tmp[2]);
+            marshal.r[1] = st.plane.yaw - PI / 2;
             hint('👋', 'マーシャラーが おみおくり');
           });
         }
@@ -1407,8 +1448,12 @@
       st.taxiLights = true; st.lightsOn = true;
       st.departV = 0;
       Au.engine(0.4, 0.8);
-      const p = st.plane;
-      setCam([p.x + 16, 5.0, p.z + 20], [p.x, 4.5, p.z - 6], false, 1.2);
+      localToWorld(ac, [10.5, 0, 5.0], tmp);
+      marshal.setPos(tmp[0], 0, tmp[2]);
+      marshal.r[1] = st.plane.yaw - PI / 2;
+      localToWorld(ac, [17, 5.2, 10], tmp);
+      localToWorld(ac, [0, 4.2, -14], tmp2);
+      setCam([tmp[0], tmp[1], tmp[2]], [tmp2[0], tmp2[1], tmp2[2]], false, 1.2);
     },
     update(dt) {
       const p = st.plane;
@@ -1425,9 +1470,10 @@
       applyPlane();
       updateMarshal(dt, 'salute', 0, false);
       /* カメラは緩やかに見送る */
-      camGoalT[0] = damp(camGoalT[0], p.x, 1.0, dt);
-      camGoalT[2] = damp(camGoalT[2], p.z - 4, 1.0, dt);
-      camGoalP[1] = 5.4;
+      localToWorld(ac, [0, 4.0, -14], tmp2);
+      camGoalT[0] = damp(camGoalT[0], tmp2[0], 0.7, dt);
+      camGoalT[2] = damp(camGoalT[2], tmp2[2], 0.7, dt);
+      camGoalP[1] = 5.6;
       if (st.sub > 3.0 && !st.departMsg) { st.departMsg = true; toast('いってらっしゃい！'); Au.fanfare(); }
       if (st.sub > 9.5) enter('end');
     },
@@ -1442,7 +1488,7 @@
       setCam([16, 9, 26], [-6, 5, -20], false, 0.9);
       Au.engine(0.16, 0.7);
       showMenu('また あそぼう！', '',
-        [['🛬', 'つぎの ひこうき', () => { st.freeMode = false; resetScene(); enter('marshal'); }],
+        [['🛬', 'つぎの ひこうき', () => { st.freeMode = false; setLivery(st.liveryIdx + 1); resetScene(); enter('marshal'); }],
         ['🔁', 'おなじ ひこうきで もういちど', () => { st.freeMode = false; resetScene(); enter('marshal'); }],
         ['🎏', 'マーシャリングだけ', () => { st.freeMode = true; resetScene(); enter('marshal'); }]]);
     },

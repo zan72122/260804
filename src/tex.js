@@ -167,7 +167,14 @@
   /* ---- 胴体（窓・ドア・塗装） ----
      u = 機首(0)→尾部(1)、v = 上(0) → +X側(0.25) → 下(0.5) → -X側(0.75)。
      ボーディングブリッジは -X 側に接続するので、そちらを L 側とする。 */
-  T.fuselage = function () {
+  T.PALETTES = [
+    { a: '#123a72', b: '#d84a3a' },
+    { a: '#0d6b52', b: '#eda31c' },
+    { a: '#5e2472', b: '#ee5aa0' },
+    { a: '#8c2f22', b: '#2f7fc4' },
+  ];
+  T.fuselage = function (pal) {
+    pal = pal || T.PALETTES[0];
     const W = 2048, H = 512, c = cv(W, H), g = c.getContext('2d');
     const Y = (v) => v * H;                 /* 幾何のv → キャンバスy */
     const PLUS_X = 0.25, MINUS_X = 0.75;
@@ -180,8 +187,8 @@
     /* 腹部の未塗装アルミとチートライン */
     function band(v0, v1, col) { g.fillStyle = col; g.fillRect(0, Y(v0), W, Y(v1) - Y(v0)); }
     band(0.385, 0.615, '#a9adb2');
-    band(0.360, 0.386, '#123a72'); band(0.376, 0.386, '#d84a3a');
-    band(0.614, 0.640, '#123a72'); band(0.614, 0.624, '#d84a3a');
+    band(0.360, 0.386, pal.a); band(0.376, 0.386, pal.b);
+    band(0.614, 0.640, pal.a); band(0.614, 0.624, pal.b);
 
     /* 客室窓 */
     function windows(vc) {
@@ -241,7 +248,7 @@
       g.strokeStyle = 'rgba(70,74,78,0.5)'; g.lineWidth = 2;
       g.beginPath(); g.moveTo(x + 8, Y(0.40) - h / 2 + 8); g.lineTo(x + w - 8, Y(0.40) - h / 2 + 8); g.stroke();
       g.fillStyle = '#4a4e52'; g.fillRect(x + w * 0.44, Y(0.40) + h / 2 - 12, 22, 7);
-      g.fillStyle = '#d84a3a';
+      g.fillStyle = pal.b;
       for (let i = 0; i < 7; i++) g.fillRect(x + 6 + i * 10, Y(0.40) - h / 2 - 8, 5, 4);
       g.restore();
     }
@@ -270,9 +277,9 @@
     /* 社名（両舷） */
     for (const v of [0.155, 0.845]) oriented(880, v, () => {
       g.textAlign = 'left'; g.textBaseline = 'middle';
-      g.fillStyle = '#123a72'; g.font = 'bold 78px sans-serif';
+      g.fillStyle = pal.a; g.font = 'bold 78px sans-serif';
       g.fillText('SORAIRO', -240, 0);
-      g.fillStyle = '#d84a3a'; g.font = 'bold 38px sans-serif';
+      g.fillStyle = pal.b; g.font = 'bold 38px sans-serif';
       g.fillText('AIR', 200, 4);
     });
     /* 機体記号 */
@@ -318,9 +325,10 @@
   T.roundRect = roundRect;
 
   /* ---- 垂直尾翼のロゴ ---- */
-  T.fin = function () {
+  T.fin = function (pal) {
+    pal = pal || T.PALETTES[0];
     const W = 512, H = 512, c = cv(W, H), g = c.getContext('2d');
-    g.fillStyle = '#123a72'; g.fillRect(0, 0, W, H);
+    g.fillStyle = pal.a; g.fillRect(0, 0, W, H);
     /* 翼をかたどった白い鳥のマーク */
     g.save();
     g.translate(W * 0.52, H * 0.46);
@@ -330,7 +338,7 @@
     g.quadraticCurveTo(-30, -30, 130, -120);
     g.quadraticCurveTo(30, 10, -20, 70);
     g.closePath(); g.fill();
-    g.fillStyle = '#d84a3a';
+    g.fillStyle = pal.b;
     g.beginPath();
     g.moveTo(-140, 90);
     g.quadraticCurveTo(-20, 40, 120, -30);

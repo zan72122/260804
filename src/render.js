@@ -338,7 +338,16 @@ void main(){
       const ib = gl.createBuffer();
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib);
       gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, dynamic ? gl.DYNAMIC_DRAW : gl.STATIC_DRAW);
-      return { vb, ib, count: geo.i.length, type: use32 ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, nverts: n, dynamic: !!dynamic };
+      /* 原点からの最大距離（影のカリングに使う） */
+      let r2 = 0;
+      for (let i = 0; i < n; i++) {
+        const d = geo.p[i * 3] * geo.p[i * 3] + geo.p[i * 3 + 1] * geo.p[i * 3 + 1] + geo.p[i * 3 + 2] * geo.p[i * 3 + 2];
+        if (d > r2) r2 = d;
+      }
+      return {
+        vb, ib, count: geo.i.length, type: use32 ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT,
+        nverts: n, dynamic: !!dynamic, radius: Math.sqrt(r2),
+      };
     }
 
     updateMesh(mesh, geo) {
@@ -394,7 +403,7 @@ void main(){
       if (a >= 1) return this.fov;
       /* 縦: 水平画角を維持するように垂直画角を拡大（上限あり） */
       const hf = 2 * Math.atan(Math.tan(this.fov / 2) * 1.0);
-      return Math.min(hf / Math.max(a, 0.45), 108 * Math.PI / 180);
+      return Math.min(hf / Math.max(a, 0.45), 86 * Math.PI / 180);
     }
 
     updateCamera() {
@@ -510,8 +519,13 @@ void main(){
       gl.cullFace(gl.BACK);
       const P = this.shadow;
       gl.useProgram(P.p);
+      gl.uniformMatrix4fv(P.u.uLightVP, false, this.lightVP);
+      /* 影のボリュームから外れたものは描かない */
+      const lim = r * 1.5;
       for (const o of this.casters) {
-        gl.uniformMatrix4fv(P.u.uLightVP, false, this.lightVP);
+        const dx = o.world[12] - c[0], dz = o.world[14] - c[2];
+        const sc = Math.max(Math.abs(o.s[0]), Math.abs(o.s[1]), Math.abs(o.s[2]));
+        if (Math.hypot(dx, dz) - (o.mesh.radius || 0) * sc > lim) continue;
         gl.uniformMatrix4fv(P.u.uModel, false, o.world);
         this.bindAttribs(P, o.mesh, false);
         gl.drawElements(gl.TRIANGLES, o.mesh.count, o.mesh.type, 0);
