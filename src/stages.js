@@ -35,7 +35,7 @@ const V = (x, y, z) => new THREE.Vector3(x, y, z);
 // Jib angle that stows the ladle over by the furnace.  The jib's pivot happens
 // to stand about one ladle-radius from the casting axis, so most angles sweep
 // the ladle straight across the bell -- this one is the far side.
-const LADLE_PARK = 2.35;
+const LADLE_PARK = 2.10;
 const _v = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3();
 
 /**
@@ -1432,7 +1432,7 @@ const lift = {
     // would mean it could never be let go anywhere near the bell.
     const c = g.screen(_v.set(0, rm.group.position.y + rm.bellGroup.position.y + S.height * 0.5, 0), {});
     const s = g.screen(p, {});
-    const reach = Math.min(g._w, g._h) * 0.34;
+    const reach = Math.min(g._w, g._h) * 0.42;   // generous on purpose
     const near = Math.hypot(c.x - s.x, c.y - s.y) < reach;
     if (near && p.y > 0.35) {
       this.phase = 'place';
@@ -1555,9 +1555,11 @@ const lift = {
     const ball = clamp(S.rim * 0.25, 0.17, 0.28);
     const c = makeClapper(g.state.metal, { arm, ball });
     // Stands on the sand beside the pit, leaning, waiting to be picked up.
+    // Kept well inside the portrait frame -- a phone held upright sees barely
+    // three metres across here, and anything past that is unreachable.
     // Its tip is a full ball-and-flight below the eye, so it has to be set
-    // that high or it would be buried to the knee in the floor.
-    c.position.set(2.05, arm + ball * 2.6, 1.55);
+    // this high or it would be buried to the knee in the floor.
+    c.position.set(1.15, arm + ball * 2.6, 1.95);
     c.rotation.z = 0.16;
     g.scene.add(c);
     this.clapper = c;

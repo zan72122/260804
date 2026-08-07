@@ -259,9 +259,10 @@ export function buildWorkshop(scene, renderer) {
 
   /* ================= ladle + pouring lever ================= */
   const ladleRig = new THREE.Group();
-  // Sits to the right of the furnace so its mast never stands in front of the
-  // hearth; the ladle still swings in from the furnace side.
-  at(ladleRig, -0.45, 0, 0.90);
+  // Far enough left that its mast never stands in front of the bell -- the
+  // pivot is now ~1.9 m from the casting axis while the ladle only reaches
+  // 1.0 m, so the ladle can never swing over the bell either.
+  at(ladleRig, -1.70, 0, 0.90);
   W.group.add(ladleRig); W.ladleRig = ladleRig;
 
   // Jib arm carrying the ladle over the mould.  It has to clear the tallest
