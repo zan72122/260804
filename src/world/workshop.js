@@ -44,24 +44,24 @@ export function buildWorkshop(scene, renderer) {
   const W = { group: new THREE.Group() };
   scene.add(W.group);
 
-  scene.fog = new THREE.FogExp2(FOG_COLOR.getHex(), 0.031);
-  scene.background = FOG_COLOR.clone().multiplyScalar(0.95);
+  scene.fog = new THREE.FogExp2(FOG_COLOR.getHex(), 0.040);
+  scene.background = FOG_COLOR.clone().multiplyScalar(0.8);
   const env = buildEnvMap(renderer);
   scene.environment = env;
   W.env = env;
 
   /* ================= materials ================= */
   const M = {
-    floor: new THREE.MeshStandardMaterial({ map: TEX.floor, color: 0xffffff, roughness: 0.97, metalness: 0 }),
-    brick: new THREE.MeshStandardMaterial({ map: TEX.brick, color: 0xffffff, roughness: 0.95, metalness: 0 }),
+    floor: new THREE.MeshStandardMaterial({ map: TEX.floor, color: 0xffffff, roughness: 1.0, metalness: 0, envMapIntensity: 0.4 }),
+    brick: new THREE.MeshStandardMaterial({ map: TEX.brick, color: 0xffffff, roughness: 0.98, metalness: 0, envMapIntensity: 0.45 }),
     brickDark: new THREE.MeshStandardMaterial({ map: TEX.brick, color: 0x6f5a4c, roughness: 0.98, metalness: 0 }),
     iron: new THREE.MeshStandardMaterial({ color: 0x3b3630, roughness: 0.62, metalness: 0.85 }),
     ironDark: new THREE.MeshStandardMaterial({ color: 0x211d1a, roughness: 0.72, metalness: 0.7 }),
     wood: new THREE.MeshStandardMaterial({ color: 0x6b4a30, roughness: 0.88, metalness: 0 }),
     woodDark: new THREE.MeshStandardMaterial({ color: 0x3a2819, roughness: 0.92, metalness: 0 }),
     silhouette: new THREE.MeshStandardMaterial({ color: 0x120d0a, roughness: 1, metalness: 0 }),
-    cloth: new THREE.MeshStandardMaterial({ color: 0x7a5136, roughness: 0.95, metalness: 0 }),
-    skin: new THREE.MeshStandardMaterial({ color: 0xb98a63, roughness: 0.8, metalness: 0 }),
+    cloth: new THREE.MeshStandardMaterial({ color: 0x7a5136, roughness: 0.98, metalness: 0, envMapIntensity: 0.4 }),
+    skin: new THREE.MeshStandardMaterial({ color: 0xb98a63, roughness: 0.85, metalness: 0, envMapIntensity: 0.4 }),
     leather: new THREE.MeshStandardMaterial({ color: 0x5b3a24, roughness: 0.78, metalness: 0.05 }),
     glass: new THREE.MeshStandardMaterial({ color: 0x2a3a30, roughness: 0.25, metalness: 0.2, transparent: true, opacity: 0.55 }),
   };
@@ -204,13 +204,13 @@ export function buildWorkshop(scene, renderer) {
 
   /* ================= crane ================= */
   const crane = new THREE.Group(); W.group.add(crane); W.crane = crane;
-  for (const x of [-3.5, 3.5]) {
+  for (const x of [-4.9, 4.3]) {
     const post = box(0.34, 6.0, 0.34, M.iron); at(post, x, 3.0, -0.5); post.castShadow = true; crane.add(post);
     const foot = box(0.8, 0.16, 0.8, M.ironDark); at(foot, x, 0.08, -0.5); crane.add(foot);
     const brace = box(0.16, 0.16, 2.2, M.iron); at(brace, x, 5.2, 0.5); brace.rotation.x = 0.72; crane.add(brace);
   }
-  const gantry = box(8.0, 0.42, 0.36, M.iron); at(gantry, 0, 6.0, -0.5); gantry.castShadow = true; crane.add(gantry);
-  const gantry2 = box(8.0, 0.14, 0.5, M.ironDark); at(gantry2, 0, 5.76, -0.5); crane.add(gantry2);
+  const gantry = box(10.8, 0.42, 0.36, M.iron); at(gantry, -0.3, 6.0, -0.5); gantry.castShadow = true; crane.add(gantry);
+  const gantry2 = box(10.8, 0.14, 0.5, M.ironDark); at(gantry2, -0.3, 5.76, -0.5); crane.add(gantry2);
   const trolley = box(0.8, 0.5, 0.7, M.ironDark); at(trolley, 0, 5.58, -0.5); crane.add(trolley);
   const sheave = new THREE.Mesh(new THREE.TorusGeometry(0.26, 0.07, 8, 18), M.iron);
   at(sheave, 0, 5.5, -0.16); crane.add(sheave); W.sheave = sheave;
@@ -255,7 +255,9 @@ export function buildWorkshop(scene, renderer) {
 
   /* ================= ladle + pouring lever ================= */
   const ladleRig = new THREE.Group();
-  at(ladleRig, -1.62, 0, 0.55);
+  // Sits to the right of the furnace so its mast never stands in front of the
+  // hearth; the ladle still swings in from the furnace side.
+  at(ladleRig, -0.45, 0, 0.90);
   W.group.add(ladleRig); W.ladleRig = ladleRig;
 
   // Jib arm carrying the ladle over the mould.  It has to clear the tallest
@@ -463,10 +465,10 @@ export function buildWorkshop(scene, renderer) {
   }
 
   /* ================= lighting ================= */
-  const hemi = new THREE.HemisphereLight(0x9fb6d8, 0x53402e, 1.30);
+  const hemi = new THREE.HemisphereLight(0x8ea6c8, 0x4a3626, 0.34);
   scene.add(hemi); W.hemi = hemi;
 
-  const key = new THREE.DirectionalLight(0xdfe9ff, 3.40);
+  const key = new THREE.DirectionalLight(0xe6ecff, 3.30);
   key.position.set(-6.5, 9.0, 5.0);
   key.castShadow = true;
   key.shadow.mapSize.set(1024, 1024);
@@ -480,7 +482,7 @@ export function buildWorkshop(scene, renderer) {
   W.key = key;
 
   // cool rim from the windows behind -- separates silhouettes from the wall
-  const rim = new THREE.DirectionalLight(0x8fb4e8, 1.70);
+  const rim = new THREE.DirectionalLight(0x8fb4e8, 1.15);
   rim.position.set(3.5, 5.5, -8);
   scene.add(rim); W.rim = rim;
 
@@ -495,9 +497,24 @@ export function buildWorkshop(scene, renderer) {
   scene.add(pourLight); W.pourLight = pourLight;
 
   // fill on the mould so the near side never goes muddy
-  const fill = new THREE.PointLight(0xffd9b0, 26, 16, 2);
+  const fill = new THREE.PointLight(0xffd0a2, 13, 15, 2);
   fill.position.set(2.6, 3.0, 3.4);
   scene.add(fill); W.fill = fill;
+
+  // The work light over the casting pit.  This is what separates the mid band
+  // from the background: whatever is on the axis is simply brighter than the
+  // room around it, which is how a real shop is lit and how the eye finds the
+  // subject without being told where to look.
+  const work = new THREE.SpotLight(0xffe2be, 55, 14, 0.72, 0.55, 1.6);
+  work.position.set(1.1, 6.2, 2.4);
+  work.target.position.set(0, 1.2, 0);
+  scene.add(work); scene.add(work.target);
+  W.work = work;
+
+  // a low practical by the furnace so that corner never dies
+  const forgeFill = new THREE.PointLight(0xffb87a, 12, 9, 2);
+  forgeFill.position.set(-2.6, 2.6, 1.4);
+  scene.add(forgeFill); W.forgeFill = forgeFill;
 
   W.time = 0;
   return W;

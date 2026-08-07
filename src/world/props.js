@@ -213,17 +213,18 @@ export function makeHeadstock(bellTopY, radius) {
     gudgeon.position.set(s * 0.86, bellTopY + 0.34, 0);
     gudgeon.rotation.z = Math.PI / 2; g.add(gudgeon);
   }
-  const wheel = new THREE.Mesh(new THREE.TorusGeometry(Math.max(0.62, radius * 0.8), 0.05, 8, 30), wood);
+  const R = Math.max(0.42, radius * 0.52);
+  const wheel = new THREE.Mesh(new THREE.TorusGeometry(R, 0.042, 8, 28), wood);
   wheel.position.set(0.0, bellTopY + 0.34, 0.42);
   g.add(wheel);
   for (let i = 0; i < 6; i++) {
     const a = (i / 6) * TAU;
-    const spoke = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, Math.max(0.62, radius * 0.8), 6), wood);
-    spoke.position.set(Math.cos(a) * radius * 0.4, bellTopY + 0.34 + Math.sin(a) * radius * 0.4, 0.42);
-    spoke.rotation.z = a + Math.PI / 2;
+    const spoke = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, R * 2, 6), wood);
+    spoke.position.set(0, bellTopY + 0.34, 0.42);
+    spoke.rotation.z = a;
     g.add(spoke);
   }
-  g.userData.wheelR = Math.max(0.62, radius * 0.8);
+  g.userData.wheelR = R;
   g.userData.wheelY = bellTopY + 0.34;
   return g;
 }

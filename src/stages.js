@@ -469,7 +469,7 @@ const mold = {
     this.done = false;
     this.painted = 0;
     this.sound = 0;
-    this.lastHit = null;
+    this.spin = 0;
     frameAxis(g, { top: this.H, widthScale: 1.2, pitch: 0.16 });
     g.hud.setProgress(0, STEP_ICONS.mold);
     g.hud.setHint('paint', V(0, this.H * 0.5, Math.max(S.rim, 0.8) + 0.3), 1.8);
@@ -488,18 +488,28 @@ const mold = {
     getBeacon(g).update(g.clock);
     let painting = 0;
 
+    // Turn the table.  Without this the far side of the flask is unreachable
+    // and the child could never finish -- and watching it come round is half
+    // the pleasure of the job anyway.
+    if (!this.done) {
+      this.spin += dt * 0.34;
+      rm.group.rotation.y = this.spin;
+      g.world.plinth.rotation.y = this.spin;
+    }
+
     if (!this.done && g.input.active) {
       const hit = g.hit([rm.paintProxy]);
       if (hit) {
-        const local = _v.copy(hit.point).sub(rm.group.position);
+        // into the flask's own frame, so the turntable does not smear the daub
+        const local = rm.group.worldToLocal(_v.copy(hit.point));
         const theta = (Math.atan2(local.z, local.x) + TAU) % TAU;
         const u = clamp01(local.y / this.H);
         // Lay a band along the path since the last frame; a child's swipe is
         // fast and should never leave holes behind the brush.
         const amt = Math.min(0.55, dt * 7.0 + 0.10);
         const added = this.prevTheta == null
-          ? rm.paintMold(theta, u, 0.44, amt)
-          : rm.paintMoldPath(this.prevTheta, this.prevU, theta, u, 0.44, amt);
+          ? rm.paintMold(theta, u, 0.62, amt)
+          : rm.paintMoldPath(this.prevTheta, this.prevU, theta, u, 0.62, amt);
         this.prevTheta = theta; this.prevU = u;
         if (added > 0.0004) {
           rm.refreshMold();
@@ -531,14 +541,14 @@ const mold = {
     audio.brush(this.sound);
 
     const p = rm.moldDone;
-    g.hud.setProgress(clamp01(p / 0.62), STEP_ICONS.mold);
+    g.hud.setProgress(clamp01(p / 0.55), STEP_ICONS.mold);
     if (p > 0.2) g.hud.suppress();
-    if (!this.done && !this._offered && p > 0.34) {
+    if (!this.done && !this._offered && p > 0.26) {
       this._offered = true;
       g.hud.showNext(true, () => { this.done = true; g.hud.showNext(false); });
     }
 
-    if (!this.done && p > 0.62) {
+    if (!this.done && p > 0.55) {
       this.done = true;
       audio.blip(1.3);
       audio.setLoop('brush', 0);
@@ -624,16 +634,21 @@ const bake = {
       audio.dustPuff();
     }
     if (this.xray) {
-      const k = smoothstep(1.2, 2.0, T) * (1 - smoothstep(3.0, 4.0, T));
-      rm.moldMat.opacity = lerp(1, 0.30, k);
-      // the false bell glows, softens and is gone
-      const burn = smoothstep(1.9, 3.4, T);
+      const k = smoothstep(1.2, 2.0, T) * (1 - smoothstep(3.2, 4.1, T));
+      rm.moldMat.opacity = lerp(1, 0.22, k);
+      // The false bell has to be unmistakable inside the flask, or the whole
+      // point of this beat -- "the red bell burns away and leaves a hole" --
+      // is lost.  So it lights up the moment the flask turns see-through.
+      const burn = smoothstep(2.1, 3.5, T);
       const op = 1 - burn;
       rm.falseMesh.material.opacity = op;
       rm.decorMat.opacity = op;
-      const glow = Math.sin(clamp01(burn) * Math.PI) * 1.8;
-      rm.falseMesh.material.emissive.setRGB(glow * 0.9, glow * 0.35, glow * 0.1);
+      const glow = smoothstep(1.2, 2.1, T) * (1 - smoothstep(3.0, 3.5, T)) * 2.4;
+      rm.falseMesh.material.emissive.setRGB(glow * 1.0, glow * 0.34, glow * 0.08);
       rm.decorMat.emissive.copy(rm.falseMesh.material.emissive);
+      const shrink = 1 - burn * 0.07;
+      rm.falseMesh.scale.setScalar(shrink);
+      rm.decorGroup.scale.setScalar(shrink);
       if (burn > 0.02 && burn < 0.98 && Math.random() < dt * 34) {
         const a = Math.random() * TAU, t = Math.random();
         const r = outerR(S, t);
@@ -642,7 +657,10 @@ const bake = {
           { x: 0, y: 0.8, z: 0 }
         ));
       }
-      if (T > 3.4) { rm.falseMesh.visible = false; rm.decorGroup.visible = false; }
+      if (T > 3.5) {
+        rm.falseMesh.visible = false; rm.decorGroup.visible = false;
+        rm.falseMesh.scale.setScalar(1); rm.decorGroup.scale.setScalar(1);
+      }
     }
 
     if (T > 5.2) {
@@ -668,8 +686,8 @@ const furnace = {
     this._shot(g);
 
     // the founder walks over to the furnace to work
-    W.founder.position.set(-2.5, 0, 0.95);
-    W.founder.rotation.y = 0.55;
+    W.founder.position.set(-3.15, 0, 0.85);
+    W.founder.rotation.y = -0.30;
 
     if (!W.igniteLever) {
       const grp = new THREE.Group();
@@ -697,8 +715,9 @@ const furnace = {
 
   _shot(g) {
     g.rig.setShot(
-      { target: V(-2.4, 2.3, 0.2), w: 6.0, h: 6.2, yaw: -0.30, pitch: 0.13 },
-      { target: V(-2.0, 2.3, 0.0), w: 11.0, h: 6.0, yaw: -0.24, pitch: 0.12 }
+      // stand square to the furnace mouth -- it is rotated 0.42 rad in the room
+      { target: V(-3.2, 1.90, -0.6), w: 3.4, h: 4.6, yaw: 0.34, pitch: 0.08 },
+      { target: V(-2.4, 2.10, -0.8), w: 10.0, h: 5.4, yaw: 0.26, pitch: 0.10 }
     );
   },
 
@@ -731,7 +750,7 @@ const furnace = {
     METAL_KEYS.forEach((k, i) => {
       const ing = makeIngot(k);
       const a = -0.5 + i * 0.5;
-      ing.position.set(-1.55 + i * 0.62, 0.14, 1.9 - i * 0.14);
+      ing.position.set(-3.95 + i * 0.52, 0.14, 0.70 - i * 0.16);
       ing.rotation.y = a;
       ing.userData.metal = k;
       ing.userData.home = ing.position.clone();
@@ -999,7 +1018,7 @@ const pour = {
 
     // ---- what the player can actually see of the fill ----
     const fillY = this.fill * this.H;
-    rm.setMoldFill(fillY, clamp01(this.fill * 1.4 + this.flow * 0.3));
+    rm.setMoldFill(fillY, clamp01(this.fill * 0.9 + this.flow * 0.2) * 0.85);
     rm.sprueMelt.visible = this.fill > 0.965;
     if (rm.sprueMelt.visible) {
       rm.sprueMelt.position.y = this.H + 0.02 + (this.fill - 0.965) * 6.0;
@@ -1031,6 +1050,7 @@ const cool = {
     // the bell now exists -- sealed inside the flask, where nobody can see it
     g.rigMold.buildBell(g.state.metal);
     g.rigMold.setBellHeat(1);
+    this.park = 0;
     frameAxis(g, { top: this.H, widthScale: 1.1, pitch: 0.15 });
     g.hud.setProgress(0, STEP_ICONS.cool);
     g.hud.setHint('wait', null, 99);
@@ -1050,6 +1070,11 @@ const cool = {
     const c = new THREE.Color(METALS[g.state.metal].molten);
     c.multiplyScalar(0.25 + heat * 0.75);
     rm.sprueMelt.material.color.copy(c);
+    // swing the empty ladle back to the furnace so it is not hanging over the
+    // flask when the mould comes off
+    this.park = Math.min(1, this.park + dt / 2.2);
+    g.world.ladleRig.rotation.y = smoothstep(0, 1, this.park) * 1.15;
+    g.world.ladle.rotation.z = lerp(g.world.ladle.rotation.z, 0, 1 - Math.exp(-2 * dt));
     g.world.pourLight.position.set(0, this.H * 0.4, 0.9);
     g.world.pourLight.intensity = 7 * heat;
     g.world.pourLight.color.setHex(METALS[g.state.metal].molten);
@@ -1090,13 +1115,28 @@ const breakup = {
     this.chunks = rm.buildChunks(5, 12);
     this.cracks = new CrackField(rm.group, S);
     this.cracks.setHeat(0.55);
+
+    // The light that finds the bell.  It comes up as the earth comes off, so
+    // the casting does not merely become visible -- it arrives.
+    this.reveal = new THREE.SpotLight(0xfff0d6, 0, 12, 0.66, 0.5, 1.4);
+    this.reveal.position.set(2.0, 5.6, 3.4);
+    this.reveal.target.position.set(0, S.height * 0.45, 0);
+    g.scene.add(this.reveal); g.scene.add(this.reveal.target);
+    this.revealBack = new THREE.PointLight(0xbcd6ff, 0, 10, 2);
+    this.revealBack.position.set(-1.6, 2.6, -2.2);
+    g.scene.add(this.revealBack);
+
     this._shot(g);
     g.hud.setProgress(0, STEP_ICONS.break);
     g.hud.setHint('tap', V(0, this.H * 0.5, moldR(S, 0.5)), 1.4);
     rm.setBellClean(0);
     rm.setBellHeat(0.10);
   },
-  exit(g) { this.cracks.clear(); },
+  exit(g) {
+    this.cracks.clear();
+    g.scene.remove(this.reveal); g.scene.remove(this.reveal.target);
+    g.scene.remove(this.revealBack);
+  },
   resize(g) { this._shot(g); },
   _shot(g) {
     const S = this.S;
@@ -1249,8 +1289,10 @@ const breakup = {
       this.revealT += dt;
       const T = this.revealT;
       this.cracks.setHeat(Math.max(0, 0.55 - T * 0.5));
-      // the dust thins and the bell is simply there
-      rm.setBellClean(smoothstep(0.9, 2.6, T) * 0.55);
+      // the dust thins, the light comes up, and the bell is simply there
+      rm.setBellClean(smoothstep(0.9, 2.6, T) * 0.62);
+      this.reveal.intensity = 90 * smoothstep(0.5, 2.4, T);
+      this.revealBack.intensity = 26 * smoothstep(0.8, 2.8, T);
       if (T > 1.15 && !this._sparkled) {
         this._sparkled = true;
         audio.sparkle();
@@ -1469,7 +1511,7 @@ const ring = {
     rm.group.remove(rm.bellGroup);
     swing.add(rm.bellGroup);
     rm.bellGroup.position.set(0, -(S.height + 0.34), 0);
-    rm.bellGroup.rotation.y = 0;
+    rm.bellGroup.rotation.y += rm.group.rotation.y;
 
     // Built in the bell's own frame, then dropped so its gudgeons land exactly
     // on the swing pivot -- the beam, the straps and the crown all line up.
@@ -1514,15 +1556,32 @@ const ring = {
       this.handle.add(tuft);
     }
 
-    // expanding shells of sound
+    // Expanding shells of sound.  A plain translucent sphere just greys the
+    // picture out; a fresnel rim reads as a wave front leaving the bell.
     this.waves = [];
-    const waveMat = new THREE.MeshBasicMaterial({
-      color: 0xffd6a0, transparent: true, opacity: 0, side: THREE.DoubleSide,
-      blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
-    });
     for (let i = 0; i < 3; i++) {
-      const m = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 12), waveMat.clone());
-      m.visible = false; m.renderOrder = 5;
+      const mat = new THREE.ShaderMaterial({
+        uniforms: { uFade: { value: 0 }, uCol: { value: new THREE.Color(0xffd9a8) } },
+        vertexShader: `
+          varying vec3 vN; varying vec3 vV;
+          void main(){
+            vec4 mv = modelViewMatrix * vec4(position, 1.0);
+            vN = normalize(normalMatrix * normal);
+            vV = normalize(-mv.xyz);
+            gl_Position = projectionMatrix * mv;
+          }`,
+        fragmentShader: `
+          uniform float uFade; uniform vec3 uCol;
+          varying vec3 vN; varying vec3 vV;
+          void main(){
+            float f = 1.0 - abs(dot(normalize(vN), normalize(vV)));
+            gl_FragColor = vec4(uCol, pow(f, 4.0) * uFade);
+          }`,
+        transparent: true, depthWrite: false, side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending, fog: false,
+      });
+      const m = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 16), mat);
+      m.visible = false; m.renderOrder = 5; m.frustumCulled = false;
       g.scene.add(m);
       this.waves.push({ mesh: m, t: -1 });
     }
@@ -1566,7 +1625,7 @@ const ring = {
     if (this.pulling) {
       const mpp = g.metresPerPixel(this.handle.position);
       const pulled = (g.input.y - this.pullStartY) * mpp;        // metres of rope taken in
-      const targetAng = clamp(this.pullStartAng + pulled / this.wheelR, -1.15, 1.15);
+      const targetAng = clamp(this.pullStartAng + pulled / (this.wheelR * 2.2), -1.05, 1.05);
       const newVel = (targetAng - this.bellAng) / Math.max(dt, 0.001);
       this.bellVel = lerp(this.bellVel, clamp(newVel, -6, 6), 0.55);
       this.bellAng = targetAng;
@@ -1606,7 +1665,7 @@ const ring = {
     const wy = this.pivotY - Math.cos(this.bellAng) * this.wheelR;
     _v.set(wx, wy, this.wheelZ);
     // rope pays out as the wheel turns, which is why pulling it turns the bell
-    const handleY = this.handleY0 - this.bellAng * this.wheelR;
+    const handleY = this.handleY0 - this.bellAng * this.wheelR * 2.2;
     this.handle.position.set(wx * 0.35, clamp(handleY, 0.35, this.handleY0 + 1.4), this.wheelZ);
     this.rope.set(_v, this.handle.position);
     if (!this.pulling) {
@@ -1626,7 +1685,7 @@ const ring = {
       if (k >= 1) { w.t = -1; w.mesh.visible = false; continue; }
       const r = 0.6 + k * 13;
       w.mesh.scale.setScalar(r);
-      w.mesh.material.opacity = 0.16 * (1 - k) * (1 - k);
+      w.mesh.material.uniforms.uFade.value = 0.85 * (1 - k) * (1 - k);
     }
   },
 

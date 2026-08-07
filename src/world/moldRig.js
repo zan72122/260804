@@ -80,7 +80,7 @@ export class MoldRig {
       const raw = blobR(S, t, theta, seed);
       const target = coreR(S, t);
       // the last of the roughness only leaves at the very end of a pass
-      const grain = 0.020 * angNoise(theta * 4 + t * 7, seed + 2, 2) * (1 - k) * (1 - k);
+      const grain = 0.016 * angNoise(theta * 3 + t * 4, seed + 2, 1) * (1 - k) * (1 - k);
       return lerp(raw, target, smoothstep(0, 1, k)) + grain;
     });
   }
@@ -108,7 +108,7 @@ export class MoldRig {
     this.decorGroup.visible = false;
     this.group.add(this.decorGroup);
     this.decorMat = new THREE.MeshStandardMaterial({
-      map: TEX.clayFalse, color: 0xfff0e4, roughness: 0.78, metalness: 0,
+      map: TEX.clayFalse, color: 0xfff0e4, roughness: 0.94, metalness: 0, envMapIntensity: 0.3,
     });
     this.refreshFalse();
   }
@@ -119,7 +119,7 @@ export class MoldRig {
       const k = prog[c];
       const raw = falseBlobR(S, t, theta, seed);
       const target = outerR(S, t);
-      const grain = 0.016 * angNoise(theta * 5 - t * 6, seed + 4, 2) * (1 - k) * (1 - k);
+      const grain = 0.013 * angNoise(theta * 3.4 - t * 3.6, seed + 4, 1) * (1 - k) * (1 - k);
       return Math.max(coreR(S, t) + 0.012, lerp(raw, target, smoothstep(0, 1, k)) + grain);
     });
   }
@@ -268,7 +268,7 @@ export class MoldRig {
         const arc = dth * ringR;
         const d = Math.hypot(dy, arc);
         if (d > radius) continue;
-        const w = (1 - d / radius) ** 1.5 * amount;
+        const w = (1 - d / radius) * amount;
         const i = r * cols + c;
         const before = cover[i];
         cover[i] = clamp01(before + w);
@@ -328,8 +328,10 @@ export class MoldRig {
     const grp = new THREE.Group();
     this.group.add(grp);
     this.chunkGroup = grp;
+    // Broken earth, not eggshell: knock the value down and keep it warm, so
+    // the pale bronze underneath is what the eye goes to.
     const mat = new THREE.MeshStandardMaterial({
-      map: TEX.moldEarth, color: 0xffffff, roughness: 0.97, metalness: 0, side: THREE.DoubleSide,
+      map: TEX.moldEarth, color: 0xa08a70, roughness: 1.0, metalness: 0, envMapIntensity: 0.3, side: THREE.DoubleSide,
     });
     this.chunkMat = mat;
 
@@ -441,13 +443,13 @@ export class MoldRig {
     const dirty = 1 - clamp01(k);
     if (this.bellMat) {
       this.bellMat.roughness = lerp(M.rough, 0.92, dirty);
-      this.bellMat.envMapIntensity = lerp(1.35, 0.15, dirty);
+      this.bellMat.envMapIntensity = lerp(2.2, 0.2, dirty);
       this.bellMat.color.setHex(M.color).lerp(new THREE.Color(0x6d6053), dirty * 0.85);
       this.bellMat.needsUpdate = false;
     }
     if (this.bellInnerMat) {
       this.bellInnerMat.roughness = lerp(M.rough + 0.22, 0.95, dirty);
-      this.bellInnerMat.envMapIntensity = lerp(0.9, 0.1, dirty);
+      this.bellInnerMat.envMapIntensity = lerp(1.4, 0.15, dirty);
       this.bellInnerMat.color.copy(this.bellMat.color);
     }
   }

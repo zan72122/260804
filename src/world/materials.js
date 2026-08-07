@@ -112,10 +112,10 @@ export function buildTextures() {
 
   // foundry floor: sand, ash, scattered grit
   TEX.floor = makeTexture(256, 5, 91, (n, x, y, rng) => {
-    let g = 0.62 + n * 0.44;
+    let g = 0.58 + n * 0.44;
     if (rng() > 0.992) g *= 0.55;
     g += (rng() - 0.5) * 0.09;
-    return [152 * g, 136 * g, 118 * g];
+    return [126 * g, 111 * g, 95 * g];
   }, { repeat: 11 });
 
   // sooty brick for the furnace and the back wall
@@ -150,12 +150,16 @@ export function buildEnvMap(renderer) {
   cv.width = W; cv.height = H;
   const g = cv.getContext('2d');
 
+  // Bright enough to be believable metal.  A polished bell is almost entirely
+  // reflection: if this image is dark, the finished bell reads as dark plastic
+  // no matter how many lamps are pointed at it.
   const grad = g.createLinearGradient(0, 0, 0, H);
-  grad.addColorStop(0.00, '#0a0806');
-  grad.addColorStop(0.34, '#241a14');
-  grad.addColorStop(0.50, '#4a382a');
-  grad.addColorStop(0.62, '#3a2c21');
-  grad.addColorStop(1.00, '#120c09');
+  grad.addColorStop(0.00, '#16110c');
+  grad.addColorStop(0.30, '#54402e');
+  grad.addColorStop(0.48, '#a8825c');
+  grad.addColorStop(0.58, '#7b6046');
+  grad.addColorStop(0.80, '#3d2e21');
+  grad.addColorStop(1.00, '#1c1510');
   g.fillStyle = grad; g.fillRect(0, 0, W, H);
 
   const blob = (x, y, rx, ry, col, a) => {
@@ -168,15 +172,15 @@ export function buildEnvMap(renderer) {
   // tall cool windows along the back wall
   for (let i = 0; i < 4; i++) {
     const x = 40 + i * 118;
-    blob(x, 96, 34, 66, 'rgba(196,222,255,0.95)', 0.85);
-    g.globalAlpha = 0.5; g.fillStyle = '#cfe2ff';
-    g.fillRect(x - 13, 58, 26, 78); g.globalAlpha = 1;
+    blob(x, 92, 44, 78, 'rgba(226,240,255,1)', 1.0);
+    g.globalAlpha = 0.92; g.fillStyle = '#eaf3ff';
+    g.fillRect(x - 15, 48, 30, 92); g.globalAlpha = 1;
   }
   // furnace mouth -- the dominant warm source
-  blob(300, 150, 72, 52, 'rgba(255,150,60,1)', 1.0);
-  blob(300, 150, 30, 26, 'rgba(255,232,190,1)', 1.0);
+  blob(300, 150, 84, 60, 'rgba(255,168,84,1)', 1.0);
+  blob(300, 150, 34, 30, 'rgba(255,240,210,1)', 1.0);
   // dusty floor bounce
-  blob(256, 236, 260, 40, 'rgba(150,110,74,0.9)', 0.6);
+  blob(256, 232, 280, 52, 'rgba(196,152,106,1)', 0.85);
 
   const tex = new THREE.CanvasTexture(cv);
   tex.mapping = THREE.EquirectangularReflectionMapping;
@@ -195,13 +199,15 @@ export function buildEnvMap(renderer) {
 
 export function clayCoreMaterial() {
   return new THREE.MeshStandardMaterial({
-    map: TEX.clayCore, color: 0xffffff, roughness: 0.94, metalness: 0.0,
+    map: TEX.clayCore, color: 0xffffff, roughness: 0.99, metalness: 0.0,
+    envMapIntensity: 0.30,
   });
 }
 
 export function clayFalseMaterial() {
   return new THREE.MeshStandardMaterial({
-    map: TEX.clayFalse, color: 0xffffff, roughness: 0.82, metalness: 0.0,
+    map: TEX.clayFalse, color: 0xffffff, roughness: 0.96, metalness: 0.0,
+    envMapIntensity: 0.30,
   });
 }
 
@@ -212,8 +218,8 @@ export function clayFalseMaterial() {
  */
 export function moldMaterial() {
   const m = new THREE.MeshStandardMaterial({
-    map: TEX.moldEarth, color: 0xffffff, roughness: 0.97, metalness: 0.0,
-    side: THREE.DoubleSide, alphaTest: 0.001,
+    map: TEX.moldEarth, color: 0xc2a98c, roughness: 1.0, metalness: 0.0,
+    envMapIntensity: 0.30, side: THREE.DoubleSide, alphaTest: 0.001,
   });
   m.userData.uniforms = {
     uSpeck: { value: TEX.speck }, uWet: { value: 1.0 },
@@ -251,7 +257,7 @@ export function moldMaterial() {
         float below = 1.0 - smoothstep( uFill - 0.10, uFill + 0.12, vLocalY );
         float seep  = pow( texture2D( uSpeck, vMapUv * 5.0 ).r, 1.4 );
         float band  = exp( -abs( vLocalY - uFill ) * 5.0 );
-        totalEmissiveRadiance += uHotCol * uGlow * ( below * (0.22 + 0.8 * seep) + band * 0.9 );
+        totalEmissiveRadiance += uHotCol * uGlow * ( below * (0.05 + 0.34 * seep) + band * 1.30 );
       `);
   };
   m.customProgramCacheKey = () => 'moldMat';
@@ -273,7 +279,7 @@ export function bronzeMaterial(metalKey) {
     roughnessMap: TEX.bronzeRough,
     roughness: M.rough,
     metalness: 1.0,
-    envMapIntensity: 1.25,
+    envMapIntensity: 2.0,
   });
   m.userData.metal = M;
   return m;
@@ -320,8 +326,8 @@ export function moltenMaterial(metalKey, { flow = 1 } = {}) {
         float n = vnoise(q) * 0.6 + vnoise(q * 2.7 + 11.0) * 0.4;
         // hotter in the middle of the stream, skinning over at the edges
         float local = uHeat * mix(0.55, 1.25, n);
-        vec3 hot = mix(uHot, vec3(1.0, 0.96, 0.86), smoothstep(0.72, 1.15, local));
-        totalEmissiveRadiance = hot * pow(clamp(local,0.0,1.4), 2.0) * 2.6;
+        vec3 hot = mix(uHot, vec3(1.0, 0.94, 0.80), smoothstep(0.98, 1.42, local));
+        totalEmissiveRadiance = hot * pow(clamp(local,0.0,1.4), 1.7) * 2.1;
         diffuseColor.rgb = mix(uCold * 0.35, uHot * 0.5, clamp(local,0.0,1.0));
       `)
       .replace('#include <roughnessmap_fragment>', `

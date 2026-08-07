@@ -142,9 +142,8 @@ export function blobR(shape, t, theta, seed = 0) {
   const base = coreR(shape, t);
   const swell = 0.19 + 0.10 * Math.sin(t * 4.1 + seed);
   const lump =
-    0.085 * angNoise(theta * 1.0 + t * 2.4, seed, 3) +
-    0.055 * angNoise(theta * 2.3 - t * 5.1, seed + 3.1, 2) +
-    0.030 * Math.sin(t * 6.0 + theta * 3.0 + seed * 2.0);
+    0.100 * angNoise(theta * 1.0 + t * 1.5, seed, 2) +
+    0.048 * angNoise(theta * 1.9 - t * 2.6, seed + 3.1, 2);
   return Math.max(0.05, base + swell + lump);
 }
 
@@ -153,8 +152,8 @@ export function falseBlobR(shape, t, theta, seed = 0) {
   const base = outerR(shape, t);
   const swell = 0.155 + 0.08 * Math.cos(t * 3.3 + seed * 1.7);
   const lump =
-    0.070 * angNoise(theta * 1.2 - t * 3.0, seed + 1.9, 3) +
-    0.045 * angNoise(theta * 2.7 + t * 4.4, seed + 5.3, 2);
+    0.078 * angNoise(theta * 1.1 - t * 1.7, seed + 1.9, 2) +
+    0.038 * angNoise(theta * 2.1 + t * 2.4, seed + 5.3, 2);
   return Math.max(0.06, base + swell + lump);
 }
 

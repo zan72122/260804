@@ -80,7 +80,7 @@ export class Rig {
     this._t += dt;
     this._solve();
     const s = this.active;
-    const k = this.snapNext ? 1 : 1 - Math.exp(-2.6 * dt);
+    const k = this.snapNext ? 1 : 1 - Math.exp(-4.6 * dt);
     this.current.lerp(this.target, k);
     this._distNow = lerp(this._distNow, this._dist, k);
     this._yawNow = lerp(this._yawNow, s.yaw, k);

@@ -38,7 +38,7 @@ export class Game {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.15;
+    renderer.toneMappingExposure = 1.02;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer = renderer;
@@ -204,10 +204,12 @@ export class Game {
     this.world.ladleRig.rotation.y = 0;
     this.world.lever.rotation.z = 0;
     this.world.setChain(5.5, 4.6);
+    this.world.plinth.rotation.y = 0;
     this.world.hook.position.set(0, 4.6, 0);
     this.world.hook.rotation.set(0, 0, 0);
-    this.world.founder.position.set(-2.25, 0, 1.35);
-    this.world.founder.rotation.y = 0.85;
+    // the founder waits out of the way until there is grown-up work to do
+    this.world.founder.position.set(-5.0, 0, 1.9);
+    this.world.founder.rotation.y = 1.05;
     audio.setLoop('furnace', 0); audio.setLoop('pour', 0);
     audio.setLoop('scrape', 0); audio.setLoop('brush', 0); audio.setLoop('chain', 0);
 
