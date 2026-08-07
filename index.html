@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<title>Tasty Travels 3D — 世界屋台マージ</title>
+<link rel="stylesheet" href="./styles.css" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🍅</text></svg>" />
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three/build/three.module.js",
+    "three/addons/": "./vendor/three/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+
+<canvas id="stage"></canvas>
+
+<!-- ============ HUD ============ -->
+<div id="hud" class="hud hidden">
+
+  <div class="hud-top">
+    <div class="panel panel-level">
+      <div class="lv-badge"><span id="lv-num">1</span></div>
+      <div class="lv-body">
+        <div class="lv-label">シェフレベル</div>
+        <div class="bar"><i id="xp-fill"></i></div>
+      </div>
+    </div>
+
+    <div class="panel panel-place">
+      <div class="place-name" id="place-name">リスボン</div>
+      <div class="place-sub" id="place-sub">夕暮れの海沿い市場</div>
+    </div>
+
+    <div class="panel panel-res">
+      <div class="res res-coin"><span class="ico">◉</span><span id="coin-num">0</span></div>
+      <div class="res res-energy">
+        <span class="ico">⚡</span>
+        <div class="bar bar-energy"><i id="en-fill"></i></div>
+        <span id="en-num">50</span>
+        <span class="en-timer" id="en-timer"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="hud-orders" id="orders"></div>
+
+  <div class="hud-bottom">
+    <div class="hint" id="hint">木箱をタップして食材を出し、同じ食材どうしを重ねてマージ。注文の品はお客さんへドラッグ。</div>
+    <div class="btns">
+      <button class="btn" id="btn-travel" title="次の街へ旅立つ">✈ 次の街</button>
+      <button class="btn" id="btn-cam" title="カメラを戻す">⟲ 視点</button>
+      <button class="btn" id="btn-quality" title="描画品質">画質: 高</button>
+      <button class="btn" id="btn-sound" title="効果音">♪ ON</button>
+      <button class="btn btn-ghost" id="btn-reset" title="最初から">初期化</button>
+    </div>
+  </div>
+
+  <div class="toasts" id="toasts"></div>
+</div>
+
+<!-- ============ Travel dialog ============ -->
+<div id="travel" class="modal hidden">
+  <div class="modal-card">
+    <h2>次の街へ</h2>
+    <div id="travel-list" class="travel-list"></div>
+    <button class="btn btn-wide" id="travel-close">閉じる</button>
+  </div>
+</div>
+
+<!-- ============ Boot / loading ============ -->
+<div id="boot" class="boot">
+  <div class="boot-inner">
+    <div class="boot-title">TASTY&nbsp;TRAVELS <span>3D</span></div>
+    <div class="boot-sub">世界の屋台をめぐるマージ・キッチン</div>
+    <div class="boot-bar"><i id="boot-fill"></i></div>
+    <div class="boot-step" id="boot-step">起動中…</div>
+    <button id="boot-start" class="boot-start hidden">はじめる</button>
+    <div class="boot-note">操作: 食材をドラッグして重ねる／木箱をタップ／背景をドラッグで視点移動</div>
+  </div>
+</div>
+
+<div id="fatal" class="fatal hidden"></div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
