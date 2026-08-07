@@ -191,7 +191,7 @@ body{ position:fixed; inset:0; }
 .replayBtn:active{ transform:translateX(-50%) scale(.92); }
 
 .nextBtn{
-  position:absolute; bottom:calc(96px + env(safe-area-inset-bottom)); right:calc(16px + env(safe-area-inset-right));
+  position:absolute; bottom:calc(150px + env(safe-area-inset-bottom)); right:calc(14px + env(safe-area-inset-right));
   transform:scale(0);
   width:84px; height:84px; border-radius:50%;
   border:3px solid rgba(255,225,190,.55);

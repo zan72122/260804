@@ -99,6 +99,13 @@ export class Hud {
     this._show(false);
   }
 
+  /**
+   * Move the current hint's anchor without restarting it.  Calling setHint
+   * every frame would reset the idle timer each frame and the hint could
+   * never appear.
+   */
+  moveHint(anchor) { this._anchor = anchor; }
+
   clearHint() { this._kind = null; this.hintSvg.innerHTML = ''; this._show(false); this._anchor = null; }
 
   /** call whenever the player does something -- resets the idle timer */

@@ -74,15 +74,15 @@ export function buildTextures() {
 
   // grey-green core clay
   TEX.clayCore = makeTexture(256, 5, 3, (n, x, y, rng) => {
-    const g = 0.74 + n * 0.42 + (rng() - 0.5) * 0.07;
+    const g = 0.68 + n * 0.56 + (rng() - 0.5) * 0.10;
     return [163 * g, 154 * g, 138 * g];
-  }, { repeat: 5 });
+  }, { repeat: 9 });
 
   // red-brown false-bell clay
   TEX.clayFalse = makeTexture(256, 5, 11, (n, x, y, rng) => {
-    const g = 0.72 + n * 0.46 + (rng() - 0.5) * 0.06;
+    const g = 0.66 + n * 0.60 + (rng() - 0.5) * 0.09;
     return [201 * g, 126 * g, 93 * g];
-  }, { repeat: 5 });
+  }, { repeat: 9 });
 
   // coarse mould earth with straw
   TEX.moldEarth = makeTexture(256, 5, 23, (n, x, y, rng) => {
@@ -90,7 +90,7 @@ export function buildTextures() {
     if (rng() > 0.985) return [214, 196, 148];        // a strand of straw
     g += (rng() - 0.5) * 0.10;
     return [156 * g, 134 * g, 110 * g];
-  }, { repeat: 3.2 });
+  }, { repeat: 5 });
 
   // speckle used as the alpha-cutout threshold for daubed mud
   TEX.speck = makeTexture(128, 4, 41, (n) => {

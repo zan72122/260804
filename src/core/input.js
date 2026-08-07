@@ -141,8 +141,11 @@ export class Input extends Emitter {
 
   _end() {
     if (!this.active) return;
-    const dur = (performance.now() - this.downTime) / 1000;
-    const isTap = this.moved < 16 && dur < 0.6;
+    // A tap is "put a finger down and lift it without moving".  Deliberately
+    // NOT time-limited: a four-year-old rests a finger for a beat, and on a
+    // busy frame the up event can be delivered late enough that any duration
+    // cut-off would silently swallow the touch.
+    const isTap = this.moved < 24;
     this.active = false; this.id = null;
     this.circleSpeed = 0;
     this.emit('up', this);

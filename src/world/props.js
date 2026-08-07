@@ -179,22 +179,28 @@ export class Stream {
   }
 }
 
-/** the clapper (舌) the child hangs inside the bell */
-export function makeClapper(metalKey, size = 1) {
-  const M = METALS[metalKey];
+/**
+ * The clapper (舌).  Its origin is the eye it hangs by; `arm` is the distance
+ * down to the centre of the ball.  That distance is not decoration -- it is
+ * what decides whether the ball can actually reach the sound bow when the bell
+ * swings, so the ring stage computes it from the bell it belongs to.
+ */
+export function makeClapper(metalKey, { arm = 1.3, ball = 0.16 } = {}) {
   const g = new THREE.Group();
   const mat = new THREE.MeshStandardMaterial({
-    color: 0x4a463f, roughness: 0.42, metalness: 0.95, envMapIntensity: 1.1,
+    color: 0x4a463f, roughness: 0.42, metalness: 0.95, envMapIntensity: 1.4,
   });
-  const ball = new THREE.Mesh(new THREE.SphereGeometry(0.16 * size, 18, 14), mat);
-  ball.position.y = -0.62 * size; ball.castShadow = true; g.add(ball);
-  const flight = new THREE.Mesh(new THREE.CylinderGeometry(0.035 * size, 0.06 * size, 0.34 * size, 10), mat);
-  flight.position.y = -0.86 * size; g.add(flight);
-  const shank = new THREE.Mesh(new THREE.CylinderGeometry(0.035 * size, 0.045 * size, 0.62 * size, 10), mat);
-  shank.position.y = -0.28 * size; shank.castShadow = true; g.add(shank);
-  const eye = new THREE.Mesh(new THREE.TorusGeometry(0.075 * size, 0.026 * size, 8, 16), mat);
-  eye.position.y = 0.03 * size; g.add(eye);
+  const b = new THREE.Mesh(new THREE.SphereGeometry(ball, 18, 14), mat);
+  b.position.y = -arm; b.castShadow = true; g.add(b);
+  const flight = new THREE.Mesh(new THREE.CylinderGeometry(ball * 0.22, ball * 0.38, ball * 2.1, 10), mat);
+  flight.position.y = -arm - ball * 1.5; g.add(flight);
+  const shank = new THREE.Mesh(new THREE.CylinderGeometry(ball * 0.22, ball * 0.28, arm, 10), mat);
+  shank.position.y = -arm * 0.5; shank.castShadow = true; g.add(shank);
+  const eye = new THREE.Mesh(new THREE.TorusGeometry(ball * 0.48, ball * 0.16, 8, 16), mat);
+  eye.position.y = ball * 0.2; g.add(eye);
   g.userData.mat = mat;
+  g.userData.arm = arm;
+  g.userData.ball = ball;
   return g;
 }
 

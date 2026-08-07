@@ -178,14 +178,18 @@ export class Game {
   idle() {
     this.state = { shapeKey: 'tulip', metal: 'gold', decorCount: 0, strikes: 0 };
     this.rig.setShot(
-      { target: new THREE.Vector3(-0.6, 2.6, 0), w: 9.5, h: 8.2, yaw: 0.06, pitch: 0.10 },
-      { target: new THREE.Vector3(-1.0, 2.7, -0.3), w: 16.5, h: 8.0, yaw: 0.12, pitch: 0.09 },
+      { target: new THREE.Vector3(-0.7, 2.6, 0), w: 4.2, h: 6.8, yaw: 0.06, pitch: 0.10 },
+      { target: new THREE.Vector3(-1.0, 2.7, -0.3), w: 15.0, h: 7.6, yaw: 0.12, pitch: 0.09 },
       true
     );
   }
 
   /* ============================ new game ============================ */
   newRun() {
+    // Let the current stage tear down first -- the ring stage borrows the bell
+    // out of the rig, and disposing before it hands the bell back would leak it.
+    if (this.stage?.exit) this.stage.exit(this);
+    this.stage = null; this.stageName = null;
     if (this.rigMold) { this.rigMold.dispose(); this.rigMold = null; }
     this.pDust.clear(); this.pGlow.clear();
     for (const b of this.world.birds) {

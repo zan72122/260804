@@ -137,9 +137,11 @@ function getBeacon(g) {
 const pick = {
   enter(g) {
     g.hud.hideProgress();
+    // Portrait cannot hold a whole room; asking it to just pushes the camera
+    // into the fog.  Show a tall slice of the shop instead.
     g.rig.setShot(
-      { target: V(-0.4, 2.4, 0), w: 8.5, h: 7.5, yaw: 0.10, pitch: 0.13 },
-      { target: V(-0.9, 2.5, -0.2), w: 15.0, h: 7.6, yaw: 0.14, pitch: 0.12 },
+      { target: V(-0.7, 2.5, 0), w: 3.8, h: 6.4, yaw: 0.10, pitch: 0.12 },
+      { target: V(-1.0, 2.5, -0.2), w: 14.0, h: 7.2, yaw: 0.14, pitch: 0.12 },
       true
     );
     audio.ambient(1);
@@ -777,10 +779,22 @@ const furnace = {
       return;
     }
     if (this.step === 'metal') {
+      let obj = null;
       const hit = g.hit(this.ingots, true);
-      if (!hit) return;
-      let obj = hit.object;
-      while (obj && !obj.userData.metal) obj = obj.parent;
+      if (hit) {
+        obj = hit.object;
+        while (obj && !obj.userData.metal) obj = obj.parent;
+      }
+      if (!obj) {
+        // small hands miss small ingots: take whichever one they aimed nearest
+        let best = 1e9;
+        for (const ing of this.ingots) {
+          if (ing.userData.fade != null) continue;
+          const s2 = g.screen(ing.position, {});
+          const d = Math.hypot(s2.x - g.input.x, s2.y - g.input.y);
+          if (d < best && d < 170) { best = d; obj = ing; }
+        }
+      }
       if (!obj) return;
       g.state.metal = obj.userData.metal;
       this.chosen = obj;
@@ -908,6 +922,8 @@ const pour = {
     this._q = new THREE.Quaternion();
     this._flat = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0));
     this._lip = new THREE.Vector3();
+    this.age = 0;
+    this._offered = false;
 
     W.ladleRig.rotation.y = 1.15;
     W.ladleMelt.visible = true;
@@ -950,7 +966,12 @@ const pour = {
 
   update(g, dt) {
     const W = g.world, S = this.S, rm = g.rigMold;
+    this.age += dt;
     getBeacon(g).update(g.clock);
+    if (!this._offered && this.age > 40 && this.fill < 0.2) {
+      this._offered = true;
+      g.hud.showNext(true, () => { this.fill = 1; g.hud.showNext(false); });
+    }
 
     // the ladle swings across from the furnace before anything can happen
     this.swing = Math.min(1, this.swing + dt / 1.8);
@@ -1331,6 +1352,8 @@ const lift = {
     g.hud.setHint('wait', null, 99);
     rm.spindle.visible = false;
     rm.basePlate.visible = true;
+    W.ladleRig.rotation.y = 1.25;      // swing the ladle clear of the bell
+    W.ladle.rotation.z = 0;
   },
   exit(g) { audio.chain(0); getBeacon(g).hide(); },
   resize(g) { this._shot(g); },
@@ -1451,15 +1474,16 @@ const lift = {
 
     if (this.phase === 'clapper' && this.clapper && !this.grabbed) {
       // bob gently on the sand so it reads as pick-up-able
-      this.clapper.position.y = damp(this.clapper.position.y, 0.95, 5, dt);
+      this.clapper.position.y = damp(this.clapper.position.y, this.clapper.userData.arm + this.clapper.userData.ball * 0.9, 5, dt);
       this.clapper.rotation.z = Math.sin(g.clock * 1.7) * 0.06;
       getBeacon(g).show(this.clapper.position, 1.2);
+      g.hud.moveHint(this.clapper.position);
     }
 
     if (this.phase === 'place') {
       this.placeT += dt;
       const k = clamp01(this.placeT / 0.8);
-      const target = V(0, rm.group.position.y + rm.bellGroup.position.y + S.height - 0.30, 0);
+      const target = V(0, rm.group.position.y + rm.bellGroup.position.y + S.height * 0.74, 0);
       this.clapper.position.lerpVectors(this.placeFrom, target, smoothstep(0, 1, k));
       this.clapper.rotation.z = lerp(this.clapper.rotation.z, 0, k);
       g.hud.setProgress(0.6 + k * 0.4, STEP_ICONS.lift);
@@ -1474,8 +1498,13 @@ const lift = {
 
   _spawnClapper(g) {
     const S = this.S;
-    const c = makeClapper(g.state.metal, S.rim / 0.9);
-    c.position.set(1.55, 0.95, 1.45);
+    // long enough that its ball can actually reach the sound bow
+    const arm = S.height * 0.62;
+    const ball = clamp(S.rim * 0.17, 0.12, 0.20);
+    const c = makeClapper(g.state.metal, { arm, ball });
+    // stands on the sand, leaning, waiting to be picked up
+    c.position.set(1.7, arm + ball * 0.9, 1.5);
+    c.rotation.z = 0.14;
     g.scene.add(c);
     this.clapper = c;
     g.state.clapper = c;
@@ -1530,9 +1559,19 @@ const ring = {
       cs.position.set(0, 0, 0);
       swing.add(cs);
       cs.add(clap);
-      clap.position.set(0, -(S.height * 0.34), 0);
+      clap.position.set(0, -(S.height * 0.26), 0);
       clap.rotation.set(0, 0, 0);
       this.clapSwing = cs;
+      // How far the clapper can swing inside the bell before it touches the
+      // wall.  Derived, not guessed: the ball has to actually arrive at the
+      // metal, or the strike sound would have nothing to look at.
+      const arm = clap.userData.arm ?? S.height * 0.62;
+      const ballR = clap.userData.ball ?? 0.16;
+      const ballFromPivot = S.height * 0.26 + arm;
+      const bellRimY = S.height + 0.34;                  // below the pivot
+      const tBall = clamp01((bellRimY - ballFromPivot) / S.height);
+      const clearance = Math.max(0.10, innerR(S, tBall) - ballR * 0.92);
+      this.clapLimit = clamp(Math.asin(clamp(clearance / ballFromPivot, 0, 0.9)), 0.14, 0.5);
     }
 
     W.hook.position.set(0, this.pivotY + 0.55, 0);
@@ -1625,7 +1664,7 @@ const ring = {
     if (this.pulling) {
       const mpp = g.metresPerPixel(this.handle.position);
       const pulled = (g.input.y - this.pullStartY) * mpp;        // metres of rope taken in
-      const targetAng = clamp(this.pullStartAng + pulled / (this.wheelR * 2.2), -1.05, 1.05);
+      const targetAng = clamp(this.pullStartAng + pulled / (this.wheelR * 2.6), -0.62, 0.62);
       const newVel = (targetAng - this.bellAng) / Math.max(dt, 0.001);
       this.bellVel = lerp(this.bellVel, clamp(newVel, -6, 6), 0.55);
       this.bellAng = targetAng;
@@ -1634,7 +1673,7 @@ const ring = {
     } else {
       // free pendulum
       const L = Math.max(0.7, S.height * 0.55);
-      const acc = -(9.81 / L) * Math.sin(this.bellAng) - 0.36 * this.bellVel;
+      const acc = -(9.81 / L) * Math.sin(this.bellAng) - 0.50 * this.bellVel;
       this.bellVel += acc * dt;
       this.bellAng += this.bellVel * dt;
     }
@@ -1645,7 +1684,7 @@ const ring = {
     this.clapVel += cAcc * dt;
     this.clapAng += this.clapVel * dt;
 
-    const LIMIT = 0.26;
+    const LIMIT = this.clapLimit ?? 0.26;
     const rel = this.clapAng - this.bellAng;
     if (Math.abs(rel) > LIMIT) {
       this.clapAng = this.bellAng + Math.sign(rel) * LIMIT;
@@ -1665,12 +1704,10 @@ const ring = {
     const wy = this.pivotY - Math.cos(this.bellAng) * this.wheelR;
     _v.set(wx, wy, this.wheelZ);
     // rope pays out as the wheel turns, which is why pulling it turns the bell
-    const handleY = this.handleY0 - this.bellAng * this.wheelR * 2.2;
+    const handleY = this.handleY0 - this.bellAng * this.wheelR * 2.6;
     this.handle.position.set(wx * 0.35, clamp(handleY, 0.35, this.handleY0 + 1.4), this.wheelZ);
     this.rope.set(_v, this.handle.position);
-    if (!this.pulling) {
-      g.hud.setHint('dragDown', this.handle.position.clone(), this.strikes ? 6 : 1.6);
-    }
+    if (!this.strikes) g.hud.moveHint(this.handle.position);
 
     /* ---- the crane keeps hold of it ---- */
     W.hook.position.set(0, this.pivotY + 0.55, 0);
@@ -1693,6 +1730,7 @@ const ring = {
     const S = this.S, rm = g.rigMold;
     this.strikes++;
     g.state.strikes = this.strikes;
+    g.hud.suppress();          // they know how to ring it now
     audio.bellStrike({
       voice: S.voice,
       bright: METALS[g.state.metal].bright,
@@ -1728,7 +1766,7 @@ const ring = {
       ));
     }
     if (this.strikes === 1) {
-      setTimeout(() => g.hud.showReplay(true), 2600);
+      setTimeout(() => { if (g.stageName === 'ring') g.hud.showReplay(true); }, 2600);
     }
   },
 };

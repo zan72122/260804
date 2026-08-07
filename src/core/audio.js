@@ -146,7 +146,8 @@ export class AudioEngine {
 
   setEnabled(on) {
     this.enabled = on;
-    if (this.master) this.master.gain.setTargetAtTime(on ? 0.9 : 0, this.ctx.currentTime, 0.05);
+    // the toggle can be pressed before (or without) a working audio context
+    if (this.master && this.ctx) this.master.gain.setTargetAtTime(on ? 0.9 : 0, this.ctx.currentTime, 0.05);
     if (this._silent) { if (on) this._silent.play().catch(() => {}); else this._silent.pause(); }
   }
 
