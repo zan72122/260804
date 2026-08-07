@@ -1,0 +1,430 @@
+:root {
+  --cream: #fff6e4;
+  --cream-2: #ffeccb;
+  --ink: #4a3520;
+  --ink-soft: #7a5e3d;
+  --accent: #e08a3c;
+  --accent-2: #c9682c;
+  --leaf: #7ba05b;
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #241a12;
+  overscroll-behavior: none;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  font-family: 'Hiragino Maru Gothic ProN', 'ヒラギノ丸ゴ ProN W4', 'Hiragino Sans',
+    'Yu Gothic', 'Noto Sans JP', system-ui, sans-serif;
+}
+
+#app {
+  position: fixed;
+  inset: 0;
+}
+
+#stage {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+#ui {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* ---------- 手順を伝える札 ---------- */
+
+.card {
+  position: absolute;
+  top: calc(var(--safe-t) + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(86vw, 560px);
+  padding: 12px 22px 13px;
+  border-radius: 24px;
+  background: linear-gradient(180deg, rgba(255, 248, 232, 0.96), rgba(255, 232, 198, 0.94));
+  color: var(--ink);
+  box-shadow: 0 8px 22px rgba(50, 28, 8, 0.35), inset 0 2px 0 rgba(255, 255, 255, 0.7);
+  text-align: center;
+  font-weight: 700;
+  font-size: clamp(17px, 4.4vw, 26px);
+  line-height: 1.35;
+  letter-spacing: 0.02em;
+  transition: opacity 0.35s ease, transform 0.35s ease;
+  opacity: 0;
+}
+
+.card.show {
+  opacity: 1;
+}
+
+.card .step {
+  display: block;
+  font-size: 0.6em;
+  color: var(--accent-2);
+  letter-spacing: 0.18em;
+  margin-bottom: 2px;
+}
+
+/* ---------- すすみぐあい ---------- */
+
+.dots {
+  position: absolute;
+  bottom: calc(var(--safe-b) + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 9px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(40, 26, 14, 0.32);
+  backdrop-filter: blur(6px);
+}
+
+.dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: rgba(255, 244, 222, 0.34);
+  transition: background 0.3s, transform 0.3s;
+}
+
+.dot.done {
+  background: var(--leaf);
+}
+
+.dot.now {
+  background: var(--cream);
+  transform: scale(1.5);
+  box-shadow: 0 0 10px rgba(255, 236, 196, 0.9);
+}
+
+/* ---------- ゆびのヒント ---------- */
+
+.hint {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 128px;
+  height: 128px;
+  margin: -64px 0 0 -64px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.45s ease;
+}
+
+.hint.show {
+  opacity: 0.95;
+}
+
+.hint .finger {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 38px;
+  height: 38px;
+  margin: -19px 0 0 -19px;
+  border-radius: 50%;
+  /* 中は空ける。ここで隠れてしまう物こそ、見せたい物なので。 */
+  background: radial-gradient(
+    circle,
+    rgba(255, 240, 210, 0) 42%,
+    rgba(255, 226, 170, 0.85) 58%,
+    rgba(255, 200, 120, 0) 82%
+  );
+  box-shadow: 0 0 14px rgba(255, 212, 150, 0.45);
+}
+
+.hint .ring {
+  position: absolute;
+  inset: 12px;
+  border: 3px dashed rgba(255, 236, 200, 0.75);
+  border-radius: 50%;
+  opacity: 0;
+}
+
+.hint.circle .ring {
+  opacity: 1;
+  animation: spin 3s linear infinite;
+}
+
+.hint.circle .finger {
+  animation: orbit 2.2s linear infinite;
+}
+
+.hint.up .finger {
+  animation: slide-up 1.5s ease-in-out infinite;
+}
+
+.hint.down .finger {
+  animation: slide-down 1.5s ease-in-out infinite;
+}
+
+.hint.far .finger {
+  animation: slide-far 1.7s ease-in-out infinite;
+}
+
+.hint.along .finger {
+  animation: slide-along 2.0s ease-in-out infinite;
+}
+
+.hint .arrow {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  opacity: 0;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes orbit {
+  from {
+    transform: rotate(0deg) translateX(44px) rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg) translateX(44px) rotate(-360deg);
+  }
+}
+
+@keyframes slide-up {
+  0%,
+  100% {
+    transform: translateY(26px) scale(0.9);
+    opacity: 0.4;
+  }
+  40% {
+    opacity: 1;
+  }
+  70% {
+    transform: translateY(-30px) scale(1.05);
+    opacity: 0.25;
+  }
+}
+
+@keyframes slide-down {
+  0%,
+  100% {
+    transform: translateY(-28px) scale(0.9);
+    opacity: 0.4;
+  }
+  40% {
+    opacity: 1;
+  }
+  70% {
+    transform: translateY(30px) scale(1.05);
+    opacity: 0.25;
+  }
+}
+
+@keyframes slide-far {
+  0%,
+  100% {
+    transform: translate(0, 26px) scale(1.05);
+    opacity: 0.35;
+  }
+  35% {
+    opacity: 1;
+  }
+  75% {
+    transform: translate(6px, -30px) scale(0.82);
+    opacity: 0.2;
+  }
+}
+
+@keyframes slide-along {
+  0%,
+  100% {
+    transform: translate(-34px, 6px) scale(1);
+    opacity: 0.4;
+  }
+  35% {
+    opacity: 1;
+  }
+  80% {
+    transform: translate(36px, -8px) scale(0.92);
+    opacity: 0.25;
+  }
+}
+
+/* ---------- ほめる ---------- */
+
+.praise {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  transform: translate(-50%, -50%) scale(0.6);
+  font-size: clamp(30px, 9vw, 64px);
+  font-weight: 800;
+  color: #fff8e8;
+  text-shadow: 0 4px 0 #e08a3c, 0 10px 26px rgba(60, 30, 6, 0.55);
+  opacity: 0;
+  pointer-events: none;
+  letter-spacing: 0.05em;
+}
+
+.praise.pop {
+  animation: pop 1.5s cubic-bezier(0.2, 1.4, 0.4, 1) forwards;
+}
+
+@keyframes pop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.5) rotate(-6deg);
+  }
+  22% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.12) rotate(2deg);
+  }
+  60% {
+    opacity: 1;
+    transform: translate(-50%, -58%) scale(1) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -78%) scale(0.95);
+  }
+}
+
+/* ---------- 覆い（はじめ・おわり） ---------- */
+
+.veil {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: calc(var(--safe-t) + 20px) 22px calc(var(--safe-b) + 20px);
+  background: radial-gradient(120% 90% at 50% 30%, rgba(60, 38, 18, 0.28), rgba(28, 17, 8, 0.82));
+  pointer-events: auto;
+  transition: opacity 0.6s ease;
+  text-align: center;
+}
+
+/* 消えた覆いは、当たり判定ごと消す。中のボタンは pointer-events: auto を
+   持っているので、親を none にするだけでは指を吸い取ってしまう。 */
+.veil.hide {
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+  transition: opacity 0.6s ease, visibility 0s linear 0.6s;
+}
+
+.veil.hide .btn {
+  pointer-events: none;
+}
+
+.veil h1 {
+  margin: 0;
+  color: #fff4dd;
+  font-size: clamp(24px, 7.2vw, 54px);
+  line-height: 1.25;
+  font-weight: 800;
+  text-shadow: 0 4px 0 rgba(190, 108, 40, 0.9), 0 14px 34px rgba(0, 0, 0, 0.55);
+}
+
+.veil h1 small {
+  display: block;
+  font-size: 0.46em;
+  font-weight: 700;
+  color: #ffd9a2;
+  letter-spacing: 0.12em;
+  margin-top: 10px;
+  text-shadow: none;
+}
+
+.veil p {
+  margin: 0;
+  color: #ffe6c2;
+  font-size: clamp(13px, 3.6vw, 18px);
+  line-height: 1.7;
+  max-width: 30em;
+}
+
+.btn {
+  pointer-events: auto;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 800;
+  color: #56320d;
+  background: linear-gradient(180deg, #ffdca2, #efa552);
+  padding: 18px 46px;
+  min-height: 66px;
+  min-width: 200px;
+  border-radius: 999px;
+  font-size: clamp(19px, 5.2vw, 27px);
+  letter-spacing: 0.08em;
+  box-shadow: 0 7px 0 #b96f28, 0 14px 26px rgba(0, 0, 0, 0.4);
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+.btn:active {
+  transform: translateY(5px);
+  box-shadow: 0 2px 0 #b96f28, 0 8px 16px rgba(0, 0, 0, 0.4);
+}
+
+/* ---------- 音のきりかえ ---------- */
+
+.sound {
+  position: absolute;
+  top: calc(var(--safe-t) + 10px);
+  right: calc(var(--safe-r) + 10px);
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: none;
+  pointer-events: auto;
+  cursor: pointer;
+  background: rgba(48, 31, 16, 0.45);
+  color: #ffe8c4;
+  font-size: 22px;
+  line-height: 1;
+  backdrop-filter: blur(6px);
+}
+
+/* ---------- 横画面のとき ---------- */
+
+@media (orientation: landscape) and (max-height: 480px) {
+  .card {
+    top: calc(var(--safe-t) + 6px);
+    padding: 8px 18px 9px;
+    font-size: clamp(15px, 3.4vh, 21px);
+  }
+  .dots {
+    bottom: calc(var(--safe-b) + 6px);
+    padding: 6px 12px;
+  }
+  .veil {
+    gap: 10px;
+  }
+}
