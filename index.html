@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>ながして！ひらいて！かねのこうぼう</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1a1210">
+<meta name="description" content="鐘の鋳造工房ゲーム">
+<link rel="stylesheet" href="./src/ui/style.css">
+</head>
+<body>
+
+<canvas id="gl"></canvas>
+
+<!-- ============ overlay UI (no text, icons only) ============ -->
+<div id="ui">
+
+  <!-- gesture hint layer -->
+  <div id="hint" class="hint" aria-hidden="true">
+    <svg viewBox="0 0 200 200" id="hintSvg"></svg>
+  </div>
+
+  <!-- stage progress ring -->
+  <div id="progress" class="progress">
+    <svg viewBox="0 0 44 44">
+      <circle class="pTrack" cx="22" cy="22" r="18"></circle>
+      <circle class="pFill" id="pFill" cx="22" cy="22" r="18"></circle>
+    </svg>
+    <div class="pIcon" id="pIcon"></div>
+  </div>
+
+  <!-- decoration tray (stage 2) -->
+  <div id="tray" class="tray"></div>
+
+  <!-- big choice panel (bell shape / metal) -->
+  <div id="choice" class="choice">
+    <div class="choiceRow" id="choiceRow"></div>
+  </div>
+
+  <!-- sound on/off -->
+  <button id="sndBtn" class="cornerBtn" aria-label="sound"></button>
+
+  <!-- replay -->
+  <button id="replayBtn" class="replayBtn" aria-label="replay"></button>
+
+  <!-- go to the next step -->
+  <button id="nextBtn" class="nextBtn" aria-label="next"></button>
+
+  <!-- title / start -->
+  <div id="title" class="title">
+    <div class="titleArt"><svg viewBox="0 0 240 240" id="titleSvg"></svg></div>
+    <button id="startBtn" class="startBtn" aria-label="start"></button>
+  </div>
+
+  <!-- boot loader -->
+  <div id="boot" class="boot"><div class="bootBell"></div></div>
+
+  <!-- fallback if WebGL missing -->
+  <div id="nogl" class="nogl" hidden><div class="noglIcon"></div></div>
+</div>
+
+<script type="module" src="./src/main.js"></script>
+<script nomodule>document.getElementById('nogl').hidden=false;document.getElementById('boot').style.display='none';</script>
+</body>
+</html>
