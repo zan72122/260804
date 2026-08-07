@@ -97,7 +97,7 @@
   /* ===================== 入力 ===================== */
   const In = {
     down: false, x: 0, y: 0, px: 0, py: 0, dx: 0, dy: 0,
-    sx: 0, sy: 0, hold: 0, moved: 0, justDown: false, justUp: false,
+    sx: 0, sy: 0, hold: 0, moved: 0, still: 0, justDown: false, justUp: false,
     tapped: false, id: null,
   };
   function initInput(canvas) {
@@ -111,7 +111,7 @@
       In.id = e.pointerId;
       const p = pos(e);
       In.x = In.px = In.sx = p[0]; In.y = In.py = In.sy = p[1];
-      In.down = true; In.justDown = true; In.hold = 0; In.moved = 0;
+      In.down = true; In.justDown = true; In.hold = 0; In.moved = 0; In.still = 0;
       canvas.setPointerCapture && canvas.setPointerCapture(e.pointerId);
       e.preventDefault();
     }, { passive: false });
@@ -134,7 +134,13 @@
   function inputFrame(dt) {
     In.dx = In.x - In.px; In.dy = In.y - In.py;
     In.px = In.x; In.py = In.y;
-    if (In.down) { In.hold += dt; In.moved += Math.hypot(In.dx, In.dy); }
+    if (In.down) {
+      In.hold += dt;
+      const mv = Math.hypot(In.dx, In.dy);
+      In.moved += mv;
+      /* 指を止めている時間（長押し判定に使う。誘導のあとに止めてもよい） */
+      In.still = mv > 2.5 ? 0 : In.still + dt;
+    } else In.still = 0;
   }
   function inputEnd() { In.justDown = false; In.justUp = false; In.tapped = false; }
 
@@ -729,9 +735,10 @@
       if (In.down) {
         const w = R.canvas.clientWidth;
         st.steerTarget = clamp((In.x - In.sx) / (w * 0.16), -1, 1);
-        if (In.hold > 0.42 && In.moved < w * 0.10) st.stopSignal = true;
+        if (In.still > 0.45) st.stopSignal = true;
       } else {
         st.steerTarget = damp(st.steerTarget, 0, 4.5, dt);
+        st.stopSignal = false;      /* 指を離したら合図も解除 */
       }
       const prevSteer = st.steer;
       st.steer = damp(st.steer, st.steerTarget, 9, dt);
@@ -744,7 +751,9 @@
         p.v = damp(p.v, target, 1.6, dt);
 
         /* 操縦: 指の位置に即応 + 自動センタリング補正 */
-        const assist = clamp(-p.x * 0.035, -0.13, 0.13);
+        /* 近づくほど自動整列を強め、何もしなくても大きくは外れないようにする */
+        const assistK = dist < 16 ? 0.038 + (16 - dist) * 0.006 : 0.038;
+        const assist = clamp(-p.x * assistK, -0.20, 0.20);
         const ty = clamp(st.steer * 0.24 + assist, -0.30, 0.30);
         p.yaw = damp(p.yaw, ty, 3.2, dt);
         p.x = clamp(p.x, -9, 9);
