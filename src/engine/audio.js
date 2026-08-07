@@ -112,6 +112,13 @@ export class Audio {
     }
   }
 
+  /** Something burst: a wet, low, unmusical thump. */
+  splat() {
+    this._noise({ dur: 0.16, gain: 0.26, freq: 320, q: 0.6 });
+    this._noise({ dur: 0.1, gain: 0.14, freq: 1400, q: 0.9, delay: 0.01 });
+    this._tone({ freq: 96, type: 'sine', dur: 0.18, gain: 0.2, glide: 0.55, reverb: 0.3 });
+  }
+
   produce() {
     this._noise({ dur: 0.09, gain: 0.2, freq: 1100, q: 1.6 });
     this._tone({ freq: 220, type: 'sine', dur: 0.1, gain: 0.14, glide: 0.7, reverb: 0.2 });

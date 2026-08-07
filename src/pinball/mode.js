@@ -1,18 +1,30 @@
-// Pinball mode: lifecycle, the ball on the table, and the plunger.
+// Pinball mode: lifecycle, the balls on the table, the plunger, and what
+// happens when two ingredients meet.
 //
-// Phase 1 scope — one ball, launch it, keep it alive with the flippers, lose it
-// down the drain and get it back. No transformations yet; this exists so the
-// feel of the table can be judged before anything is built on top of it.
+// Up to six ingredients are loose on the playfield at once, fed in one at a
+// time through the shooter lane. Everything they can become, they become by
+// hitting each other — see recipes.js for the rules; this file is where the
+// collision turns into a new ball, a mess on the table and a noise.
 
 import * as THREE from 'three';
 import * as TEX from '../engine/textures.js';
+import * as M from '../engine/materials.js';
 import { PinballWorld, Ball } from './physics.js';
 import { Table, TABLE } from './table.js';
-import { buildMesh } from '../game/items.js';
-import { clamp, damp } from '../engine/util.js';
+import { buildMesh, ITEMS } from '../game/items.js';
+import { resolve, pairable, LOADABLE, GENTLE, HARD } from './recipes.js';
+import { clamp, damp, easeOutBack } from '../engine/util.js';
 
 const STUCK_NUDGE = 2.5;    // seconds before the table shakes itself
 const STUCK_GIVEUP = 9.0;   // …and before the ball is written off
+const MAX_BALLS = 6;
+const COOL = 0.22;          // grace after a transform, so results do not chain instantly
+
+/** Splash colour per ingredient, for the mess left on the playfield. */
+const SPLAT = {
+  veg2: 0xa8281c, bread2: 0xe8d6ae, sea2: 0xbcd0d8, drink1: 0xe9c62f,
+  x_sauce: 0x8c1f16, x_flat: 0xe8d6ae, x_mince: 0xe8c3b4, x_juice: 0xf2c62e,
+};
 
 export class Pinball {
   constructor(view, stall, fx, audio) {
@@ -34,6 +46,7 @@ export class Pinball {
     this.charging = false;
     this.respawn = 0;
     this.drains = 0;          // balls lost this session
+    this.made = [];           // ids produced on the table this session
     this.tiltWarn = 0;
     this._q = new THREE.Quaternion();
     this._axis = new THREE.Vector3();
@@ -62,7 +75,9 @@ export class Pinball {
     this.world.reset();
     this.balls.length = 0;
     this.drains = 0;
-    this.spawnBall('veg2');
+    this.made.length = 0;
+    this.table.clearStains();
+    this.loadBall(LOADABLE[0]);
   }
 
   exit() {
@@ -88,6 +103,7 @@ export class Pinball {
     ball.stuck = 0;
     ball.stuckTotal = 0;
     ball.stuckAt = { u, v };
+    ball.cool = 0;
 
     // Visual: the real ingredient model, scaled so its footprint is the ball,
     // pivoted at its centre so it can roll.
@@ -111,9 +127,20 @@ export class Pinball {
     shadow.rotation.x = -Math.PI / 2;
     this.table.group.add(shadow);
 
+    // A finished dish glows: on a table full of ingredients it needs to be
+    // obvious which ball is the one you have been working towards.
+    if (ITEMS[itemId]?.kind === 'dish') {
+      const halo = new THREE.Sprite(M.halo(0xffd9a0, 0.5));
+      halo.scale.setScalar(0.16);
+      halo.position.y = height / 2;
+      pivot.parent.add(halo);
+      ball.halo = halo;
+    }
+
     ball.pivot = pivot;
     ball.shadow = shadow;
     ball.spin = new THREE.Quaternion();
+    ball.popIn = 0;
     this.world.addBall(ball);
     this.balls.push(ball);
     return ball;
@@ -126,6 +153,7 @@ export class Pinball {
     ball.pivot?.parent?.remove(ball.pivot);
     ball.shadow?.parent?.remove(ball.shadow);
     ball.shadow?.material.dispose();
+    ball.halo?.parent?.remove(ball.halo);
   }
 
   _inLane(ball) {
@@ -146,6 +174,21 @@ export class Pinball {
       if (!best || b.v < best.v) best = b;
     }
     return best;
+  }
+
+  /**
+   * Feed an ingredient into the launch lane. Refused if the lane is still
+   * occupied or the table is already busy — the lane holds one ball, like a
+   * real shooter lane.
+   */
+  loadBall(itemId) {
+    if (!this.active) return 'inactive';
+    if (!ITEMS[itemId]) return 'unknown';
+    if (this.balls.length >= MAX_BALLS) return 'full';
+    if (this.waitingBall) return 'occupied';
+    this.spawnBall(itemId);
+    this.audio?.pickup();
+    return 'ok';
   }
 
   // ----------------------------------------------------------- input ----
@@ -200,6 +243,7 @@ export class Pinball {
 
     for (const ball of [...this.balls]) {
       if (!ball.alive) { this._onDrain(ball); continue; }
+      if (ball.cool > 0) ball.cool -= dt;
       this._syncBall(ball, dt);
       // Ball search. Real tables have one for the same reason: geometry always
       // finds a pocket you did not think of, and a stuck ball must never be
@@ -245,11 +289,72 @@ export class Pinball {
       } else if (e.type === 'flipper' && e.impact > 0.4) {
         this.audio?.drop(2);
         this.view.addShake(Math.min(0.12, e.impact * 0.04));
-      } else if (e.type === 'balls' && e.impact > 0.3) {
-        this.audio?.pickup();
-        this.fx.sparks(this.table.toWorld(e.u, e.v, 0.03), 0xffe0b0, 5, 0.25);
+      } else if (e.type === 'balls') {
+        this._onBallHit(e);
       }
     }
+  }
+
+  /**
+   * Two ingredients met. How hard decides what comes out — a gentle kiss
+   * merges them up a tier, a real collision bursts them into something
+   * processed, and a processed pair meeting at any sane speed is a dish.
+   */
+  _onBallHit(e) {
+    const { a, b, impact } = e;
+    if (!a.alive || !b.alive || a.cool > 0 || b.cool > 0) return;
+    const { kind, result } = resolve(a.id, b.id, impact);
+
+    if (kind === 'bounce') {
+      // Tell the player when a pair *could* work but the speed was wrong:
+      // a small spark is a hint, not a reward.
+      if (pairable(a.id, b.id) && impact > 0.2) {
+        this.fx.sparks(this.table.toWorld(e.u, e.v, 0.03), 0xbfa87a, 3, 0.16);
+        this.audio?.pickup();
+      }
+      return;
+    }
+
+    const at = this.table.toWorld(e.u, e.v, 0.03);
+    // Perfectly inelastic: the pair's momentum carries into what they became.
+    const vu = (a.vu + b.vu) / 2, vv = (a.vv + b.vv) / 2;
+    const u = (a.u + b.u) / 2, v = (a.v + b.v) / 2;
+    const wasId = a.id;
+    this.despawn(a);
+    this.despawn(b);
+
+    const nb = this.spawnBall(result, u, v);
+    nb.vu = vu; nb.vv = vv;
+    nb.cool = COOL;
+    nb.pivot.scale.setScalar(0.01);
+    nb.popIn = 0.28;
+    this.made.push(result);
+
+    const def = ITEMS[result];
+    if (kind === 'crush') {
+      // Violent: mess on the table, a shove outward, and a real thump.
+      const col = SPLAT[wasId] ?? 0xb08050;
+      this.table.addStain(u, v, col, 0.06 + Math.min(0.05, impact * 0.02));
+      this.fx.sparks(at, col, 16, 0.5);
+      this.fx.dust(at, 5, 0.05);
+      this.view.addShake(0.22);
+      this.audio?.splat();
+      nb.vu += (Math.random() - 0.5) * 0.5;
+      nb.vv += 0.2;
+    } else if (kind === 'dish') {
+      this.fx.flash(at, 0xffe0a0, 0.22);
+      this.fx.sparks(at, 0xffd070, 20, 0.6);
+      this.fx.steam(at);
+      this.view.addShake(0.26);
+      this.audio?.merge(5);
+      this.audio?.coin(3);
+    } else {
+      this.fx.flash(at, 0xffd9a0, 0.14);
+      this.fx.sparks(at, 0xffc46a, 8 + (def?.tier ?? 2) * 3, 0.35);
+      this.view.addShake(0.1);
+      this.audio?.merge(def?.tier ?? 2);
+    }
+    this.onMake?.({ kind, result, def, impact });
   }
 
   _onDrain(ball) {
@@ -262,10 +367,17 @@ export class Pinball {
   }
 
   _syncBall(ball, dt) {
+    // Freshly made things pop into existence rather than appearing.
+    if (ball.popIn > 0) {
+      ball.popIn -= dt;
+      const k = clamp(1 - ball.popIn / 0.28, 0, 1);
+      ball.pivot.scale.setScalar(0.2 + easeOutBack(k) * 0.8);
+    }
     const lift = ball.pivot.userData.lift;
     ball.pivot.position.set(ball.u, lift, -ball.v);
     ball.shadow.position.set(ball.u, 0.0015, -ball.v);
     ball.shadow.material.opacity = 0.45;
+    if (ball.halo) ball.halo.position.set(ball.u, lift, -ball.v);
 
     // Roll: spin about the axis perpendicular to travel, by distance / radius.
     const sp = ball.speed;

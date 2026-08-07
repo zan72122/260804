@@ -7,7 +7,7 @@ import { ITEMS } from '../game/items.js';
 
 const $ = (id) => document.getElementById(id);
 
-const CHAIN_ICON = { veg: '🍅', bread: '🥖', sea: '🐟', drink: '🍋' };
+const CHAIN_ICON = { veg: '🍅', bread: '🥖', sea: '🐟', drink: '🍋', table: '🍕' };
 
 export class Hud {
   constructor(state) {
@@ -21,6 +21,7 @@ export class Hud {
       travel: $('travel'), travelList: $('travel-list'),
       btnTravel: $('btn-travel'), btnCam: $('btn-cam'), btnQuality: $('btn-quality'),
       btnPinball: $('btn-pinball'),
+      pinbar: $('pinbar'), pinLoad: $('pinbar-load'), made: $('pinbar-made'),
       btnSound: $('btn-sound'), btnReset: $('btn-reset'), travelClose: $('travel-close'),
     };
     this.orderNodes = new Map();
@@ -85,6 +86,45 @@ export class Hud {
         meta.querySelector('.ready-tag')?.remove();
       }
     }
+  }
+
+  // ------------------------------------------------------- pinball ----
+  /** Build the ingredient loader once; the callback fires with an item id. */
+  setupPinball(ids, onLoad) {
+    const bar = this.el.pinLoad;
+    bar.innerHTML = '';
+    this.loadButtons = new Map();
+    for (const id of ids) {
+      const item = ITEMS[id];
+      if (!item) continue;
+      const b = document.createElement('button');
+      b.className = 'load-btn';
+      b.innerHTML = `<span class="ico">${CHAIN_ICON[item.chain] || '🍽'}</span>${item.name}`;
+      b.addEventListener('click', () => onLoad(id));
+      bar.appendChild(b);
+      this.loadButtons.set(id, b);
+    }
+  }
+
+  showPinball(on) {
+    this.el.pinbar.classList.toggle('hidden', !on);
+    if (on) this.el.made.innerHTML = '';
+  }
+
+  /** Grey the loaders out while the lane is occupied. */
+  setLoadersBusy(busy) {
+    for (const b of this.loadButtons?.values() || []) b.classList.toggle('busy', busy);
+  }
+
+  /** Announce something produced on the table. */
+  addMade(def) {
+    if (!def) return;
+    const chip = document.createElement('div');
+    chip.className = `made-chip${def.kind === 'dish' || def.isMax ? '' : ' proc'}`;
+    chip.textContent = def.name;
+    this.el.made.appendChild(chip);
+    while (this.el.made.children.length > 4) this.el.made.firstChild.remove();
+    setTimeout(() => chip.remove(), 4200);
   }
 
   toast(text, kind = '') {

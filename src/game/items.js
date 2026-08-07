@@ -703,6 +703,155 @@ const buildDrinkProducer = () => {
   return g;
 };
 
+// ------------------------------------------- crushed and combined ----
+//
+// These exist only because of the pinball table: they are what an ingredient
+// becomes when it is hit hard instead of gently, and what two processed
+// ingredients become when they meet. They are modelled round-ish on purpose —
+// everything here has to keep rolling after it is made.
+
+const buildSauceBall = () => {
+  const rng = R('sauceball');
+  const g = new THREE.Group();
+  const sauce = M.food(0xa8281c, { rough: 0.3, clearcoat: 0.7, seed: 13 });
+  // A thick blob, lumpier than a sphere: it was a tomato a moment ago.
+  const body = G.mesh(G.blob(0.031, 1.06, 0.9, 1.02, 18), sauce, { pos: [0, 0.028, 0], parent: g });
+  body.scale.set(1, 1, 1);
+  for (let i = 0; i < 6; i++) {
+    const a = rng.range(0, 6.28), t = rng.range(0.2, 0.9);
+    G.mesh(G.sphere(rng.range(0.007, 0.013), 8), sauce, {
+      pos: [Math.cos(a) * 0.026 * t, 0.028 + rng.range(-0.014, 0.016), Math.sin(a) * 0.026 * t], parent: g, cast: false,
+    });
+  }
+  // Skins and seeds still in it, plus a basil leaf that got caught up.
+  for (let i = 0; i < 5; i++) {
+    G.mesh(G.blob(0.0035, 1, 0.5, 1.4, 6), M.food(0xf0d98a, { rough: 0.5 }), {
+      pos: [rng.range(-0.022, 0.022), 0.05, rng.range(-0.022, 0.022)],
+      rot: [rng.range(0, 3), rng.range(0, 3), 0], parent: g, cast: false,
+    });
+  }
+  G.mesh(G.plane(0.02, 0.028), M.leaf(0x3d7028), {
+    pos: [0.012, 0.052, 0.004], rot: [-1.2, 0.5, 0.2], parent: g, cast: false,
+  });
+  return g;
+};
+
+const buildFlatDough = () => {
+  const rng = R('flatdough');
+  const g = new THREE.Group();
+  const d = M.food(0xe8d6ae, { rough: 0.8, seed: 14 });
+  // A rolled-out disc: it rolls on its edge like a wheel, which is exactly
+  // what it looks like it should do.
+  G.mesh(G.lathe([
+    [0.001, 0], [0.026, 0], [0.033, 0.006], [0.034, 0.016], [0.033, 0.026],
+    [0.026, 0.032], [0.001, 0.032],
+  ], 22), d, { parent: g });
+  for (let i = 0; i < 16; i++) {
+    const a = rng.range(0, 6.28);
+    G.mesh(G.sphere(rng.range(0.0012, 0.0024), 5), M.food(0xf6f0e2, { rough: 1 }), {
+      pos: [Math.cos(a) * rng.range(0, 0.03), 0.016 + rng.range(-0.014, 0.016), Math.sin(a) * rng.range(0, 0.03)],
+      parent: g, cast: false,
+    });
+  }
+  return g;
+};
+
+const buildMince = () => {
+  const rng = R('mince');
+  const g = new THREE.Group();
+  const flesh = M.food(0xe8c3b4, { rough: 0.52, clearcoat: 0.25, seed: 15 });
+  const body = G.mesh(G.blob(0.03, 1.04, 0.94, 1.0, 16), flesh, { pos: [0, 0.028, 0], parent: g });
+  body.scale.set(1, 1, 1);
+  // Pressed together from strands, so the surface is ridged rather than smooth.
+  for (let i = 0; i < 14; i++) {
+    const a = rng.range(0, 6.28), e = rng.range(-0.6, 0.9);
+    G.mesh(G.capsule(0.0035, 0.014, 6), flesh, {
+      pos: [Math.cos(a) * 0.027 * Math.cos(e), 0.028 + Math.sin(e) * 0.026, Math.sin(a) * 0.027 * Math.cos(e)],
+      rot: [rng.range(0, 3), rng.range(0, 3), rng.range(0, 3)], parent: g, cast: false,
+    });
+  }
+  G.mesh(G.plane(0.014, 0.02), M.leaf(0x4a7a2c), {
+    pos: [-0.01, 0.052, 0.006], rot: [-1.3, 0.8, 0], parent: g, cast: false,
+  });
+  return g;
+};
+
+const buildJuiceBall = () => {
+  const rng = R('juiceball');
+  const g = new THREE.Group();
+  // Held together by surface tension: bright, translucent, wobbling.
+  const skin = new THREE.MeshPhysicalMaterial({
+    color: 0xf2c62e, roughness: 0.06, metalness: 0,
+    transparent: true, opacity: 0.72, clearcoat: 1, clearcoatRoughness: 0.04,
+  });
+  G.mesh(G.blob(0.03, 1.04, 0.92, 1.04, 20), skin, { pos: [0, 0.028, 0], parent: g });
+  const pulp = M.food(0xf6e07a, { rough: 0.55 });
+  for (let i = 0; i < 9; i++) {
+    const a = rng.range(0, 6.28), r = rng.range(0, 0.018);
+    G.mesh(G.blob(0.005, 1, 0.6, 1.6, 6), pulp, {
+      pos: [Math.cos(a) * r, 0.024 + rng.range(-0.012, 0.014), Math.sin(a) * r],
+      rot: [rng.range(0, 3), rng.range(0, 3), 0], parent: g, cast: false,
+    });
+  }
+  return g;
+};
+
+const buildPizza = () => {
+  const rng = R('pizza');
+  const g = new THREE.Group();
+  const crust = M.food(0xd6a75c, { rough: 0.68, seed: 16 });
+  G.mesh(G.lathe([
+    [0.001, 0], [0.03, 0.001], [0.038, 0.006], [0.041, 0.014], [0.039, 0.02],
+    [0.032, 0.018], [0.03, 0.012], [0.001, 0.011],
+  ], 26), crust, { parent: g });
+  G.mesh(G.cyl(0.031, 0.031, 0.004, 24), M.food(0xb03426, { rough: 0.42, clearcoat: 0.4 }),
+    { pos: [0, 0.013, 0], parent: g, cast: false });
+  // Cheese in irregular pools, then toppings on top of it.
+  const cheese = M.food(0xf2e2a8, { rough: 0.4, clearcoat: 0.35 });
+  for (let i = 0; i < 9; i++) {
+    const a = rng.range(0, 6.28), r = rng.range(0, 0.024);
+    G.mesh(G.blob(rng.range(0.006, 0.011), 1, 0.35, 1, 8), cheese, {
+      pos: [Math.cos(a) * r, 0.016, Math.sin(a) * r], parent: g, cast: false,
+    });
+  }
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * 6.28 + 0.4;
+    G.mesh(G.cyl(0.008, 0.008, 0.003, 12), M.food(0xb8322a, { rough: 0.4, clearcoat: 0.3 }), {
+      pos: [Math.cos(a) * 0.019, 0.019, Math.sin(a) * 0.019], parent: g, cast: false,
+    });
+    G.mesh(G.plane(0.01, 0.014), M.leaf(0x3d7028), {
+      pos: [Math.cos(a + 0.6) * 0.014, 0.02, Math.sin(a + 0.6) * 0.014],
+      rot: [-1.45, rng.range(0, 3), 0], parent: g, cast: false,
+    });
+  }
+  return g;
+};
+
+const buildStewPot = () => {
+  const g = new THREE.Group();
+  // A lidded cocotte: round enough to roll, and obviously a finished dish.
+  const clay = M.terracotta(0xb2603c);
+  G.mesh(G.lathe([
+    [0.001, 0], [0.019, 0], [0.026, 0.008], [0.031, 0.022], [0.03, 0.03],
+    [0.027, 0.03], [0.028, 0.022], [0.023, 0.009], [0.001, 0.008],
+  ], 22), clay, { parent: g });
+  for (const s of [-1, 1]) {
+    G.mesh(G.torus(0.008, 0.003, 10, 5, Math.PI), clay, {
+      pos: [s * 0.031, 0.024, 0], rot: [0, Math.PI / 2, s > 0 ? -0.3 : Math.PI + 0.3], parent: g,
+    });
+  }
+  G.mesh(G.cyl(0.028, 0.03, 0.006, 22), M.food(0xc4623a, { rough: 0.4, clearcoat: 0.4 }),
+    { pos: [0, 0.028, 0], parent: g, cast: false });
+  // Lid, tipped slightly: you can see the broth.
+  const lid = G.group({ pos: [0.004, 0.032, -0.003], rot: [0.12, 0, 0.08], parent: g });
+  G.mesh(G.lathe([[0.001, 0], [0.029, 0], [0.031, 0.003], [0.026, 0.009], [0.012, 0.013], [0.001, 0.014]], 22),
+    clay, { parent: lid });
+  G.mesh(G.sphere(0.005, 10), M.brass(), { pos: [0, 0.017, 0], parent: lid });
+  G.mesh(G.cone(0.005, 0.012, 8), M.food(0xe2704a, { rough: 0.3, clearcoat: 0.5 }),
+    { pos: [-0.016, 0.03, 0.008], rot: [0.4, 0, 1.2], parent: g, cast: false });
+  return g;
+};
+
 // ------------------------------------------------------------- data ----
 
 export const CHAINS = [
@@ -771,6 +920,32 @@ for (const chain of CHAINS) {
     };
   });
   PRODUCERS[chain.producer.id] = { ...chain.producer, chain: chain.id, seed: chain.items[0].id };
+}
+
+/**
+ * Table-only goods: made by crushing or combining on the pinball playfield,
+ * never by merging on the board. They have no `next`, so nothing on the merge
+ * grid will try to stack them.
+ */
+export const TABLE_ITEMS = [
+  { id: 'x_sauce', name: 'トマトソース玉', build: buildSauceBall, tier: 3, kind: 'processed' },
+  { id: 'x_flat', name: 'のばし生地', build: buildFlatDough, tier: 3, kind: 'processed' },
+  { id: 'x_mince', name: 'すり身玉', build: buildMince, tier: 3, kind: 'processed' },
+  { id: 'x_juice', name: '搾りたて果汁', build: buildJuiceBall, tier: 3, kind: 'processed' },
+  { id: 'x_pizza', name: '窯出しピザ', build: buildPizza, tier: 5, kind: 'dish' },
+  { id: 'x_stew', name: '魚介の煮込み', build: buildStewPot, tier: 5, kind: 'dish' },
+];
+
+for (const it of TABLE_ITEMS) {
+  ITEMS[it.id] = {
+    ...it,
+    chain: 'table',
+    chainName: '調理',
+    coin: Math.round(3 * Math.pow(3.1, it.tier - 1)),
+    xp: Math.round(1 * Math.pow(2.4, it.tier - 1)),
+    next: null,
+    isMax: it.kind === 'dish',
+  };
 }
 
 export const chainById = (id) => CHAINS.find((c) => c.id === id);

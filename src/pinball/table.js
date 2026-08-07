@@ -9,6 +9,7 @@
 import * as THREE from 'three';
 import * as M from '../engine/materials.js';
 import * as G from '../engine/geo.js';
+import * as TEX from '../engine/textures.js';
 import { COUNTER } from '../game/config.js';
 
 export const TABLE = {
@@ -101,6 +102,7 @@ export class Table {
   build(world, dest) {
     for (const c of [...this.group.children]) this.group.remove(c);
     this.flipperMeshes.length = 0;
+    this._stains = [];
     world.clearStatics();
 
     const L = layout();
@@ -212,6 +214,42 @@ export class Table {
     m.rotation.y = Math.atan2(dv, dx);
     m.castShadow = true;
     m.receiveShadow = true;
+  }
+
+  /**
+   * Splatter left where something burst. The table gets messier as you play,
+   * which is both honest and a record of where your shots have been landing.
+   */
+  addStain(u, v, color, size = 0.07) {
+    if (!this._stains) this._stains = [];
+    const mat = new THREE.MeshBasicMaterial({
+      color, transparent: true, opacity: 0.42,
+      alphaMap: TEX.radialFalloff(1.5), depthWrite: false,
+    });
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(size, size * 0.85), mat);
+    m.position.set(u, 0.0011, -v);
+    m.rotation.x = -Math.PI / 2;
+    m.rotation.z = Math.random() * Math.PI;
+    m.renderOrder = 1;
+    this.group.add(m);
+    this._stains.push(m);
+    // Cap it: an hour of play should not turn the playfield into a texture.
+    while (this._stains.length > 48) {
+      const old = this._stains.shift();
+      this.group.remove(old);
+      old.geometry.dispose();
+      old.material.dispose();
+    }
+    return m;
+  }
+
+  clearStains() {
+    for (const m of this._stains || []) {
+      this.group.remove(m);
+      m.geometry.dispose();
+      m.material.dispose();
+    }
+    this._stains = [];
   }
 
   /** Sync the visible flippers and plunger to the simulation. */

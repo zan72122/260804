@@ -13,6 +13,7 @@ import { OrderSystem } from './game/orders.js';
 import { Input } from './game/input.js';
 import { Hud } from './ui/hud.js';
 import { Pinball } from './pinball/mode.js';
+import { LOADABLE } from './pinball/recipes.js';
 import { ITEMS, PRODUCERS, CHAINS, chainById } from './game/items.js';
 import { BOARD, PRODUCER_CELLS, cellPos } from './game/config.js';
 import { clamp } from './engine/util.js';
@@ -166,6 +167,8 @@ class Game {
     });
 
     this.input.setPinball(this.pinball);
+    this.hud.setupPinball(LOADABLE, (id) => this.loadPinballBall(id));
+    this.pinball.onMake = ({ def }) => this.hud.addMade(def);
 
     this.orders.onChange = () => {
       this.hud.setOrders(this.orders.list());
@@ -191,15 +194,25 @@ class Game {
     if (this.pinball.active) {
       this.pinball.exit();
       this.board.root.visible = true;
+      this.hud.showPinball(false);
       this.hud.el.btnPinball.textContent = '🕹 ピンボール';
       this.hud.hint('食材をドラッグして重ねるとマージ。注文の品はお客さんへ。');
     } else {
       this.board.root.visible = false;
       this.board.hover.visible = false;
       this.pinball.enter(this.dest);
+      this.hud.showPinball(true);
       this.hud.el.btnPinball.textContent = '🍅 作業台へ戻る';
       this.hud.hint('麺棒を下へドラッグして離すと発射（Space長押しでも可）。画面左右タップ／←→キーでフリッパー。Z・Xで台を揺らす。');
     }
+  }
+
+  /** Feed an ingredient into the shooter lane. */
+  loadPinballBall(id) {
+    this.audio.resume();
+    const res = this.pinball.loadBall(id);
+    if (res === 'occupied') this.hud.toast('レーンに球が残っています', 'bad');
+    else if (res === 'full') this.hud.toast('台の上がいっぱいです', 'bad');
   }
 
   cycleQuality() {
@@ -422,6 +435,7 @@ class Game {
     this.stall.update(dt, this.elapsed);
     if (this.pinball.active) {
       this.pinball.update(dt, this.elapsed);
+      this.hud.setLoadersBusy(!!this.pinball.waitingBall || this.pinball.balls.length >= 6);
     } else {
       this.board.update(dt, this.elapsed);
     }
