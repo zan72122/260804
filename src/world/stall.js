@@ -23,6 +23,12 @@ export class Stall {
     const rng = makeRng(4242);
     this.dest = dest;
 
+    // Two switchable layers: the merge tray and the counter-top clutter. Both
+    // are hidden when the counter is raised into a pinball table.
+    this.tray = new THREE.Group();
+    this.props = new THREE.Group();
+    this.root.add(this.tray, this.props);
+
     this._counter(rng);
     this._tray();
     this._awning(dest, rng);
@@ -35,6 +41,15 @@ export class Stall {
   clear() {
     for (const c of [...this.root.children]) this.root.remove(c);
     this.animated.length = 0;
+    this.tray = null;
+    this.props = null;
+  }
+
+  /** Raise/lower the merge tray and the counter clutter for pinball mode. */
+  setCounterMode(mode) {
+    const merge = mode !== 'pinball';
+    if (this.tray) this.tray.visible = merge;
+    if (this.props) this.props.visible = merge;
   }
 
   // --------------------------------------------------------- counter ----
@@ -107,7 +122,7 @@ export class Stall {
     // Board with a lip: the lip is what makes items feel contained and gives
     // the grid a physical boundary instead of a painted one.
     const base = G.mesh(new THREE.BoxGeometry(w + rim * 2, th, d + rim * 2), trayWood, {
-      pos: [BOARD.centerX, y - th / 2, BOARD.centerZ], parent: this.root,
+      pos: [BOARD.centerX, y - th / 2, BOARD.centerZ], parent: this.tray,
     });
     base.geometry.userData.shared = false;
     base.receiveShadow = true;
@@ -119,7 +134,7 @@ export class Stall {
       [(w / 2 + rim / 2), 0, rim, d + rim * 2],
     ]) {
       const bar = G.mesh(new THREE.BoxGeometry(lw, 0.012, ld), M.darkWood(), {
-        pos: [BOARD.centerX + sx, y + 0.005, BOARD.centerZ + sz], parent: this.root,
+        pos: [BOARD.centerX + sx, y + 0.005, BOARD.centerZ + sz], parent: this.tray,
       });
       bar.geometry.userData.shared = false;
     }
@@ -143,7 +158,7 @@ export class Stall {
         cast: false, receive: false, parent: grid,
       });
     }
-    this.root.add(grid);
+    this.tray.add(grid);
 
     // Cut marks and stains on the working surface.
     const stainMat = new THREE.MeshBasicMaterial({
@@ -154,7 +169,7 @@ export class Stall {
     for (let i = 0; i < 7; i++) {
       G.mesh(G.plane(rng.range(0.05, 0.13), rng.range(0.05, 0.13)), stainMat, {
         pos: [BOARD.centerX + rng.range(-w / 2, w / 2), y + 0.0014, BOARD.centerZ + rng.range(-d / 2, d / 2)],
-        rot: [-Math.PI / 2, 0, rng.range(0, 3.14)], cast: false, receive: false, parent: this.root,
+        rot: [-Math.PI / 2, 0, rng.range(0, 3.14)], cast: false, receive: false, parent: this.tray,
       });
     }
   }
@@ -284,23 +299,23 @@ export class Stall {
     }
     scale.position.set(-W / 2 + 0.19, y, centerZ - D / 2 + 0.17);
     scale.rotation.y = 0.5;
-    this.root.add(G.freeze(scale));
+    this.props.add(G.freeze(scale));
 
     // Chopping board + knife, front right of the tray.
     const board = G.mesh(G.box(0.3, 0.022, 0.2, 0.006), M.crateWood(2), {
-      pos: [W / 2 - 0.24, y + 0.011, centerZ + 0.3], rot: [0, -0.28, 0], parent: this.root,
+      pos: [W / 2 - 0.24, y + 0.011, centerZ + 0.3], rot: [0, -0.28, 0], parent: this.props,
     });
     const knife = new THREE.Group();
     G.mesh(G.box(0.14, 0.0035, 0.035, 0.001), M.steel(0.22), { pos: [0, 0, 0], parent: knife });
     G.mesh(G.box(0.075, 0.016, 0.022, 0.005), M.darkWood(), { pos: [0.105, 0.004, 0], parent: knife });
     knife.position.set(W / 2 - 0.26, y + 0.024, centerZ + 0.31);
     knife.rotation.y = -0.28 + 0.5;
-    this.root.add(G.freeze(knife));
+    this.props.add(G.freeze(knife));
     // Chopped herbs on the board.
     for (let i = 0; i < 14; i++) {
       G.mesh(G.box(0.008, 0.002, 0.006, 0.0005), M.leaf(0x4e7a2e), {
         pos: [W / 2 - 0.3 + rng.range(-0.04, 0.04), y + 0.024, centerZ + 0.28 + rng.range(-0.03, 0.03)],
-        rot: [0, rng.range(0, 3.14), 0], parent: this.root,
+        rot: [0, rng.range(0, 3.14), 0], parent: this.props,
       });
     }
 
@@ -311,7 +326,7 @@ export class Stall {
         M.ceramic(0xf5f0e6), { pos: [rng.range(-0.002, 0.002), i * 0.011, rng.range(-0.002, 0.002)], parent: plates });
     }
     plates.position.set(-W / 2 + 0.15, y, centerZ + 0.32);
-    this.root.add(G.freeze(plates));
+    this.props.add(G.freeze(plates));
 
     // Herb pot at the back edge, catching rim light from the sun.
     const pot = new THREE.Group();
@@ -328,17 +343,17 @@ export class Stall {
       leaf.material.side = THREE.DoubleSide;
     }
     pot.position.set(W / 2 - 0.17, y, centerZ - D / 2 + 0.15);
-    this.root.add(G.freeze(pot));
+    this.props.add(G.freeze(pot));
 
     // Coin bowl — where deliveries pay out.
     const bowl = G.mesh(
       G.lathe([[0.001, 0], [0.03, 0.0], [0.052, 0.028], [0.056, 0.036], [0.05, 0.036], [0.046, 0.028], [0.026, 0.004], [0.001, 0.004]], 20),
-      M.ceramic(0x2f4f5c, 0.3), { pos: [-W / 2 + 0.36, y, centerZ + 0.3], parent: this.root });
+      M.ceramic(0x2f4f5c, 0.3), { pos: [-W / 2 + 0.36, y, centerZ + 0.3], parent: this.props });
     this.coinBowl = bowl;
     for (let i = 0; i < 6; i++) {
       G.mesh(G.cyl(0.011, 0.011, 0.0022, 12), M.brass(), {
         pos: [-W / 2 + 0.36 + rng.range(-0.02, 0.02), y + 0.012 + i * 0.001, centerZ + 0.3 + rng.range(-0.02, 0.02)],
-        rot: [rng.range(-0.2, 0.2), rng.range(0, 3), rng.range(-0.2, 0.2)], parent: this.root,
+        rot: [rng.range(-0.2, 0.2), rng.range(0, 3), rng.range(-0.2, 0.2)], parent: this.props,
       });
     }
 
@@ -363,7 +378,7 @@ export class Stall {
     cb.position.set(-W / 2 - 0.09, 0.0, centerZ + 0.1);
     cb.rotation.set(0.14, 0.42, 0.0);
     cb.position.y = 0.0;
-    this.root.add(G.freeze(cb));
+    this.props.add(G.freeze(cb));
 
     // Jar shelf on the back-left post: silhouette clutter at customer height.
     const shelf = new THREE.Group();
@@ -381,7 +396,7 @@ export class Stall {
     }
     shelf.position.set(-W / 2 + 0.06, 1.42, centerZ - 0.48);
     shelf.rotation.y = 0.1;
-    this.root.add(G.freeze(shelf));
+    this.props.add(G.freeze(shelf));
   }
 
   // ------------------------------------------------------ foreground ----

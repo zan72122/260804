@@ -12,6 +12,7 @@ import { GameState } from './game/state.js';
 import { OrderSystem } from './game/orders.js';
 import { Input } from './game/input.js';
 import { Hud } from './ui/hud.js';
+import { Pinball } from './pinball/mode.js';
 import { ITEMS, PRODUCERS, CHAINS, chainById } from './game/items.js';
 import { BOARD, PRODUCER_CELLS, cellPos } from './game/config.js';
 import { clamp } from './engine/util.js';
@@ -52,6 +53,7 @@ class Game {
     this.stall = new Stall(this.view);
     this.board = new Board(this.view, this.fx);
     this.orders = new OrderSystem(this.view, this.state, this.fx);
+    this.pinball = new Pinball(this.view, this.stall, this.fx, this.audio);
     this.hud = new Hud(this.state);
 
     this.saveTimer = 0;
@@ -132,6 +134,7 @@ class Game {
     });
     h.travelClose.addEventListener('click', () => this.hud.closeTravel());
     h.travel.addEventListener('click', (e) => { if (e.target === h.travel) this.hud.closeTravel(); });
+    h.btnPinball.addEventListener('click', () => this.togglePinball());
     h.btnCam.addEventListener('click', () => this.view.resetCamera());
     h.btnQuality.addEventListener('click', () => this.cycleQuality());
     h.btnSound.addEventListener('click', () => {
@@ -140,6 +143,7 @@ class Game {
     });
     h.btnReset.addEventListener('click', () => {
       if (!confirm('進行状況を消して最初からやり直しますか？')) return;
+      if (this.pinball.active) this.togglePinball();
       this.state.wipe();
       this.state.reset();
       this.dest = destById(this.state.destination);
@@ -161,6 +165,8 @@ class Game {
       onDrop: (e, cell, cust) => this.onDrop(e, cell, cust),
     });
 
+    this.input.setPinball(this.pinball);
+
     this.orders.onChange = () => {
       this.hud.setOrders(this.orders.list());
       this.refreshReady();
@@ -177,6 +183,23 @@ class Game {
       else this.state.tick();
     });
     window.addEventListener('beforeunload', () => this.save());
+  }
+
+  /** Raise the counter into a pinball table, or lower it back. */
+  togglePinball() {
+    this.audio.resume();
+    if (this.pinball.active) {
+      this.pinball.exit();
+      this.board.root.visible = true;
+      this.hud.el.btnPinball.textContent = '🕹 ピンボール';
+      this.hud.hint('食材をドラッグして重ねるとマージ。注文の品はお客さんへ。');
+    } else {
+      this.board.root.visible = false;
+      this.board.hover.visible = false;
+      this.pinball.enter(this.dest);
+      this.hud.el.btnPinball.textContent = '🍅 作業台へ戻る';
+      this.hud.hint('麺棒を下へドラッグして離すと発射（Space長押しでも可）。画面左右タップ／←→キーでフリッパー。Z・Xで台を揺らす。');
+    }
   }
 
   cycleQuality() {
@@ -343,6 +366,7 @@ class Game {
   // ---------------------------------------------------------- travel ----
   travelTo(dest) {
     if (dest.id === this.state.destination) return;
+    if (this.pinball.active) this.togglePinball();
     if (!this.state.travel(dest.id)) {
       this.hud.toast('コインが足りません', 'bad');
       return;
@@ -396,7 +420,11 @@ class Game {
     this.view.update(dt);
     this.env.update(dt, this.elapsed);
     this.stall.update(dt, this.elapsed);
-    this.board.update(dt, this.elapsed);
+    if (this.pinball.active) {
+      this.pinball.update(dt, this.elapsed);
+    } else {
+      this.board.update(dt, this.elapsed);
+    }
     this.orders.update(dt, this.elapsed);
     this.fx.update(dt);
 

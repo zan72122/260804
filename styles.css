@@ -194,6 +194,12 @@ html, body {
 .btn:hover { background: rgba(52,42,34,.85); border-color: rgba(255,225,180,.32); }
 .btn:active { transform: translateY(1px) scale(.985); }
 .btn-ghost { opacity: .55; }
+.btn-accent {
+  border-color: rgba(255, 205, 130, .45);
+  background: linear-gradient(180deg, rgba(94, 62, 34, .9), rgba(52, 34, 22, .92));
+  color: #ffe2b0;
+}
+.btn-accent:hover { border-color: rgba(255, 220, 160, .7); }
 .btn-wide { width: 100%; margin-top: 12px; }
 
 /* toasts */

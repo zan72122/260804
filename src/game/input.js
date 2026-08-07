@@ -38,13 +38,26 @@ export class Input {
     this._move = (e) => this.onMove(e);
     this._up = (e) => this.onUp(e);
     this._wheel = (e) => this.onWheel(e);
+    this._keyDown = (e) => this.onKey(e, true);
+    this._keyUp = (e) => this.onKey(e, false);
     el.addEventListener('pointerdown', this._down);
     window.addEventListener('pointermove', this._move, { passive: false });
     window.addEventListener('pointerup', this._up);
     window.addEventListener('pointercancel', this._up);
     el.addEventListener('wheel', this._wheel, { passive: false });
     el.addEventListener('contextmenu', (e) => e.preventDefault());
+    window.addEventListener('keydown', this._keyDown);
+    window.addEventListener('keyup', this._keyUp);
+
+    // Pinball mode takes the pointer over completely: screen halves become
+    // flippers, so nothing about the merge-board drag survives into it.
+    this.pinball = null;
+    this.plungerDrag = null;
+    this.heldFlipper = new Map();
   }
+
+  setPinball(pinball) { this.pinball = pinball; }
+  get pinballActive() { return !!this.pinball?.active; }
 
   dispose() {
     this.el.removeEventListener('pointerdown', this._down);
@@ -52,6 +65,65 @@ export class Input {
     window.removeEventListener('pointerup', this._up);
     window.removeEventListener('pointercancel', this._up);
     this.el.removeEventListener('wheel', this._wheel);
+    window.removeEventListener('keydown', this._keyDown);
+    window.removeEventListener('keyup', this._keyUp);
+  }
+
+  // ---------------------------------------------------------- pinball ----
+  _pinballDown(e) {
+    // Grabbing the plunger itself starts a launch; anywhere else is a flipper.
+    const mesh = this.pinball.table.plungerMesh;
+    if (mesh) {
+      this._setNdc(e.clientX, e.clientY);
+      if (this.ray.intersectObject(mesh, true).length) {
+        this.plungerDrag = { id: e.pointerId, y: e.clientY };
+        this.pinball.chargePlunger(0);
+        return;
+      }
+    }
+    const side = e.clientX < window.innerWidth / 2 ? 'left' : 'right';
+    this.heldFlipper.set(e.pointerId, side);
+    this.pinball.setFlipper(side, true);
+  }
+
+  _pinballMove(e) {
+    if (this.plungerDrag?.id === e.pointerId) {
+      // Drag downward to draw it back — 150 px of travel is a full charge.
+      this.pinball.chargePlunger((e.clientY - this.plungerDrag.y) / 150);
+      e.preventDefault?.();
+    }
+  }
+
+  _pinballUp(e) {
+    if (this.plungerDrag?.id === e.pointerId) {
+      this.plungerDrag = null;
+      this.pinball.releasePlunger();
+      return;
+    }
+    const side = this.heldFlipper.get(e.pointerId);
+    if (side) {
+      this.heldFlipper.delete(e.pointerId);
+      if (![...this.heldFlipper.values()].includes(side)) this.pinball.setFlipper(side, false);
+    }
+  }
+
+  onKey(e, down) {
+    if (!this.pinballActive || e.repeat) return;
+    const k = e.key.toLowerCase();
+    if (k === 'arrowleft' || k === 'a') { this.pinball.setFlipper('left', down); e.preventDefault(); }
+    else if (k === 'arrowright' || k === 'd') { this.pinball.setFlipper('right', down); e.preventDefault(); }
+    else if (k === ' ' || k === 'enter') {
+      // Hold to charge, release to fire.
+      if (down) { this._keyCharge = performance.now(); this.pinball.chargePlunger(0); }
+      else if (this._keyCharge) {
+        this.pinball.chargePlunger((performance.now() - this._keyCharge) / 900);
+        this.pinball.releasePlunger();
+        this._keyCharge = 0;
+      }
+      e.preventDefault();
+    } else if (down && (k === 'z' || k === 'x')) {
+      this.pinball.nudge(k === 'z' ? -1 : 1);
+    }
   }
 
   _setNdc(x, y) {
@@ -94,6 +166,7 @@ export class Input {
     if (!this.enabled) return;
     this.el.setPointerCapture?.(e.pointerId);
     this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (this.pinballActive) { this._pinballDown(e); return; }
 
     if (this.pointers.size === 2) {
       const [a, b] = [...this.pointers.values()];
@@ -123,6 +196,7 @@ export class Input {
     if (!this.enabled) return;
     const rec = this.pointers.get(e.pointerId);
     if (rec) { rec.x = e.clientX; rec.y = e.clientY; }
+    if (this.pinballActive) { this._pinballMove(e); return; }
 
     // Idle: pointer position drives a small camera parallax.
     if (this.mode === 'idle' || this.mode === 'drag') {
@@ -196,8 +270,9 @@ export class Input {
 
   onUp(e) {
     this.pointers.delete(e.pointerId);
-    this.el.releasePointerCapture?.(e.pointerId);
+    try { this.el.releasePointerCapture?.(e.pointerId); } catch { /* already released */ }
     if (!this.enabled) { this.mode = 'idle'; return; }
+    if (this.pinballActive) { this._pinballUp(e); return; }
 
     if (this.mode === 'pinch') {
       if (this.pointers.size === 0) this.mode = 'idle';
@@ -234,7 +309,7 @@ export class Input {
   }
 
   onWheel(e) {
-    if (!this.enabled) return;
+    if (!this.enabled || this.pinballActive) return;
     e.preventDefault();
     this.view.zoom(Math.sign(e.deltaY) * 0.1);
   }

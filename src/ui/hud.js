@@ -20,6 +20,7 @@ export class Hud {
       orders: $('orders'), toasts: $('toasts'), hint: $('hint'),
       travel: $('travel'), travelList: $('travel-list'),
       btnTravel: $('btn-travel'), btnCam: $('btn-cam'), btnQuality: $('btn-quality'),
+      btnPinball: $('btn-pinball'),
       btnSound: $('btn-sound'), btnReset: $('btn-reset'), travelClose: $('travel-close'),
     };
     this.orderNodes = new Map();
