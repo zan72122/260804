@@ -153,11 +153,18 @@ async function run(device) {
   }
   await sleep(600);
   await snap('threading');
-  // threading takes a few seconds
-  for (let i = 0; i < 40; i++) {
-    const st = await phase();
-    if (st?.seaPhase !== 'prep') break;
-    await sleep(300);
+  // threading takes a few seconds of game time, longer in wall time here
+  {
+    const deadline = Date.now() + 180000;
+    for (;;) {
+      const st = await phase();
+      if (st?.seaPhase !== 'prep') break;
+      if (Date.now() > deadline) {
+        console.log('  !! threading did not finish within 180s');
+        break;
+      }
+      await sleep(300);
+    }
   }
   await snap('payout-start');
 
@@ -186,7 +193,7 @@ async function run(device) {
   let guard = 0;
   let lastLay = -1;
   let payStall = 0;
-  while (guard++ < 90) {
+  while (guard++ < 160) {
     const st = await phase();
     if (!st || st.seaPhase !== 'payout') break;
     if (st.lay <= lastLay + 0.0005) payStall++;
@@ -215,12 +222,23 @@ async function run(device) {
   await snap('descent');
 
   // ---- descent is automatic ----------------------------------------------
-  for (let i = 0; i < 80; i++) {
-    const st = await phase();
-    if (st?.seaPhase !== 'descent') break;
-    if (i === 12) await snap('descent-mid');
-    if (i === 30) await snap('descent-deep');
-    await sleep(300);
+  // Software rendering runs at a few frames a second, so a fixed iteration
+  // count is not a timeout - wait on the actual state, generously.
+  {
+    const deadline = Date.now() + 240000;
+    let i = 0;
+    for (;;) {
+      const st = await phase();
+      if (st?.seaPhase !== 'descent') break;
+      if (Date.now() > deadline) {
+        console.log('  !! descent did not finish within 240s');
+        break;
+      }
+      if (i === 12) await snap('descent-mid');
+      if (i === 40) await snap('descent-deep');
+      i++;
+      await sleep(300);
+    }
   }
   await sleep(400);
   await snap('rov-dark');
@@ -236,7 +254,7 @@ async function run(device) {
   guard = 0;
   let lastBury = 0;
   let stalled = 0;
-  while (guard++ < 140) {
+  while (guard++ < 260) {
     const st = await phase();
     if (!st || (st.seaPhase !== 'rov' && st.seaPhase !== 'done')) break;
     if (st.seaPhase === 'done') break;
@@ -255,10 +273,17 @@ async function run(device) {
   await snap('buried');
 
   // ---- finale ------------------------------------------------------------
-  for (let i = 0; i < 60; i++) {
-    const st = await phase();
-    if (st?.stage === 'finale') break;
-    await sleep(400);
+  {
+    const deadline = Date.now() + 120000;
+    for (;;) {
+      const st = await phase();
+      if (st?.stage === 'finale') break;
+      if (Date.now() > deadline) {
+        console.log('  !! never reached the finale');
+        break;
+      }
+      await sleep(400);
+    }
   }
   await sleep(3000);
   await snap('finale-mid');

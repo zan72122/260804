@@ -40,7 +40,7 @@ const CABLE_RADIUS = 0.155;
 
 const LAYBACK = 46; // metres the touchdown lags behind the ship
 const SHIP_PER_PAID = 0.85; // ship advance per metre of cable paid out (slack)
-const PAYOUT_TARGET_S = 0.55; // route fraction laid before we dive
+const PAYOUT_TARGET_S = 0.62; // route fraction laid before we dive
 const TRENCH_SINK = 1.38;
 
 /**
@@ -51,7 +51,7 @@ const TRENCH_SINK = 1.38;
 const PAY_PER_SCREEN = 62;
 const LEVER_RATE = 15.5;
 /** Same idea for the seabed trace: one screen-height traced = this much route. */
-const TRACE_PER_SCREEN = 0.15;
+const TRACE_PER_SCREEN = 0.125;
 
 export interface SeaEvents {
   onPhase: (p: SeaPhase) => void;
@@ -618,8 +618,8 @@ export class SeaStage {
         // gear, so the ship's fore-and-aft axis maps to the tall screen axis:
         // sheave at the top, the free span of cable running down the frame,
         // the sea taking the bottom. Landscape can afford to stand abeam.
-        this.localShot(P ? this.shotA.set(-50, 8.5, 7) : this.shotA.set(-42, 9.5, 25), this.targetPos);
-        this.localShot(P ? this.shotA.set(-39, 3.5, 0) : this.shotA.set(-42, 1.0, 0), this.targetLook);
+        this.localShot(P ? this.shotA.set(-50, 8.5, 7) : this.shotA.set(-62, 13, 26), this.targetPos);
+        this.localShot(P ? this.shotA.set(-39, 3.5, 0) : this.shotA.set(-36, 1.5, 0), this.targetLook);
         this.targetFov = P ? 58 : 52;
         break;
       }
@@ -791,6 +791,10 @@ export class SeaStage {
     this.updateMachinery(dt);
     this.updateEnvironment(dt, portrait);
     this.frameShot(portrait, dt);
+    if (this.snapNext) {
+      this.snapNext = false;
+      this.snapCamera();
+    }
 
     dampVec(this.camPos, this.targetPos, this.phase === 'descent' ? 4.5 : 2.6, dt);
     dampVec(this.camLook, this.targetLook, this.phase === 'descent' ? 5.5 : 3.2, dt);
@@ -815,8 +819,15 @@ export class SeaStage {
     this.camera.updateProjectionMatrix();
   }
 
+  private snapNext = false;
+
   private setPhase(p: SeaPhase) {
     if (this.phase === p) return;
+    // Prep looks forward along the deck; payout looks at the stern from
+    // astern. Gliding between them flies the lens straight through the
+    // A-frame, so this one is a cut. Every other transition is continuous and
+    // stays a glide.
+    if (p === 'payout') this.snapNext = true;
     this.phase = p;
     this.idleTimer = 0;
     this.events.onPhase(p);

@@ -160,6 +160,10 @@ export class Game {
   private enterFinale() {
     this.stage = 'finale';
     this.finaleT = 0;
+    // the sea stage stops updating here, so its continuous voices have to be
+    // told to stop rather than left humming under the celebration
+    sound.silenceLoops();
+    sound.setSubmersion(0);
     this.hud.setLever(false);
     this.hud.setRail(false);
     this.hud.setHand(false);

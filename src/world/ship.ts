@@ -632,10 +632,15 @@ export function buildShip(decor: DecorDef, cable: CableDef): ShipBuild {
     g.add(wheel);
     spinners.push({ mesh: wheel, axis: 'z', radius: SHEAVE_R });
     for (const s of [-1, 1]) {
-      const cheek = new THREE.Mesh(new THREE.CylinderGeometry(SHEAVE_R + 0.42, SHEAVE_R + 0.42, 0.2, 40), accentMat);
+      const cheek = new THREE.Mesh(new THREE.CylinderGeometry(SHEAVE_R + 0.42, SHEAVE_R + 0.42, 0.2, 40), safetyMat);
       cheek.rotation.x = Math.PI / 2;
       cheek.position.z = s * 0.6;
       g.add(cheek);
+      // the chosen decoration is a rim band, not the whole wheel
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(SHEAVE_R + 0.4, 0.11, 6, 34), accentMat);
+      rim.rotation.y = Math.PI / 2;
+      rim.position.z = s * 0.72;
+      g.add(rim);
       // spokes
       for (let i = 0; i < 6; i++) {
         const sp = new THREE.Mesh(new THREE.BoxGeometry(0.34, SHEAVE_R * 1.85, 0.12), darkSteel);
