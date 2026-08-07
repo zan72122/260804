@@ -326,18 +326,18 @@
     cb('gen', this.mFar, this.mdlIdent, { rough: 0.92, metal: 0.0, ao: 1.0, detail: 0.0 });
     cb('concrete', this.mConcrete, this.mdlIdent, { rough: 0.85, metal: 0.0, ao: 0.92 });
     cb('gen', this.mMetal, this.mdlIdent, { rough: 0.48, metal: 0.72, ao: 0.85 });
-    cb('gen', this.mWood, this.mdlIdent, { rough: 0.88, metal: 0.0, ao: 0.75 });
-    cb('gen', this.mMisc, this.mdlIdent, { rough: 0.78, metal: 0.15, ao: 0.8 });
+    cb('gen', this.mWood, this.mdlIdent, { rough: 0.88, metal: 0.0, ao: 0.75, noRefl: true });
+    cb('gen', this.mMisc, this.mdlIdent, { rough: 0.78, metal: 0.15, ao: 0.8, noRefl: true });
     cb('gen', this.mGantry, this.mdlIdent, { rough: 0.55, metal: 0.6, ao: 0.9 });
-    cb('gen', this.mWorkers, this.mdlIdent, { rough: 0.85, metal: 0.0, ao: 0.85 });
+    cb('gen', this.mWorkers, this.mdlIdent, { rough: 0.85, metal: 0.0, ao: 0.85, noRefl: true });
     cb('gen', this.mGate, this.mdlGate, { rough: 0.5, metal: 0.7, ao: 0.85 });
     cb('hull', this.mHull, this.mdlShip, { rough: 0.55, metal: 0.15, ao: 0.95 });
     cb('gen', this.mShipPaint, this.mdlShip, { rough: 0.52, metal: 0.12, ao: 0.9 });
     cb('gen', this.mShipMetal, this.mdlShip, { rough: 0.45, metal: 0.75, ao: 0.85 });
     cb('gen', this.mProp, this.mdlProp, { rough: 0.32, metal: 0.9, ao: 0.9, tint: st.propTint || [1, 1, 1] });
     cb('gen', this.mRudder, this.mdlRudder, { rough: 0.6, metal: 0.25, ao: 0.9 });
-    cb('gen', this.mLeverBase, this.mdlLeverBase, { rough: 0.55, metal: 0.4, ao: 0.9 });
-    cb('gen', this.mLeverArm, this.mdlLeverArm, { rough: 0.4, metal: 0.5, ao: 0.9 });
+    cb('gen', this.mLeverBase, this.mdlLeverBase, { rough: 0.55, metal: 0.4, ao: 0.9, noRefl: true });
+    cb('gen', this.mLeverArm, this.mdlLeverArm, { rough: 0.4, metal: 0.5, ao: 0.9, noRefl: true });
     if (st.tugVisible) cb('gen', this.mTug, this.mdlTug, { rough: 0.55, metal: 0.25, ao: 0.9 });
   };
 
@@ -374,6 +374,7 @@
 
   /* ---------------- 不透明シーン ---------------- */
   Renderer.prototype.renderOpaque = function (st, clipY, clipSign, drawSky, reflSky) {
+    var skipSmall = !!reflSky;
     var gl = this.gl;
     gl.enable(gl.DEPTH_TEST);
     gl.depthFunc(gl.LEQUAL);
@@ -390,6 +391,7 @@
       var used = false;
       this.forEachObject(st, function (k, mesh, model, opt) {
         if (k !== kind) return;
+        if (skipSmall && opt.noRefl) return;
         if (!used) {
           p.use();
           self.setGlobals(p, st);
@@ -579,7 +581,7 @@
     m4.trs(this.mdlGate, W.GATE_X, W.SILL_Y + 0.05, 0, 0, 0, st.gateAngle, 1);
     m4.trs(this.mdlLeverBase, st.lever.x, st.lever.y, st.lever.z, 0, st.lever.yaw, 0, 1);
     m4.trs(this.mdlLeverArm, st.lever.x, st.lever.y + 1.15, st.lever.z, st.leverTilt, st.lever.yaw, 0, 1);
-    m4.trs(this.mdlTug, st.tugX, W.SEA_Y - 2.2, st.tugZ, 0, st.tugYaw || 0, 0, 1);
+    m4.trs(this.mdlTug, st.tugX, W.SEA_Y - 2.6, st.tugZ, 0, st.tugYaw || 0, 0, 1);
 
     // 1. シャドウ
     this.renderShadow(st);

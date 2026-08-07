@@ -29,7 +29,7 @@
       waterLevel: W.SEA_Y,
       wetLevel: W.SEA_Y,
       wetAmount: 1.0,
-      wetLen: 16.0,
+      wetLen: 6.0,
       shipX: SHIP_START_X,
       shipY: W.SHIP_FLOAT_Y,
       shipPitch: 0,
@@ -44,8 +44,8 @@
       tugYaw: 0,
       tugVisible: true,
       vortices: [
-        { x: -104, z: 17, w: 0 },
-        { x: 104, z: 17, w: 0 },
+        { x: -96, z: 17, w: 0 },
+        { x: 96, z: 17, w: 0 },
         { x: 0, z: 0, w: 0 },
         { x: 0, z: 0, w: 0 }
       ],
@@ -70,6 +70,7 @@
     this.drag = null;
     this.camState = null;
     this.gateSound = false;
+    this.gateClosing = false;
     this.hornDone = false;
     this.approachBoost = 0;
     this.emitAcc = { wall: 0, sump: 0, hull: 0, out: 0, mist: 0, gate: 0 };
@@ -129,8 +130,10 @@
 
   Game.prototype.updGateClose = function (dt) {
     var st = this.st;
-    st.tugVisible = st.tugX > -330;
-    st.tugX -= dt * 14;
+    // ゲートの見通しを塞がないよう、タグは速やかに退場する
+    st.tugX -= dt * 16;
+    st.tugZ = U.approach(st.tugZ, 18, 0.8, dt);
+    st.tugVisible = this.phaseT < 2.5;
     st.shipRoll = U.approach(st.shipRoll, 0, 0.7, dt);
     st.shipPitch = U.approach(st.shipPitch, 0, 0.7, dt);
     if (this.gateClosing) {
@@ -158,8 +161,8 @@
   Game.prototype.updPump = function (dt) {
     var st = this.st;
     st.tugVisible = false;
-    // 放置しても進むようにゆっくり自動排水
-    if (this.idle > 2.2) this.pumpSet = Math.min(1, this.pumpSet + dt / 46);
+    // 放置しても進むようにゆっくり自動排水（触っている間は邪魔しない）
+    if (this.idle > 9.0) this.pumpSet = Math.min(1, this.pumpSet + dt / 40);
     if (st.waterLevel < 0.09 && this.pumpSet > 0.985) {
       this.landTimer += dt;
       if (this.landTimer > 2.4) this.setPhase(PH.EXPOSED);
@@ -171,17 +174,19 @@
     st.tugVisible = false;
     this.exposedT += dt;
     // レバーを戻したら注水へ
-    if (this.pumpSet < 0.93) this.setPhase(PH.FLOOD);
-    else if (this.exposedT > 78 && this.idle > 12) {
-      this.pumpSet = Math.max(0, this.pumpSet - dt / 24);
-      if (this.pumpSet < 0.93) this.setPhase(PH.FLOOD);
+    if (this.pumpSet < 0.80) { this.setPhase(PH.FLOOD); return; }
+    if (this.exposedT > 70 && this.idle > 14) {
+      this.pumpSet = Math.max(0, this.pumpSet - dt / 20);
+      if (this.pumpSet < 0.80) this.setPhase(PH.FLOOD);
     }
   };
 
   Game.prototype.updFlood = function (dt) {
     var st = this.st;
     st.tugVisible = false;
-    if (this.idle > 2.2) this.pumpSet = Math.max(0, this.pumpSet - dt / 34);
+    if (this.idle > 9.0) this.pumpSet = Math.max(0, this.pumpSet - dt / 30);
+    // もう一度抜きたくなったら排水へ戻れる
+    if (this.pumpSet > 0.90 && st.waterLevel < W.LAND_LEVEL) { this.setPhase(PH.PUMP); return; }
     if (st.waterLevel > W.SEA_Y - 0.07 && this.pumpSet < 0.012) {
       this.setPhase(PH.GATE_OPEN);
     }
@@ -210,7 +215,8 @@
     var t = Math.max(0, this.phaseT - 2.0);
     var v = Math.min(3.4, 0.35 + t * 0.55);
     st.shipX -= v * dt;
-    st.tugX = st.shipX - 118;
+    st.tugX = st.shipX - 116;
+    st.tugZ = U.approach(st.tugZ, 15, 0.6, dt);
     st.shipRoll = Math.sin(st.time * 0.55) * 0.006 * Math.min(1, t * 0.3);
     if (st.shipX < -300) {
       st.fade = Math.max(0, st.fade - dt * 0.75);
@@ -260,10 +266,10 @@
     st.wetLevel = st.waterLevel;
     if (draining || filling) {
       st.wetAmount = U.approach(st.wetAmount, 1.0, 2.0, dt);
-      st.wetLen = U.approach(st.wetLen, 9.5, 0.9, dt);
+      st.wetLen = U.approach(st.wetLen, 5.5, 0.9, dt);
     } else {
       st.wetAmount = U.approach(st.wetAmount, 0.42, 0.055, dt);
-      st.wetLen = U.approach(st.wetLen, 3.4, 0.05, dt);
+      st.wetLen = U.approach(st.wetLen, 2.2, 0.05, dt);
     }
 
     // 水たまりへの分裂
@@ -341,8 +347,8 @@
 
     if (this.phase === PH.GATE_CLOSE && !this.gateClosing) {
       show = this.idle > 1.0; kind = 0;
-      pos = [W.GATE_X - 5, W.SEA_Y + 8.0, 0];
-      size = 11;
+      pos = [W.GATE_X - 3, W.SEA_Y + 4.5, 0];
+      size = 9;
     } else if (this.phase === PH.PUMP || this.phase === PH.FLOOD) {
       show = this.idle > 2.6; kind = 1;
       pos = this.leverKnob();
@@ -484,6 +490,26 @@
       }
     }
 
+    // ゲートが水面を割って立ち上がるときの水膜としぶき
+    if (this.gateClosing && this.phase === PH.GATE_CLOSE) {
+      var ga = st.gateAngle;
+      var tipX = W.GATE_X + 14.8 * Math.cos(ga);
+      var tipY = W.SILL_Y + 0.05 + 14.8 * Math.sin(ga);
+      E.gaterise = (E.gaterise || 0) + dt * 320;
+      while (E.gaterise > 1) {
+        E.gaterise -= 1;
+        var gz = rr(-23, 23);
+        var above = tipY > W.SEA_Y - 1.5;
+        P.spawn({
+          x: tipX + rr(-1.6, 1.6), y: Math.min(tipY, W.SEA_Y) + rr(-0.6, 1.4), z: gz,
+          vx: rr(-3.5, -0.5), vy: above ? rr(-1.5, 1.2) : rr(0.2, 2.6), vz: rr(-1.2, 1.2),
+          life: rr(0.5, 1.5), size: rr(0.12, 0.45), size1: rr(0.35, 1.2),
+          kind: Math.random() < 0.45 ? 1 : 0, r: 0.94, g: 0.97, b: 0.99,
+          drag: 1.1, grav: 9.8, floorY: W.SEA_Y - 1.0
+        });
+      }
+    }
+
     // 注水時のゲート際の激流
     if (filling) {
       E.gate += dt * 110;
@@ -605,21 +631,23 @@
     var k;
     switch (this.phase) {
       case PH.APPROACH: {
-        var p = U.smoothstep(-160, SHIP_DOCK_X, st.shipX);
-        var track = key(st.shipX - 172, 38, 92, st.shipX + 34, 12, -4);
-        var fixed = key(-222, 42, 76, -66, 11, 0);
-        k = mixKey(track, fixed, p);
+        // 前半はドックの中から、開いた入口越しに近づく船を見る。
+        // 船が入ってくる前に、脇から全体を見る位置へ移る。
+        var p = U.smoothstep(-236, -178, st.shipX);
+        var inside = key(-58, 25, 13, -205, 11.5, 0);
+        var side = key(-124, 33, 35, -34, 10, 2);
+        k = mixKey(inside, side, p);
         break;
       }
       case PH.GATE_CLOSE:
-        k = key(-58, 42, 66, -126, 11, 0);
+        k = key(-176, 15.5, 11, -123, 12, 0);   // 水面すれすれから、起き上がるゲートを見る
         break;
       case PH.PUMP:
       case PH.FLOOD: {
         var q = U.clamp(1 - st.waterLevel / W.SEA_Y, 0, 1);
-        var k0 = key(-142, 37, 35, -34, 11.5, 3);
+        var k0 = key(-113, 38, 36, -30, 11.5, 3);
         var k1 = key(-118, 27, 25, -26, 8.0, 3);
-        var k2 = key(-100, 19, 17, -20, 5.0, 3);
+        var k2 = key(-108, 19, 18, -20, 5.0, 3);
         var qq = U.smoothstep(0.02, 1.0, q);
         k = qq < 0.55 ? mixKey(k0, k1, qq / 0.55) : mixKey(k1, k2, (qq - 0.55) / 0.45);
         break;
@@ -632,7 +660,8 @@
           k = key(st.shipX + W.RUDDER_X - 19, 8.0, 17.0, st.shipX + W.RUDDER_X + 1, 5.6, 0);
         } else if (mode === 3) {    // 船底洗浄
           var wx = this.washFocusX === undefined ? st.shipX - 30 : this.washFocusX;
-          k = key(wx + 31, 11.5, 18.5, wx - 8, 5.6, 0);
+          wx = U.clamp(wx, W.DOCK_X0 + 28, W.DOCK_X1 - 62);
+          k = key(wx + 48, 15.0, 26.0, wx - 10, 6.2, 1);
         } else {
           var sw = Math.sin(this.exposedT * 0.042) * 0.5 + 0.5;
           var lo = key(-108, 7.0, 13.0, -56, 8.0, 0);      // 船尾を見上げる
@@ -642,10 +671,10 @@
         break;
       }
       case PH.GATE_OPEN:
-        k = key(-56, 42, 66, -126, 11, 0);
+        k = key(-178, 15.5, 12, -123, 12, 0);
         break;
       case PH.DEPART:
-        k = key(-96, 46, 96, Math.max(-330, st.shipX + 46), 12, 0);
+        k = key(62, 32, 22, Math.max(-240, st.shipX - 30), 11, 0);
         break;
       default:
         k = key(-118, 27, 25, -26, 8.0, 3);
@@ -664,8 +693,11 @@
     } else if (aspect > 2.0) {
       fov = 0.60 * 0.92;
     }
-    // 閉鎖したゲートより海側へ出ない
-    if (this.phase >= PH.PUMP && this.phase <= PH.FLOOD && k.ex < -110) k.ex = -110;
+    // 排水中はドックの中に留まる（壁やゲートの内側に入り込まないように）
+    if (this.phase >= PH.PUMP && this.phase <= PH.FLOOD) {
+      k.ex = U.clamp(k.ex, -113, 100);
+      k.ez = U.clamp(k.ez, -44, 44);
+    }
     if (k.ey < 3.5) k.ey = 3.5;
     k.fov = fov;
     return k;
@@ -796,7 +828,11 @@
         this.doWash(hit);
         return;
       }
+      // 船に当たらなかった上下ドラッグは水位操作として扱う（幼児でも戻せるように）
       this.focus = 0;
+      this.drag.mode = 'lever';
+      this.drag.base = this.pumpSet;
+      return;
     }
 
     if (this.phase === PH.GATE_CLOSE) {

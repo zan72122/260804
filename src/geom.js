@@ -733,7 +733,7 @@
     }
     // --- 底のサンプ（ポンプ吸込みピット）---
     for (var p = 0; p < 2; p++) {
-      var px = (p === 0) ? W.DOCK_X0 + 14 : W.DOCK_X1 - 14;
+      var px = (p === 0) ? W.DOCK_X0 + 20 : W.DOCK_X1 - 20;
       mb.color('#4c4941');
       mb.boxMM(px - 5.0, 0.01, HW - 6.2, px + 5.0, 0.06, HW - 0.6, 0.4);   // 暗いピット面
       mb.color('#7e796f');
@@ -879,9 +879,9 @@
     // 吸込み管（ドック底のサンプから壁を貫通して立ち上がる）
     mb.color('#4f5a60');
     for (var p = 0; p < 2; p++) {
-      var px = (p === 0) ? W.DOCK_X0 + 12 : W.DOCK_X1 - 12;
-      mb.push(); mb.translate(px, 0.9, HW - 3.2); mb.rotZ(Math.PI / 2); mb.cyl(1.7, 1.7, 3.4, 14); mb.pop();
-      mb.push(); mb.translate(px, -0.1, HW - 3.2); mb.cyl(2.1, 1.9, 1.1, 14); mb.pop();
+      var px = (p === 0) ? W.DOCK_X0 + 20 : W.DOCK_X1 - 20;
+      mb.push(); mb.translate(px, 0.9, HW - 3.4); mb.rotZ(Math.PI / 2); mb.cyl(1.7, 1.7, 3.4, 14); mb.pop();
+      mb.push(); mb.translate(px, -0.1, HW - 3.4); mb.cyl(2.1, 1.9, 1.1, 14); mb.pop();
     }
     // 巨大な吐出管（ヤードを横断して岸壁へ）
     var pipeZ = [-THW - 9, -THW - 13.2];
@@ -1195,46 +1195,79 @@
 
   /* 小型タグボート */
   function buildTug(mb) {
-    mb.color('#22303c');
-    mb.surface(18, 8, function (u, v, o) {
-      var t = u;
-      var hb = 4.2 * (t > 0.75 ? Math.pow(1 - (t - 0.75) / 0.25, 0.5) : (t < 0.12 ? 0.75 + 0.25 * (t / 0.12) : 1));
-      var y0 = (t > 0.85 ? (t - 0.85) / 0.15 * 1.4 : 0);
-      var y = y0 + v * (3.4 - y0);
-      var r = Math.min(1, (y - y0) / 1.6);
-      var z = hb * Math.sqrt(Math.max(0, 1 - (1 - r) * (1 - r)));
-      o[0] = (t - 0.5) * 24; o[1] = y; o[2] = z;
-    });
-    mb.surface(18, 8, function (u, v, o) {
-      var t = u;
-      var hb = 4.2 * (t > 0.75 ? Math.pow(1 - (t - 0.75) / 0.25, 0.5) : (t < 0.12 ? 0.75 + 0.25 * (t / 0.12) : 1));
-      var y0 = (t > 0.85 ? (t - 0.85) / 0.15 * 1.4 : 0);
-      var y = y0 + v * (3.4 - y0);
-      var r = Math.min(1, (y - y0) / 1.6);
-      var z = -hb * Math.sqrt(Math.max(0, 1 - (1 - r) * (1 - r)));
-      o[0] = (t - 0.5) * 24; o[1] = y; o[2] = z;
-    }, true);
-    mb.color('#b8453a');
-    mb.push(); mb.translate(0, 3.5, 0); mb.box(24, 0.3, 8.4, 0.5); mb.pop();
-    mb.color('#e6e3da');
-    mb.push(); mb.translate(-1.5, 5.0, 0); mb.box(9.0, 3.0, 6.4, 0.4); mb.pop();
-    mb.push(); mb.translate(-1.0, 7.4, 0); mb.box(5.4, 2.4, 5.0, 0.4); mb.pop();
-    mb.color('#2a3238');
-    mb.push(); mb.translate(-4.0, 9.6, 0); mb.cyl(0.9, 0.8, 2.6, 10); mb.pop();
-    mb.color('#141a1f');
-    for (var i = 0; i < 4; i++) {
-      mb.push(); mb.translate(6.0 - i * 0.0, 2.4, (i < 2 ? 1 : -1) * 4.2); mb.pop();
+    var L = 22, HB = 4.0, D = 4.6;
+    function halfB(t) {
+      if (t > 0.78) return HB * Math.pow(1 - (t - 0.78) / 0.22, 0.55);
+      if (t < 0.10) return HB * (0.78 + 0.22 * (t / 0.10));
+      return HB;
     }
-    // 防舷材
-    mb.color('#1c2226');
+    mb.color('#1e2b36');
+    for (var sg = -1; sg <= 1; sg += 2) {
+      mb.surface(20, 8, function (u, v, o) {
+        var t = u;
+        var hb = halfB(t);
+        var y0 = (t > 0.86 ? (t - 0.86) / 0.14 * 1.6 : 0);
+        var y = y0 + v * (D - y0);
+        var r = Math.min(1, (y - y0) / 2.0);
+        o[0] = (t - 0.5) * L;
+        o[1] = y;
+        o[2] = sg * hb * Math.sqrt(Math.max(0, 1 - (1 - r) * (1 - r)));
+      }, sg < 0);
+    }
+    // 船底
     mb.surface(20, 1, function (u, v, o) {
       var t = u;
-      var hb = 4.45 * (t > 0.75 ? Math.pow(1 - (t - 0.75) / 0.25, 0.5) : (t < 0.12 ? 0.75 + 0.25 * (t / 0.12) : 1));
-      var ang = v * Math.PI;
-      o[0] = (t - 0.5) * 24;
-      o[1] = 3.3 + Math.sin(ang) * 0.0;
-      o[2] = Math.cos(ang) * hb;
+      var y0 = (t > 0.86 ? (t - 0.86) / 0.14 * 1.6 : 0);
+      o[0] = (t - 0.5) * L;
+      o[1] = y0;
+      o[2] = (v * 2 - 1) * 0.35 * halfB(t);
     });
+    // 甲板
+    mb.color('#8d5a30');
+    mb.surface(20, 1, function (u, v, o) {
+      o[0] = (u - 0.5) * L;
+      o[1] = D - 0.06;
+      o[2] = (v * 2 - 1) * halfB(u) * 0.98;
+    });
+    // 舷側の赤帯
+    mb.color('#b8453a');
+    for (var sg2 = -1; sg2 <= 1; sg2 += 2) {
+      mb.surface(20, 1, function (u, v, o) {
+        o[0] = (u - 0.5) * L;
+        o[1] = D - 1.1 + v * 1.05;
+        o[2] = sg2 * (halfB(u) + 0.06);
+      }, sg2 < 0);
+    }
+    // 上部構造
+    mb.color('#e2ded4');
+    mb.push(); mb.translate(-1.4, D + 1.5, 0); mb.box(8.0, 3.0, 6.0, 0.35); mb.pop();
+    mb.color('#1d2a33');
+    mb.push(); mb.translate(-1.4, D + 2.3, 0); mb.box(8.15, 1.1, 6.15, 0.35); mb.pop();
+    mb.color('#e2ded4');
+    mb.push(); mb.translate(-1.0, D + 4.2, 0); mb.box(4.8, 2.4, 4.4, 0.35); mb.pop();
+    mb.color('#1d2a33');
+    mb.push(); mb.translate(-1.0, D + 4.5, 0); mb.box(4.95, 1.0, 4.55, 0.35); mb.pop();
+    // 煙突とマスト
+    mb.color('#2a3238');
+    mb.push(); mb.translate(-3.6, D + 5.6, 0); mb.cyl(0.75, 0.68, 2.4, 10); mb.pop();
+    mb.color('#b8453a');
+    mb.push(); mb.translate(-3.6, D + 7.4, 0); mb.cyl(0.78, 0.72, 0.6, 10); mb.pop();
+    mb.color('#9aa0a6');
+    mb.push(); mb.translate(-1.0, D + 5.4, 0); mb.cyl(0.14, 0.10, 3.4, 6); mb.pop();
+    // 防舷材（タイヤ）
+    mb.color('#15191d');
+    for (var f = 0; f < 9; f++) {
+      var tf = 0.06 + f * 0.105;
+      for (var sf = -1; sf <= 1; sf += 2) {
+        mb.push();
+        mb.translate((tf - 0.5) * L, D - 0.5, sf * (halfB(tf) + 0.22));
+        mb.rotX(Math.PI / 2);
+        mb.cyl(0.5, 0.5, 0.34, 8);
+        mb.pop();
+      }
+    }
+    // 船首の当て
+    mb.push(); mb.translate(L * 0.5 - 0.2, D - 0.7, 0); mb.rotZ(Math.PI / 2); mb.cyl(0.85, 0.85, 0.5, 10); mb.pop();
     return mb;
   }
 

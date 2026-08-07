@@ -240,8 +240,8 @@ void main(){
     float wamt = outside ? 1.0 : uWetAmt;
     float wlen = outside ? 1.2 : uWetLen;
     float wet = wamt * clamp(exp(-max(0.0, vWorld.y - wref)/max(wlen,0.05)), 0.0, 1.0);
-    // 潮位線（水際の濃い帯）
-    float tide = exp(-abs(vWorld.y - wref)*2.2)*wamt;
+    // 潮位線（水際の濃い帯）: 直上は濡れて黒く、直下は水中
+    float tide = exp(-abs(vWorld.y - wref)*1.1)*wamt;
     albedo *= 1.0 - 0.56*wet;
     albedo *= 1.0 - 0.26*tide;
     rough = mix(rough, 0.10, wet*0.95);
