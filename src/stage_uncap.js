@@ -19,8 +19,8 @@
     _roll: new THREE.Quaternion().setFromEuler(new THREE.Euler(0.10, 0, 0.16))
   };
 
-  var BRUSH_U = 0.115, BRUSH_V = 0.115;   // 刃幅 ≒ 8.8cm 相当
-  var GOAL = 0.80;
+  var BRUSH_U = 0.135, BRUSH_V = 0.130;   // 刃幅 ≒ 9.6cm 相当（指のずれを吸収する太さ）
+  var GOAL = 0.66;
 
   global.Stages = global.Stages || {};
 

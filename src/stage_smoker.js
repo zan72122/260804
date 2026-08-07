@@ -10,7 +10,7 @@
   global.LAYOUT = {
     hiveY: 0.34,
     entrance: new THREE.Vector3(0, 0.352, 0.235),
-    smokerCrate: new THREE.Vector3(0.14, 0, 0.76),
+    smokerCrate: new THREE.Vector3(0.05, 0, 0.74),
     table: new THREE.Vector3(1.72, 0, 0.26),
     tableH: 0.74,
     extractor: new THREE.Vector3(3.06, 0, -0.06),
@@ -97,13 +97,14 @@
       var L = LAYOUT;
       S.puffs = 0; S.calm = 0; S.done = 0; S.press = 0; S.pressGoal = 0; S.holdT = 0;
       S.swarm.calm = 0; S.swarm.hidden = 0;
+      S.swarm.group.visible = true;
       // 新しい周回では巣枠を作りなおす
       Stages.frames.reset(G);
 
       G.setCam(
-        new THREE.Vector3(0.09, 0.46, 0.48),
-        new THREE.Vector3(0.13, 0.33, 0.94).normalize(),
-        0.42, { speed: 2.2, minW: 0.27 }
+        new THREE.Vector3(0.04, 0.45, 0.46),
+        new THREE.Vector3(0.11, 0.33, 0.94).normalize(),
+        0.42, { speed: 2.2, minW: 0.30 }
       );
       World.setShadowFocus(new THREE.Vector3(0.25, 0.4, 0.3));
       SFX.beeLoop(0.55);

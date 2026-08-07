@@ -246,7 +246,7 @@
     g.scale(1, ry / rx);
     var rg = g.createRadialGradient(0, 0, 0, 0, 0, rx);
     rg.addColorStop(0, 'rgba(255,255,255,1)');
-    rg.addColorStop(0.62, 'rgba(255,255,255,0.92)');
+    rg.addColorStop(0.78, 'rgba(255,255,255,0.96)');
     rg.addColorStop(1, 'rgba(255,255,255,0)');
     g.fillStyle = rg;
     g.beginPath(); g.arc(0, 0, rx, 0, 7); g.fill();
@@ -269,7 +269,7 @@
     for (var y = 2; y < this.h - 2; y += 3) {
       for (var x = 2; x < this.w - 2; x += 3) {
         tot++;
-        if (d[(y * this.w + x) * 4] > 130) hit++;
+        if (d[(y * this.w + x) * 4] > 120) hit++;
       }
     }
     return tot ? hit / tot : 0;
