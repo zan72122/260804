@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#7fc4e2">
+<meta name="format-detection" content="telephone=no">
+<title>はちみつやさん</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <canvas id="gl"></canvas>
+  <canvas id="hint"></canvas>
+
+  <div id="hud">
+    <div id="steps"></div>
+    <div id="jars"><span id="jarIcon"></span><span id="jarPips"></span></div>
+  </div>
+
+  <div id="title">
+    <div class="t-inner">
+      <div class="t-comb"></div>
+      <h1>はちみつやさん</h1>
+      <button id="startBtn" aria-label="はじめる">
+        <span class="drop"></span>
+      </button>
+    </div>
+  </div>
+
+  <div id="loading"><div class="ld"></div></div>
+</div>
+
+<script src="vendor/three.min.js"></script>
+<script src="src/util.js"></script>
+<script src="src/audio.js"></script>
+<script src="src/tex.js"></script>
+<script src="src/materials.js"></script>
+<script src="src/props.js"></script>
+<script src="src/bees.js"></script>
+<script src="src/smoke.js"></script>
+<script src="src/world.js"></script>
+<script src="src/hint.js"></script>
+<script src="src/stage_smoker.js"></script>
+<script src="src/stage_frames.js"></script>
+<script src="src/stage_uncap.js"></script>
+<script src="src/stage_extract.js"></script>
+<script src="src/stage_bottle.js"></script>
+<script src="src/game.js"></script>
+</body>
+</html>
