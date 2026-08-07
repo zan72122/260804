@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0d1626">
+<meta name="description" content="4さいからのくうこうグランドハンドリング。マーシャリング・りんどめ・ボーディングブリッジ・プッシュバックであそぼう。">
+<title>くうこう グランドハンドリング</title>
+<style>
+  :root{
+    --safe-t: env(safe-area-inset-top, 0px);
+    --safe-b: env(safe-area-inset-bottom, 0px);
+    --safe-l: env(safe-area-inset-left, 0px);
+    --safe-r: env(safe-area-inset-right, 0px);
+    --ui: clamp(15px, 3.4vmin, 30px);
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{
+    margin:0; padding:0; width:100%; height:100%;
+    overflow:hidden; position:fixed; overscroll-behavior:none;
+    background:#0d1626; color:#fff;
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Maru Gothic ProN", "Hiragino Sans",
+                 "IPAPGothic", "Yu Gothic", "Noto Sans JP", sans-serif;
+    -webkit-user-select:none; user-select:none; touch-action:none;
+  }
+  #gl{ position:fixed; inset:0; width:100%; height:100%; display:block; touch-action:none; }
+
+  #ui{ position:fixed; inset:0; pointer-events:none; z-index:10;
+       padding: calc(var(--safe-t) + 10px) calc(var(--safe-r) + 10px) calc(var(--safe-b) + 10px) calc(var(--safe-l) + 10px); }
+
+  /* ---- 手順ヒント ---- */
+  #hint{
+    position:absolute; left:50%; top:calc(var(--safe-t) + 10px); transform:translateX(-50%);
+    display:flex; align-items:center; gap:.55em;
+    background:rgba(12,22,38,.62); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+    border:2px solid rgba(255,255,255,.22);
+    border-radius:999px; padding:.42em .95em .46em .55em;
+    font-size:var(--ui); font-weight:800; letter-spacing:.02em;
+    box-shadow:0 6px 22px rgba(0,0,0,.38);
+    opacity:0; transition:opacity .35s, transform .35s; max-width:92vw;
+  }
+  #hint.on{ opacity:1; }
+  #hintIcon{ font-size:1.5em; line-height:1; filter:drop-shadow(0 2px 3px rgba(0,0,0,.5)); }
+  #hintText{ white-space:nowrap; text-shadow:0 2px 6px rgba(0,0,0,.6); }
+
+  /* ---- 進行ステップ表示（絵だけ） ---- */
+  #steps{
+    position:absolute; left:50%; bottom:calc(var(--safe-b) + 8px); transform:translateX(-50%);
+    display:flex; gap:.35em; opacity:0; transition:opacity .4s;
+  }
+  #steps.on{ opacity:1; }
+  #steps div{
+    width:calc(var(--ui)*1.45); height:calc(var(--ui)*1.45); border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-size:calc(var(--ui)*.82);
+    background:rgba(10,18,32,.5); border:2px solid rgba(255,255,255,.18);
+    filter:grayscale(1) opacity(.5); transition:.4s;
+  }
+  #steps div.done{ filter:none; background:rgba(40,150,90,.55); border-color:rgba(160,255,200,.6); }
+  #steps div.cur{ filter:none; background:rgba(255,180,40,.55); border-color:#fff; transform:scale(1.18); }
+
+  /* ---- 操作ゴースト（ゆび） ---- */
+  #ghost{ position:absolute; left:0; top:0; width:100%; height:100%; opacity:0; transition:opacity .4s; }
+  #ghost.on{ opacity:.92; }
+  #ghand{
+    position:absolute; width:calc(var(--ui)*2.6); height:calc(var(--ui)*2.6); margin:calc(var(--ui)*-1.3) 0 0 calc(var(--ui)*-1.3);
+    border-radius:50%; border:calc(var(--ui)*.16) solid rgba(255,255,255,.95);
+    background:radial-gradient(circle at 38% 34%, rgba(255,255,255,.55), rgba(255,255,255,.10) 62%, rgba(255,255,255,0) 72%);
+    box-shadow:0 0 22px rgba(255,255,255,.55), inset 0 0 14px rgba(255,255,255,.35);
+  }
+  #ghand::after{
+    content:''; position:absolute; inset:-28%; border-radius:50%;
+    border:calc(var(--ui)*.10) solid rgba(255,255,255,.45);
+    animation:pulse 1.6s ease-out infinite;
+  }
+  @keyframes pulse{ 0%{transform:scale(.62);opacity:.9} 100%{transform:scale(1.25);opacity:0} }
+  .gm-h{ animation:mvH 2.0s ease-in-out infinite; }
+  .gm-v{ animation:mvV 2.0s ease-in-out infinite; }
+  .gm-hold{ animation:mvHold 1.8s ease-in-out infinite; }
+  .gm-tap{ animation:mvTap 1.3s ease-in-out infinite; }
+  .gm-drag{ animation:mvDrag 2.4s ease-in-out infinite; }
+  @keyframes mvH{ 0%,100%{transform:translateX(-13vmin)} 50%{transform:translateX(13vmin)} }
+  @keyframes mvV{ 0%,100%{transform:translateY(11vmin)} 50%{transform:translateY(-11vmin)} }
+  @keyframes mvHold{ 0%,100%{transform:scale(1);opacity:.85} 45%,75%{transform:scale(.74);opacity:1} }
+  @keyframes mvTap{ 0%,100%{transform:scale(1)} 50%{transform:scale(.68)} }
+  @keyframes mvDrag{ 0%{transform:translate(0,0)} 45%,55%{transform:translate(14vmin,-7vmin)} 100%{transform:translate(0,0)} }
+
+  /* ---- 大きなボタン ---- */
+  #menu{
+    position:absolute; inset:0; display:none; flex-direction:column;
+    align-items:center; justify-content:center; gap:calc(var(--ui)*.62);
+    pointer-events:none;
+    padding: calc(var(--safe-t) + 8px) 4vw calc(var(--safe-b) + 8px);
+  }
+  #menu.on{ display:flex; }
+  #menu h1{
+    margin:0 0 .25em; font-size:calc(var(--ui)*1.85); font-weight:900; letter-spacing:.04em; text-align:center;
+    text-shadow:0 4px 20px rgba(0,0,0,.7), 0 1px 0 rgba(255,255,255,.25); line-height:1.25;
+  }
+  #menu h1 small{ display:block; font-size:.52em; font-weight:700; opacity:.85; letter-spacing:.22em; margin-top:.5em; }
+  .btn{
+    pointer-events:auto; cursor:pointer;
+    display:flex; align-items:center; gap:.6em;
+    min-width:min(78vw, 22em);
+    padding:.62em 1.15em; border-radius:999px; border:3px solid rgba(255,255,255,.55);
+    font-size:calc(var(--ui)*1.02); font-weight:900; color:#12233c;
+    background:linear-gradient(180deg,#ffe9a8,#ffc23e);
+    box-shadow:0 8px 0 rgba(150,88,10,.55), 0 14px 30px rgba(0,0,0,.42);
+    transition:transform .10s, box-shadow .10s, filter .2s;
+  }
+  .btn .em{ font-size:1.45em; line-height:1; }
+  .btn:active{ transform:translateY(6px); box-shadow:0 2px 0 rgba(150,88,10,.55), 0 6px 16px rgba(0,0,0,.4); }
+  .btn.b2{ background:linear-gradient(180deg,#bfe6ff,#5cb2f0); box-shadow:0 8px 0 rgba(12,74,120,.55), 0 14px 30px rgba(0,0,0,.42); }
+  .btn.b3{ background:linear-gradient(180deg,#d6f5c8,#7ed06a); box-shadow:0 8px 0 rgba(38,96,28,.55), 0 14px 30px rgba(0,0,0,.42); }
+
+  /* 単独の大ボタン（画面下） */
+  #action{
+    position:absolute; left:50%; bottom:calc(var(--safe-b) + 12px); transform:translateX(-50%) scale(.7);
+    opacity:0; pointer-events:none; transition:opacity .3s, transform .3s;
+  }
+  #action.on{ opacity:1; transform:translateX(-50%) scale(1); }
+  #action .btn{ min-width:auto; pointer-events:auto; }
+
+  /* ---- できた！ ---- */
+  #toast{
+    position:absolute; left:50%; top:44%; transform:translate(-50%,-50%) scale(.5);
+    font-size:calc(var(--ui)*2.1); font-weight:900; letter-spacing:.06em;
+    color:#fff; text-shadow:0 0 28px rgba(255,210,90,.95), 0 6px 16px rgba(0,0,0,.6);
+    opacity:0; pointer-events:none; white-space:nowrap;
+  }
+  #toast.pop{ animation:pop 1.5s cubic-bezier(.2,1.5,.4,1) forwards; }
+  @keyframes pop{
+    0%{opacity:0; transform:translate(-50%,-50%) scale(.4) rotate(-7deg)}
+    22%{opacity:1; transform:translate(-50%,-50%) scale(1.14) rotate(2deg)}
+    38%{transform:translate(-50%,-50%) scale(1) rotate(0)}
+    78%{opacity:1; transform:translate(-50%,-56%) scale(1)}
+    100%{opacity:0; transform:translate(-50%,-72%) scale(.94)}
+  }
+
+  /* ---- 給油ゲージ（円形・数字なし） ---- */
+  #gauge{
+    position:absolute; right:calc(var(--safe-r) + 14px); top:50%; transform:translateY(-50%) scale(.8);
+    width:calc(var(--ui)*4.6); height:calc(var(--ui)*4.6);
+    opacity:0; transition:opacity .3s, transform .3s;
+  }
+  #gauge.on{ opacity:1; transform:translateY(-50%) scale(1); }
+  #gauge svg{ width:100%; height:100%; transform:rotate(-90deg); }
+  #gauge .bg{ fill:rgba(10,18,32,.55); stroke:rgba(255,255,255,.25); stroke-width:6; }
+  #gauge .fg{ fill:none; stroke:#ffd23a; stroke-width:11; stroke-linecap:round; filter:drop-shadow(0 0 6px rgba(255,210,60,.9)); }
+  #gauge .ic{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:calc(var(--ui)*1.5); }
+
+  #loading{
+    position:fixed; inset:0; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:.8em;
+    background:#0d1626; z-index:50; font-size:var(--ui); font-weight:800; letter-spacing:.14em;
+    transition:opacity .5s; text-align:center;
+  }
+  #loading.off{ opacity:0; pointer-events:none; }
+  #loading .plane{ font-size:2.6em; animation:fly 2.2s ease-in-out infinite; }
+  @keyframes fly{ 0%,100%{transform:translateX(-14px) translateY(2px)} 50%{transform:translateX(14px) translateY(-4px)} }
+  #err{ position:fixed; inset:0; display:none; align-items:center; justify-content:center; padding:8vw;
+        background:#0d1626; z-index:60; font-size:calc(var(--ui)*.9); line-height:1.7; text-align:center; }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div id="ui">
+  <div id="hint"><span id="hintIcon">✈️</span><span id="hintText"></span></div>
+  <div id="ghost"><div id="ghand"></div></div>
+  <div id="steps"></div>
+  <div id="toast"></div>
+  <div id="gauge">
+    <svg viewBox="0 0 100 100">
+      <circle class="bg" cx="50" cy="50" r="42"></circle>
+      <circle class="fg" id="gaugeArc" cx="50" cy="50" r="42"
+              stroke-dasharray="264" stroke-dashoffset="264"></circle>
+    </svg>
+    <div class="ic" id="gaugeIcon">⛽</div>
+  </div>
+  <div id="action"></div>
+  <div id="menu"></div>
+</div>
+
+<div id="loading"><div class="plane">✈️</div><div>よみこみちゅう…</div></div>
+<div id="err"></div>
+
+<script src="src/math.js"></script>
+<script src="src/geo.js"></script>
+<script src="src/tex.js"></script>
+<script src="src/render.js"></script>
+<script src="src/models.js"></script>
+<script src="src/audio.js"></script>
+<script src="src/game.js"></script>
+</body>
+</html>
