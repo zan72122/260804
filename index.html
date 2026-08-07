@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>ドライドック</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0b1620">
+<link rel="apple-touch-icon" href="icon.png">
+<style>
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    overflow: hidden; background: #0b1620;
+    -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: none; overscroll-behavior: none;
+  }
+  #gl { display: block; position: fixed; inset: 0; width: 100%; height: 100%; }
+
+  /* 起動時の指示（文字なし・指のアイコンのみ） */
+  #splash {
+    position: fixed; inset: 0; display: flex;
+    align-items: center; justify-content: center;
+    background: radial-gradient(circle at 50% 55%, #16303f 0%, #0b1620 70%);
+    transition: opacity .6s ease;
+    z-index: 10;
+  }
+  #splash.gone { opacity: 0; pointer-events: none; }
+  #splash svg { width: 42vmin; height: 42vmin; }
+  .fingerGrp { animation: tapMove 2.4s ease-in-out infinite; transform-origin: 50% 50%; }
+  @keyframes tapMove {
+    0%, 100% { transform: translateY(0); }
+    45%      { transform: translateY(-7px); }
+  }
+  .pulseRing { animation: pulse 2.4s ease-out infinite; transform-origin: 50% 46%; }
+  .pulseRing2 { animation: pulse 2.4s ease-out infinite; animation-delay: .8s; transform-origin: 50% 46%; }
+  @keyframes pulse {
+    0%   { opacity: .0; transform: scale(.5); }
+    25%  { opacity: .85; }
+    100% { opacity: 0; transform: scale(1.6); }
+  }
+
+  #fallback {
+    position: fixed; inset: 0; display: none;
+    align-items: center; justify-content: center;
+    background: #0b1620; z-index: 20;
+  }
+  #fallback svg { width: 40vmin; height: 40vmin; }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div id="splash">
+  <svg viewBox="0 0 200 200" aria-hidden="true">
+    <defs>
+      <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#9fd6f2"/>
+        <stop offset="1" stop-color="#4a8fb5"/>
+      </linearGradient>
+    </defs>
+    <!-- 船のシルエット -->
+    <g opacity="0.92">
+      <path d="M32 108 h136 l-14 26 a10 10 0 0 1 -9 5 H55 a10 10 0 0 1 -9 -5 Z" fill="url(#sg)"/>
+      <rect x="118" y="84" width="34" height="24" rx="3" fill="#cfe6f3"/>
+      <rect x="126" y="72" width="17" height="13" rx="2" fill="#cfe6f3"/>
+      <rect x="46" y="98" width="58" height="10" rx="2" fill="#7fb8d6"/>
+    </g>
+    <!-- 波 -->
+    <g stroke="#3f7f9f" stroke-width="4" stroke-linecap="round" fill="none" opacity=".75">
+      <path d="M24 150 q10 -7 20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0"/>
+      <path d="M30 164 q10 -7 20 0 t20 0 t20 0 t20 0 t20 0 t20 0"/>
+    </g>
+    <!-- タップの指示 -->
+    <g transform="translate(100,92)">
+      <circle class="pulseRing" r="30" fill="none" stroke="#ffe08a" stroke-width="4" opacity="0"/>
+      <circle class="pulseRing2" r="30" fill="none" stroke="#ffe08a" stroke-width="4" opacity="0"/>
+    </g>
+    <g class="fingerGrp" transform="translate(96,104)">
+      <path d="M4 40 V16 a7 7 0 0 1 14 0 v18 l7 2 a10 10 0 0 1 7 10 v12 a12 12 0 0 1 -12 12 H14 a12 12 0 0 1 -12 -12 z"
+            fill="#ffe9c2" stroke="#8a6a3c" stroke-width="2.5" stroke-linejoin="round"/>
+    </g>
+  </svg>
+</div>
+
+<div id="fallback">
+  <svg viewBox="0 0 200 200" aria-hidden="true">
+    <circle cx="100" cy="100" r="70" fill="none" stroke="#4a8fb5" stroke-width="8"/>
+    <path d="M62 62 L138 138" stroke="#4a8fb5" stroke-width="8" stroke-linecap="round"/>
+  </svg>
+</div>
+
+<script src="src/math.js"></script>
+<script src="src/gl.js"></script>
+<script src="src/geom.js"></script>
+<script src="src/shaders.js"></script>
+<script src="src/particles.js"></script>
+<script src="src/renderer.js"></script>
+<script src="src/audio.js"></script>
+<script src="src/game.js"></script>
+<script src="src/main.js"></script>
+</body>
+</html>
