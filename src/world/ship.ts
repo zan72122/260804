@@ -499,12 +499,14 @@ export function buildShip(decor: DecorDef, cable: CableDef): ShipBuild {
       const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 7.4, 10), legMat);
       leg.position.set(TANK_CENTER.x, DECK_Y + 3.7, s * (TANK_RADIUS + 0.9));
       gantry.add(leg);
-      const brace = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 5.4, 8), legMat);
-      brace.position.set(TANK_CENTER.x, DECK_Y + 3.2, s * (TANK_RADIUS * 0.6));
-      brace.rotation.x = s * 0.62;
+      // braced outboard of the coaming: a brace across the opening would sit
+      // right over the coils, which are the thing the child is meant to see
+      const brace = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 4.6, 8), legMat);
+      brace.position.set(TANK_CENTER.x - 1.9, DECK_Y + 2.6, s * (TANK_RADIUS + 0.9));
+      brace.rotation.z = 0.72;
       gantry.add(brace);
     }
-    const beam = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.7, (TANK_RADIUS + 0.9) * 2), safetyMat);
+    const beam = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.5, (TANK_RADIUS + 0.9) * 2), safetyMat);
     beam.position.set(TANK_CENTER.x, DECK_Y + 7.3, 0);
     gantry.add(beam);
     // the bellmouth itself - a flared ring the cable rises through
@@ -772,9 +774,11 @@ export function buildShip(decor: DecorDef, cable: CableDef): ShipBuild {
 
     const boxMat = new THREE.MeshStandardMaterial({ map: tex.hullPaint, color: 0x4d7f8c, roughness: 0.9, metalness: 0.15 });
     const rng = makeRng(5);
+    // Stowed forward, out of the cable run. A real cable ship keeps the whole
+    // after deck clear from the tank to the stern sheave.
     for (let i = 0; i < 4; i++) {
       const b = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2.2, 5.2), i % 2 ? boxMat : paint);
-      b.position.set(-25 + i * 3.0, DECK_Y + 1.1, (rng() > 0.5 ? 1 : -1) * 5.0);
+      b.position.set(9 + i * 2.8, DECK_Y + 1.1, (rng() > 0.5 ? 1 : -1) * 4.6);
       group.add(b);
     }
     // life raft canisters

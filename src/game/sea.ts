@@ -427,7 +427,7 @@ export class SeaStage {
 
     this.updateShipTransform(0);
     // park the cable head on the working deck, outboard of the tank coaming
-    this.tipFree.set(6.0, 4.7, 4.4).applyMatrix4(this.shipFrame);
+    this.tipFree.set(4.5, 4.7, 5.4).applyMatrix4(this.shipFrame);
     this.tipTarget.copy(this.tipFree);
 
     this.buildSpine();
@@ -594,8 +594,8 @@ export class SeaStage {
         // Portrait looks forward along the deck from astern, so the ship's
         // length runs up the tall screen; landscape stands abeam. Both hold the
         // tank, the loose cable head and the guide roller in one frame.
-        this.localShot(P ? this.shotA.set(-31, 20, 7) : this.shotA.set(-3, 16, 27), this.targetPos);
-        this.localShot(P ? this.shotA.set(-1, 5.0, 0) : this.shotA.set(-3, 5.0, 0), this.targetLook);
+        this.localShot(P ? this.shotA.set(-31, 22, 8) : this.shotA.set(-3, 22, 25), this.targetPos);
+        this.localShot(P ? this.shotA.set(-1, 5.0, 0) : this.shotA.set(-2, 4.5, 1.5), this.targetLook);
         if (focus && this.prepState === 'drag') this.targetLook.lerp(focus, 0.35);
         if (this.prepState === 'thread' || this.prepState === 'ready') {
           // track the tip aft as it threads the machinery
@@ -603,7 +603,7 @@ export class SeaStage {
           const tipIdx = Math.round(lerp(rig.idxGuide, 0, easeInOutCubic(this.threadT)));
           const tp = this.rigWorld(tipIdx, this.tmpA);
           this.targetLook.lerp(tp, 0.72);
-          this.localShot(P ? this.shotA.set(-30, 16, 12) : this.shotA.set(-16, 14, 25), this.targetPos);
+          this.localShot(P ? this.shotA.set(-30, 18, 13) : this.shotA.set(-14, 19, 29), this.targetPos);
           this.targetPos.x = lerp(this.targetPos.x, tp.x, 0.3);
           this.targetPos.z = lerp(this.targetPos.z, tp.z + (P ? 16 : 21), 0.25);
         }
