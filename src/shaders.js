@@ -188,8 +188,10 @@ void main(){
   if(uClipSign != 0.0){
     if((vWorld.y - uClipY)*uClipSign < 0.0) discard;
   }
-  vec3 N = normalize(vNormal);
+  // 退化した法線（先端や極）が NaN として伝播しないよう保険をかける
+  float nsq = dot(vNormal, vNormal);
   vec3 V = normalize(uCamPos - vWorld);
+  vec3 N = (nsq > 1e-8) ? vNormal * inversesqrt(nsq) : V;
   vec3 albedo = vColor*uTint;
   float rough = uRough;
   float metal = uMetal;

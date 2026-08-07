@@ -258,9 +258,10 @@
   function shipX(t) { return SHIP.X0 + t * SHIP.LEN; }
 
   function halfBeamAt(t) {
+    // 浮動小数の誤差で pow() の底が負にならないよう必ず 0 で下限を切る
     var b, s;
-    if (t > 0.70) { s = (t - 0.70) / 0.30; b = Math.pow(1 - s, 0.52); }
-    else if (t < 0.15) { s = t / 0.15; b = 0.74 + 0.26 * Math.pow(s, 0.6); }
+    if (t > 0.70) { s = U.clamp((t - 0.70) / 0.30, 0, 1); b = Math.pow(1 - s, 0.52); }
+    else if (t < 0.15) { s = U.clamp(t / 0.15, 0, 1); b = 0.74 + 0.26 * Math.pow(s, 0.6); }
     else b = 1;
     return SHIP.BEAM * 0.5 * b;
   }
@@ -277,14 +278,16 @@
   }
   /* 断面: t=長手位置, vn=キールからデッキまでの正規化高さ → {y,z} */
   function hullSection(t, vn, out) {
+    if (!(t >= 0)) t = 0; else if (t > 1) t = 1;
     var a = halfBeamAt(t);
     var y0 = keelYAt(t), y1 = deckYAt(t);
     var y = y0 + (y1 - y0) * vn;
     var yLocal = y - y0;                       // キールからの高さ
     var endness = Math.max(U.smoothstep(0.32, 0.02, t), U.smoothstep(0.60, 0.96, t));
-    var R = U.clamp(U.lerp(2.9, a, endness * endness), 0.4, a);
+    // ビルジ半径は半幅を超えない（超えると断面の z が負になる）
+    var R = Math.min(a, Math.max(0, U.lerp(2.9, a, endness * endness)));
     var z;
-    if (yLocal < R) {
+    if (R > 1e-5 && yLocal < R) {
       var k = (R - yLocal) / R;
       z = a - R + R * Math.sqrt(Math.max(0, 1 - k * k));
     } else z = a;
@@ -325,8 +328,14 @@
         var bx = P[jp] - P[jm], by = P[jp + 1] - P[jm + 1], bz = P[jp + 2] - P[jm + 2];
         var nx = ay * bz - az * by, ny = az * bx - ax * bz, nz = ax * by - ay * bx;
         nx *= sgn; ny *= sgn; nz *= sgn;
-        var l = Math.hypot(nx, ny, nz) || 1;
-        // 中心線に近い底部は法線が潰れるので下向きに寄せる
+        var l = Math.hypot(nx, ny, nz);
+        if (l < 1e-7) {
+          // 船首尾の先端など差分が消える点は、断面の外向き方向で代用する
+          nx = (i2 > NU / 2) ? 1 : -1;
+          ny = 0.15;
+          nz = sgn * 0.6;
+          l = Math.hypot(nx, ny, nz);
+        }
         mb.vert(P[k], P[k + 1], P[k + 2], nx / l, ny / l, nz / l,
           i2 / NU, 0.5 + sgn * 0.5 * (j2 / NV));
       }
@@ -545,10 +554,35 @@
       mb.push(); mb.translate(cx, dy + 0.35, 0); mb.box(15.4, 0.9, hw * 2 + 0.9, 0.25); mb.pop();
       mb.color('#7c8087');
     }
-    // 船首楼
-    var tf = 0.90, fx = shipX(tf);
+    // 船首楼（船体の曲線に沿わせる）
+    var FC0 = 0.845, FC1 = 0.995, FCH = 2.7;
+    function fcT(u) { return FC0 + u * (FC1 - FC0); }
+    function fcHW(u) { var sc = [0, 0, 0]; hullSection(fcT(u), 1, sc); return sc[2] - 0.14; }
+    mb.color('#4f545a');
+    mb.surface(16, 1, function (u, v, o) {      // 上面
+      var sc = [0, 0, 0]; hullSection(fcT(u), 1, sc);
+      o[0] = sc[0]; o[1] = sc[1] + FCH; o[2] = (v * 2 - 1) * fcHW(u);
+    });
     mb.color('#2b3550');
-    mb.push(); mb.translate(fx + 4.0, deckYAt(tf) + 1.3, 0); mb.box(20, 2.6, halfBeamAt(tf) * 1.75, 0.3); mb.pop();
+    for (var fs = -1; fs <= 1; fs += 2) {       // 側面
+      mb.surface(16, 1, function (u, v, o) {
+        var sc = [0, 0, 0]; hullSection(fcT(u), 1, sc);
+        o[0] = sc[0]; o[1] = sc[1] - 0.1 + v * (FCH + 0.1); o[2] = fs * (fcHW(u) + 0.14 * (1 - v * 0.3));
+      }, fs < 0);
+    }
+    mb.surface(1, 1, function (u, v, o) {       // 後端
+      var sc = [0, 0, 0]; hullSection(FC0, 1, sc);
+      o[0] = sc[0]; o[1] = sc[1] + v * FCH; o[2] = (u * 2 - 1) * fcHW(0);
+    }, true);
+    // 船首楼の手すり
+    mb.color('#8c9298');
+    var fcx0 = shipX(FC0), fcx1 = shipX(0.985);
+    for (var fr = -1; fr <= 1; fr += 2) {
+      var scA = [0, 0, 0], scB = [0, 0, 0];
+      hullSection(FC0, 1, scA); hullSection(0.985, 1, scB);
+      railingLine(mb, scA[0], fr * (scA[2] - 0.3), scB[0], fr * (scB[2] - 0.3), scA[1] + FCH, 1.0, 0.07, 3.0);
+    }
+    mb.color('#2b3550');
 
     // 船尾の上部構造（5層 + ブリッジ）
     var tb = 0.115, bx = shipX(tb);

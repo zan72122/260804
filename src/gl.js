@@ -80,8 +80,11 @@
     if (indices && indices.length) {
       this.ibo = gl.createBuffer();
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.ibo);
-      var arr = (indices.length > 65535) ? new Uint32Array(indices) : new Uint16Array(indices);
-      this.itype = (indices.length > 65535) ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
+      var maxIdx = 0;
+      for (var k = 0; k < indices.length; k++) if (indices[k] > maxIdx) maxIdx = indices[k];
+      var big = maxIdx > 65535;
+      var arr = big ? new Uint32Array(indices) : new Uint16Array(indices);
+      this.itype = big ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
       gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, arr, gl.STATIC_DRAW);
       this.count = indices.length;
       this.indexed = true;
