@@ -201,6 +201,7 @@ export class Game {
     this.world.ladleMelt.visible = false;
     this.world.furnaceGlowMat.opacity = 0;
     this.world.hearthMat.color.setHex(0x120806);
+    this.world.doorMat.emissive.setRGB(0, 0, 0);
     this.world.fireLight.intensity = 0;
     this.world.pourLight.intensity = 0;
     for (const k of Object.keys(this.world.gear)) for (const m of this.world.gear[k]) m.visible = false;

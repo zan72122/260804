@@ -42,9 +42,9 @@ const _v = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vecto
  * which is also the shot the brief asks for.  Landscape does the opposite and
  * pulls back to hold the furnace, the flask and the crane together.
  */
-function frameAxis(g, { top, pad = 0.45, yaw = 0.17, pitch = 0.16, widthScale = 1.0 } = {}) {
+function frameAxis(g, { top, pad = 0.45, yaw = 0.17, pitch = 0.16, widthScale = 1.0, radius = null } = {}) {
   const S = SHAPES[g.state.shapeKey];
-  const r = Math.max(S.rim, 0.85);
+  const r = radius ?? Math.max(S.rim, 0.85);
   const h = top + pad;
   g.rig.setShot(
     { target: V(0, h * 0.5, 0), w: r * 2 * widthScale * 0.92, h: h * 1.04, yaw, pitch },
@@ -74,7 +74,7 @@ export function bellSvgPath(key, W = 100, H = 118) {
 
 export function bellSvg(key, fill = '#d9a04c') {
   const crown = { tulip: 'M50 22 a9 9 0 1 1 .1 0 z', temple: 'M42 24 h16 v-8 h-16 z', squat: 'M50 20 a10 8 0 1 1 .1 0 z' }[key];
-  return `<svg viewBox="0 0 100 122" xmlns="http://www.w3.org/2000/svg">
+  return `<svg viewBox="-5 -6 110 134" xmlns="http://www.w3.org/2000/svg">
     <defs><linearGradient id="bg${key}" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0" stop-color="#8a5f28"/><stop offset=".42" stop-color="${fill}"/>
       <stop offset=".7" stop-color="#f0cf8e"/><stop offset="1" stop-color="#7a5322"/>
@@ -472,7 +472,7 @@ const mold = {
     this.painted = 0;
     this.sound = 0;
     this.spin = 0;
-    frameAxis(g, { top: this.H, widthScale: 1.2, pitch: 0.16 });
+    frameAxis(g, { top: this.H, widthScale: 1.02, pitch: 0.16, radius: moldR(this.S, 0.08) });
     g.hud.setProgress(0, STEP_ICONS.mold);
     g.hud.setHint('paint', V(0, this.H * 0.5, Math.max(S.rim, 0.8) + 0.3), 1.8);
   },
@@ -480,7 +480,7 @@ const mold = {
     g.scene.remove(this.brush);
     audio.setLoop('brush', 0);
   },
-  resize(g) { frameAxis(g, { top: this.H, widthScale: 1.2, pitch: 0.16 }); },
+  resize(g) { frameAxis(g, { top: this.H, widthScale: 1.02, pitch: 0.16, radius: moldR(this.S, 0.08) }); },
 
   down(g) { this.prevTheta = null; this.prevU = null; },
   up(g) { this.brush.visible = false; this.prevTheta = null; },
@@ -583,7 +583,7 @@ const bake = {
     this.xray = false;
     const rm = g.rigMold;
     rm.setMoldFill(-1, 0);
-    frameAxis(g, { top: this.H, widthScale: 1.15, pitch: 0.15 });
+    frameAxis(g, { top: this.H, widthScale: 1.0, pitch: 0.15, radius: moldR(S, 0.08) });
     g.hud.setProgress(0, STEP_ICONS.fire);
     g.hud.setHint('wait', null, 99);
     audio.furnace(0.35);
@@ -601,9 +601,11 @@ const bake = {
     rm.moldMat.needsUpdate = true;
     rm.falseMesh.visible = false;
     rm.decorGroup.visible = false;
+    rm.falseMesh.material.emissive.setRGB(0, 0, 0);
+    rm.decorMat.emissive.setRGB(0, 0, 0);
     audio.setLoop('furnace', 0);
   },
-  resize(g) { frameAxis(g, { top: this.H, widthScale: 1.15, pitch: 0.15 }); },
+  resize(g) { frameAxis(g, { top: this.H, widthScale: 1.0, pitch: 0.15, radius: moldR(this.S, 0.08) }); },
 
   update(g, dt) {
     const rm = g.rigMold, S = this.S;
@@ -645,8 +647,8 @@ const bake = {
       const op = 1 - burn;
       rm.falseMesh.material.opacity = op;
       rm.decorMat.opacity = op;
-      const glow = smoothstep(1.2, 2.1, T) * (1 - smoothstep(3.0, 3.5, T)) * 2.4;
-      rm.falseMesh.material.emissive.setRGB(glow * 1.0, glow * 0.34, glow * 0.08);
+      const glow = smoothstep(1.2, 2.1, T) * (1 - smoothstep(3.0, 3.5, T)) * 1.7;
+      rm.falseMesh.material.emissive.setRGB(glow * 1.0, glow * 0.30, glow * 0.06);
       rm.decorMat.emissive.copy(rm.falseMesh.material.emissive);
       const shrink = 1 - burn * 0.07;
       rm.falseMesh.scale.setScalar(shrink);
@@ -688,8 +690,10 @@ const furnace = {
     this._shot(g);
 
     // the founder walks over to the furnace to work
-    W.founder.position.set(-3.15, 0, 0.85);
-    W.founder.rotation.y = -0.30;
+    // beside the hearth, not in front of it -- he must never hide the mouth,
+    // the ingots or the safety door
+    W.founder.position.set(-2.30, 0, 1.55);
+    W.founder.rotation.y = -1.05;
 
     if (!W.igniteLever) {
       const grp = new THREE.Group();
@@ -718,7 +722,7 @@ const furnace = {
   _shot(g) {
     g.rig.setShot(
       // stand square to the furnace mouth -- it is rotated 0.42 rad in the room
-      { target: V(-3.2, 1.90, -0.6), w: 3.4, h: 4.6, yaw: 0.34, pitch: 0.08 },
+      { target: V(-3.55, 1.80, -0.35), w: 3.6, h: 4.6, yaw: 0.34, pitch: 0.07 },
       { target: V(-2.4, 2.10, -0.8), w: 10.0, h: 5.4, yaw: 0.26, pitch: 0.10 }
     );
   },
@@ -735,7 +739,7 @@ const furnace = {
       g.hud.setHint('tap', this.ingots.length ? this.ingots[1].position.clone().setY(0.6) : null, 1.4);
     } else if (this.step === 'door') {
       W.door.getWorldPosition(_v);
-      B.show(_v, 1.9);
+      B.show(_v, 1.15);
       g.hud.setHint('dragSide', _v.clone(), 1.2);
     } else if (this.step === 'ignite') {
       W.igniteLever.userData.knob.getWorldPosition(_v);
@@ -752,7 +756,7 @@ const furnace = {
     METAL_KEYS.forEach((k, i) => {
       const ing = makeIngot(k);
       const a = -0.5 + i * 0.5;
-      ing.position.set(-3.95 + i * 0.52, 0.14, 0.70 - i * 0.16);
+      ing.position.set(-4.25 + i * 0.55, 0.14, 1.60 - i * 0.14);
       ing.rotation.y = a;
       ing.userData.metal = k;
       ing.userData.home = ing.position.clone();
@@ -880,14 +884,23 @@ const furnace = {
       W.crucibleMelt.visible = k > 0.35;
       W.crucibleMelt.material.color.setHex(M.molten);
       W.crucibleMelt.material.color.multiplyScalar(0.4 + k * 0.6);
+      // the shut door is all the player can see, so let it come up to heat
+      const flick = 0.86 + Math.sin(g.clock * 5.1) * 0.09 + Math.sin(g.clock * 2.3) * 0.05;
+      W.doorMat.emissive.setRGB(0.85 * k * flick, 0.20 * k * flick, 0.03 * k * flick);
+      W.doorMat.emissiveIntensity = 1.4;
       if (Math.random() < dt * 30 * k) {
         W.chimneyPos = W.chimneyPos || V(-3.85, 6.5, -2.4);
         g.pDust.spawn(FX.smoke(W.chimneyPos.clone().add(V((Math.random() - 0.5) * 0.4, 0, (Math.random() - 0.5) * 0.4)),
           { x: 0.2, y: 1.2 + Math.random(), z: 0 }));
       }
-      if (Math.random() < dt * 22 * k) {
-        g.pGlow.spawn(FX.emberFloat(V(-3.4 + (Math.random() - 0.5) * 0.7, 2.2, -0.4 + (Math.random() - 0.5) * 0.6),
-          { x: 0.3 + Math.random() * 0.5, y: 1.0 + Math.random(), z: 0.4 }));
+      if (Math.random() < dt * 26 * k) {
+        // embers streaming up past the door seams
+        g.pGlow.spawn(FX.emberFloat(V(-3.6 + (Math.random() - 0.5) * 1.3, 2.9, 0.1 + (Math.random() - 0.5) * 0.5),
+          { x: 0.1 + Math.random() * 0.4, y: 1.2 + Math.random() * 0.8, z: 0.3 }));
+      }
+      if (Math.random() < dt * 16 * k) {
+        g.pGlow.spawn(FX.spark(V(-3.55 + (Math.random() - 0.5) * 1.2, 1.2, 0.35),
+          { x: (Math.random() - 0.5) * 1.2, y: 0.9 + Math.random() * 1.4, z: 0.6 }));
       }
       g.hud.setProgress(k, STEP_ICONS.fire);
       if (this.meltT > 3.9) g.setStage('pour');
@@ -896,7 +909,7 @@ const furnace = {
       g.hud.setProgress((steps[this.step] ?? 0) / 4 + (this.step === 'gear' ? this.gearIdx / 12 : 0), STEP_ICONS.fire);
       if (this.step === 'door') {
         W.door.getWorldPosition(_v);
-        getBeacon(g).show(_v, 1.9);
+        getBeacon(g).show(_v, 1.15);
       }
     }
   },
@@ -934,6 +947,17 @@ const pour = {
     this.stream = new Stream(this.streamMat);
     g.scene.add(this.stream.mesh);
 
+    // the bloom of heat where the metal goes in -- the pour needs a glare of
+    // its own, not just a light, or it reads as coloured water
+    this.glowMat = new THREE.SpriteMaterial({
+      map: makeDotTexture(0.5, 128), color: METALS[g.state.metal].molten,
+      transparent: true, opacity: 0, blending: THREE.AdditiveBlending,
+      depthWrite: false, depthTest: false, fog: false,
+    });
+    this.glow = new THREE.Sprite(this.glowMat);
+    this.glow.renderOrder = 6;
+    g.scene.add(this.glow);
+
     g.rigMold.setMoldFill(-1, 0);
     g.rigMold.sprueMelt.material.color.setHex(METALS[g.state.metal].molten);
 
@@ -945,6 +969,8 @@ const pour = {
   },
   exit(g) {
     g.scene.remove(this.stream.mesh);
+    g.scene.remove(this.glow);
+    this.glowMat.map.dispose(); this.glowMat.dispose();
     this.stream.geo.dispose();
     this.streamMat.dispose();
     g.world.ladleMelt.visible = false;
@@ -1007,8 +1033,8 @@ const pour = {
 
     if (this.flow > 0.02) {
       this.stream.mesh.visible = true;
-      const r0 = 0.035 + this.flow * 0.075;
-      const r1 = 0.028 + this.flow * 0.055;
+      const r0 = 0.050 + this.flow * 0.095;
+      const r1 = 0.040 + this.flow * 0.070;
       this.stream.update(lipW, cup, r0, r1, 1, g.clock);
       this.streamMat.userData.uniforms.uTime.value = g.clock;
 
@@ -1031,9 +1057,14 @@ const pour = {
         g.pGlow.spawn(FX.emberFloat(cup.clone(), { x: (Math.random() - 0.5) * 1.1, y: 1.3 + Math.random(), z: (Math.random() - 0.5) * 1.1 }));
       }
       audio.pour(clamp01(this.flow * 1.2), this.flow);
+      this.glow.position.copy(cup).setY(this.cupY + 0.06);
+      const pulse = 1 + Math.sin(g.clock * 8.3) * 0.06 + Math.sin(g.clock * 3.7) * 0.04;
+      this.glow.scale.setScalar((0.85 + this.flow * 0.85) * pulse);
+      this.glowMat.opacity = 0.34 * this.flow;
     } else {
       this.stream.mesh.visible = false;
       W.pourLight.intensity = damp(W.pourLight.intensity, 0, 4, dt);
+      this.glowMat.opacity = Math.max(0, this.glowMat.opacity - dt * 1.4);
       audio.pour(0, 0);
     }
 
@@ -1067,18 +1098,18 @@ const cool = {
     this.S = S;
     this.H = moldHeight(S);
     this.t = 0;
-    this.DUR = 7.0;
+    this.DUR = 5.5;
     // the bell now exists -- sealed inside the flask, where nobody can see it
     g.rigMold.buildBell(g.state.metal);
     g.rigMold.setBellHeat(1);
     this.park = 0;
-    frameAxis(g, { top: this.H, widthScale: 1.1, pitch: 0.15 });
+    frameAxis(g, { top: this.H, widthScale: 1.0, pitch: 0.15, radius: moldR(S, 0.08) });
     g.hud.setProgress(0, STEP_ICONS.cool);
     g.hud.setHint('wait', null, 99);
     audio.furnace(0.18);
   },
   exit(g) { audio.setLoop('furnace', 0); },
-  resize(g) { frameAxis(g, { top: this.H, widthScale: 1.1, pitch: 0.15 }); },
+  resize(g) { frameAxis(g, { top: this.H, widthScale: 1.0, pitch: 0.15, radius: moldR(this.S, 0.08) }); },
 
   update(g, dt) {
     const rm = g.rigMold, S = this.S;
@@ -1096,8 +1127,11 @@ const cool = {
     this.park = Math.min(1, this.park + dt / 2.2);
     g.world.ladleRig.rotation.y = smoothstep(0, 1, this.park) * 1.15;
     g.world.ladle.rotation.z = lerp(g.world.ladle.rotation.z, 0, 1 - Math.exp(-2 * dt));
-    g.world.pourLight.position.set(0, this.H * 0.4, 0.9);
-    g.world.pourLight.intensity = 7 * heat;
+    // Heat spilling out onto the sand around the pit.  Aimed at the ground,
+    // not at the flask: a lamp pointed at the shell would read as a spotlight,
+    // when the whole point is that the glow is coming from inside.
+    g.world.pourLight.position.set(0, 0.35, 0);
+    g.world.pourLight.intensity = 9 * heat;
     g.world.pourLight.color.setHex(METALS[g.state.metal].molten);
 
     if (Math.random() < dt * 20 * (0.3 + heat)) {
@@ -1162,8 +1196,8 @@ const breakup = {
   _shot(g) {
     const S = this.S;
     g.rig.setShot(
-      { target: V(0, this.H * 0.5, 0), w: (S.rim + 0.5) * 2.1, h: this.H * 1.12, yaw: 0.16, pitch: 0.14 },
-      { target: V(0, this.H * 0.48, 0), w: (S.rim + 0.5) * 3.6, h: this.H * 1.08, yaw: 0.2, pitch: 0.13 }
+      { target: V(0, this.H * 0.5, 0), w: moldR(S, 0.08) * 2.05, h: this.H * 1.10, yaw: 0.16, pitch: 0.14 },
+      { target: V(0, this.H * 0.48, 0), w: moldR(S, 0.08) * 4.2, h: this.H * 1.08, yaw: 0.2, pitch: 0.13 }
     );
   },
 
@@ -1310,6 +1344,9 @@ const breakup = {
       this.revealT += dt;
       const T = this.revealT;
       this.cracks.setHeat(Math.max(0, 0.55 - T * 0.5));
+      // the crack web belonged to a shell that no longer exists; take it away
+      // under cover of the dust rather than leaving it hanging in the air
+      if (T > 0.35) this.cracks.hide();
       // the dust thins, the light comes up, and the bell is simply there
       rm.setBellClean(smoothstep(0.9, 2.6, T) * 0.62);
       this.reveal.intensity = 90 * smoothstep(0.5, 2.4, T);

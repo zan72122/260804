@@ -125,8 +125,9 @@ export class Input extends Emitter {
       const a = Math.atan2(y - this.circleCenter.y, x - this.circleCenter.x);
       const r = Math.hypot(y - this.circleCenter.y, x - this.circleCenter.x);
       // only count motion at a believable radius, so tiny jitters near the
-      // centre cannot spin the accumulator
-      if (r > 26) {
+      // centre cannot spin the accumulator -- but keep the dead zone small,
+      // because a small hand draws small circles
+      if (r > 16) {
         const d = angDelta(this.circleAngle, a);
         this.circleTurns += d / TAU;
         const now = performance.now();

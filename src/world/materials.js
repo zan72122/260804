@@ -85,12 +85,14 @@ export function buildTextures() {
   }, { repeat: 9 });
 
   // coarse mould earth with straw
-  TEX.moldEarth = makeTexture(256, 5, 23, (n, x, y, rng) => {
-    let g = 0.70 + n * 0.48;
-    if (rng() > 0.985) return [214, 196, 148];        // a strand of straw
-    g += (rng() - 0.5) * 0.10;
+  TEX.moldEarth = makeTexture(256, 7, 23, (n, x, y, rng) => {
+    // high octave count and heavy grain: a low-frequency blob would tile
+    // visibly across a two-metre flask and read as wallpaper
+    let g = 0.80 + n * 0.34;
+    if (rng() > 0.982) return [212, 194, 148];        // a strand of straw
+    g += (rng() - 0.5) * 0.17;
     return [156 * g, 134 * g, 110 * g];
-  }, { repeat: 5 });
+  }, { repeat: 3.5 });
 
   // speckle used as the alpha-cutout threshold for daubed mud
   TEX.speck = makeTexture(128, 4, 41, (n) => {

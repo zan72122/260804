@@ -121,6 +121,20 @@ export function moldR(shape, u) {
 export const SPRUE_R = 0.185;
 
 /**
+ * The outer mould is daubed on by hand, so its surface is never a clean
+ * surface of revolution.  Everything that has to agree on where that surface
+ * is -- the shell, the paint proxy, the cracks and the broken pieces -- goes
+ * through here, so they never disagree by a hand's width.
+ */
+export function moldBump(u, theta) {
+  return 0.030 * angNoise(theta * 1.15 + u * 2.1, 17.3, 2)
+       + 0.016 * angNoise(theta * 2.4 - u * 3.3, 5.9, 2);
+}
+export function moldSurfaceR(shape, u, theta) {
+  return moldR(shape, u) + moldBump(u, theta);
+}
+
+/**
  * Inner face of the outer mould -- i.e. the wall of the cavity the bronze
  * fills.  Below the crown this is exactly the bell's outer surface, which is
  * the whole point of the false-bell method.

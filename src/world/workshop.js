@@ -55,8 +55,8 @@ export function buildWorkshop(scene, renderer) {
     floor: new THREE.MeshStandardMaterial({ map: TEX.floor, color: 0xffffff, roughness: 1.0, metalness: 0, envMapIntensity: 0.4 }),
     brick: new THREE.MeshStandardMaterial({ map: TEX.brick, color: 0xffffff, roughness: 0.98, metalness: 0, envMapIntensity: 0.45 }),
     brickDark: new THREE.MeshStandardMaterial({ map: TEX.brick, color: 0x6f5a4c, roughness: 0.98, metalness: 0 }),
-    iron: new THREE.MeshStandardMaterial({ color: 0x3b3630, roughness: 0.62, metalness: 0.85 }),
-    ironDark: new THREE.MeshStandardMaterial({ color: 0x211d1a, roughness: 0.72, metalness: 0.7 }),
+    iron: new THREE.MeshStandardMaterial({ color: 0x3b3630, roughness: 0.62, metalness: 0.85, envMapIntensity: 0.6 }),
+    ironDark: new THREE.MeshStandardMaterial({ color: 0x211d1a, roughness: 0.72, metalness: 0.7, envMapIntensity: 0.5 }),
     wood: new THREE.MeshStandardMaterial({ color: 0x6b4a30, roughness: 0.88, metalness: 0 }),
     woodDark: new THREE.MeshStandardMaterial({ color: 0x3a2819, roughness: 0.92, metalness: 0 }),
     silhouette: new THREE.MeshStandardMaterial({ color: 0x120d0a, roughness: 1, metalness: 0 }),
@@ -167,7 +167,7 @@ export function buildWorkshop(scene, renderer) {
     blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
   });
   const fGlow = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 3.2), glowMat);
-  at(fGlow, 0, 2.0, 1.02); furnace.add(fGlow);
+  at(fGlow, 0, 2.0, 1.46); furnace.add(fGlow);
   W.furnaceGlow = fGlow; W.furnaceGlowMat = glowMat;
 
   // crucible sitting in the hearth
@@ -180,9 +180,13 @@ export function buildWorkshop(scene, renderer) {
   at(crucMelt, 0, 1.94, 0.42); crucMelt.visible = false; furnace.add(crucMelt);
   W.crucibleMelt = crucMelt;
 
-  // sliding safety door
+  // sliding safety door -- its own material so it can glow when the furnace
+  // behind it is running; with the door shut it is the only thing the player
+  // can see of the fire, so it has to carry the news
   const door = new THREE.Group();
-  const dPlate = box(1.55, 2.05, 0.12, M.iron); at(dPlate, 0, 0, 0); dPlate.castShadow = true; door.add(dPlate);
+  const doorMat = M.iron.clone();
+  W.doorMat = doorMat;
+  const dPlate = box(1.55, 2.05, 0.12, doorMat); at(dPlate, 0, 0, 0); dPlate.castShadow = true; door.add(dPlate);
   for (const y of [-0.72, 0, 0.72]) { const rib = box(1.6, 0.1, 0.18, M.ironDark); at(rib, 0, y, 0.04); door.add(rib); }
   const handle = new THREE.Mesh(new THREE.TorusGeometry(0.19, 0.045, 8, 16), M.ironDark);
   at(handle, 0.55, 0, 0.14); door.add(handle);

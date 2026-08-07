@@ -7,7 +7,7 @@
 // hint of what is about to come out.
 
 import * as THREE from '../core/three.js';
-import { moldR, moldHeight } from './profiles.js';
+import { moldSurfaceR, moldHeight } from './profiles.js';
 import { TAU, clamp01, makeRng, lerp } from '../core/util.js';
 
 const VERT = `
@@ -55,7 +55,7 @@ export class CrackField {
 
     const surface = (th, uu, out) => {
       const uc = clamp01(uu);
-      const r = moldR(S, uc) + 0.010;
+      const r = moldSurfaceR(S, uc, th) + 0.010;
       out.set(Math.cos(th) * r, uc * H, Math.sin(th) * r);
       return out;
     };
@@ -142,6 +142,9 @@ export class CrackField {
   }
 
   setHeat(h) { for (const g of this.groups) g.uniforms.uHeat.value = h; }
+
+  /** the cracks live on the shell -- once it is gone they must go too */
+  hide() { for (const g of this.groups) g.mesh.visible = false; }
 
   clear() {
     for (const g of this.groups) {

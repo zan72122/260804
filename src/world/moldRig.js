@@ -12,7 +12,7 @@
 import * as THREE from '../core/three.js';
 import { LatheGrid } from './latheGrid.js';
 import {
-  outerR, innerR, coreR, blobR, falseBlobR, moldR, moldInnerR,
+  outerR, innerR, coreR, blobR, falseBlobR, moldR, moldInnerR, moldSurfaceR,
   moldHeight, SPRUE_R,
 } from './profiles.js';
 import {
@@ -175,7 +175,7 @@ export class MoldRig {
 
     // an invisible proxy at the finished mould surface, for painting raycasts
     const proxyGrid = new LatheGrid({ rows: 28, cols: 40, y0: 0, y1: H, capBottom: false, capTop: false });
-    proxyGrid.update((t) => moldR(S, t) + 0.02);
+    proxyGrid.update((t, c, theta) => moldSurfaceR(S, t, theta) + 0.02);
     this.paintProxy = new THREE.Mesh(proxyGrid.geometry,
       new THREE.MeshBasicMaterial({ visible: false }));
     this.group.add(this.paintProxy);
@@ -217,10 +217,10 @@ export class MoldRig {
   refreshMold() {
     const S = this.shape, H = moldHeight(S), cover = this.moldCover;
     const cols = MOLD_COLS;
-    this.moldGrid.update((u, c) => {
+    this.moldGrid.update((u, c, theta) => {
       const k = cover[Math.round(u * MOLD_ROWS) * cols + c];
       const inner = moldInnerR(S, u) + 0.012;
-      const outerFull = moldR(S, u);
+      const outerFull = moldSurfaceR(S, u, theta);
       return lerp(inner, outerFull, smoothstep(0, 1, k));
     });
     this.moldGrid.setCover((u, c) => cover[Math.round(u * MOLD_ROWS) * cols + c]);
@@ -485,7 +485,7 @@ export class MoldRig {
 function buildChunkGeo(S, H, u0, u1, th0, th1, nu = 4, nth = 4) {
   const pos = [], nor = [], uv = [], idx = [];
   const ring = (u, th, outer) => {
-    const r = outer ? moldR(S, u) : moldInnerR(S, u) + 0.012;
+    const r = outer ? moldSurfaceR(S, u, th) : moldInnerR(S, u) + 0.012;
     return [Math.cos(th) * r, u * H, Math.sin(th) * r];
   };
   const pushGrid = (outer, flip) => {
