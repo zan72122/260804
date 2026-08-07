@@ -1,0 +1,16 @@
+{
+  "name": "tbm-tunnel",
+  "version": "1.0.0",
+  "private": true,
+  "description": "シールドマシン（TBM）でトンネルを掘り、後方でセグメントをリング状に組み立てる4歳児向け WebGL 3D ゲーム",
+  "scripts": {
+    "build": "esbuild src/main.js --bundle --format=iife --target=es2019 --outfile=dist/tbm.js",
+    "watch": "esbuild src/main.js --bundle --format=iife --target=es2019 --outfile=dist/tbm.js --watch",
+    "serve": "http-server -p 8080 -s .",
+    "shots": "node tools/shot.mjs land && node tools/shot.mjs port"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "three": "^0.180.0"
+  }
+}

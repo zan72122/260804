@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>シールドマシン トンネル工事 — TBM TUNNEL</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#07080a">
+<meta name="description" content="巨大なシールドマシン（TBM）でトンネルを掘り、うしろでセグメントをリング状に組み立てる、4さいからの3Dあそび。">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<canvas id="stage"></canvas>
+
+<!-- カメラ切替時の暗転 -->
+<div id="wipe"></div>
+<!-- リング完成のフラッシュ -->
+<div id="flash"></div>
+<div id="vignette"></div>
+
+<div id="ui" class="landscape">
+
+  <!-- 上部 HUD -->
+  <div id="hud">
+    <div class="chip">
+      <svg viewBox="0 0 24 24" class="ico"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="3.4"/></svg>
+      <span id="ringCount">0</span><small>リング</small>
+    </div>
+    <div id="ringDots"></div>
+    <div class="chip">
+      <svg viewBox="0 0 24 24" class="ico"><path d="M3 12h18M15 7l6 5-6 5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span id="depthVal">0.0</span><small>m</small>
+    </div>
+  </div>
+
+  <!-- 指示 -->
+  <div id="coach" class="hidden">
+    <div id="hand" class="hand none"></div>
+    <p id="coachText"></p>
+  </div>
+
+  <!-- 操作系 -->
+  <div id="controls">
+
+    <!-- 始動レバー -->
+    <div id="lever" class="ctl lever">
+      <div class="label">スタート</div>
+      <div class="rail">
+        <div class="arrow up">▲</div>
+        <div class="knob"><span></span></div>
+      </div>
+    </div>
+
+    <!-- ジャッキ ハンドル -->
+    <div id="jack" class="ctl lever jackc">
+      <div class="label">ジャッキ</div>
+      <div class="rail">
+        <div class="knob"><span></span></div>
+        <div class="arrow down">▼</div>
+      </div>
+    </div>
+
+    <!-- 掘進ペダル -->
+    <div id="pedal" class="ctl">
+      <div class="pedal-ring"></div>
+      <div class="pedal-face">
+        <svg viewBox="0 0 48 48" aria-hidden="true">
+          <g fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round">
+            <circle cx="24" cy="24" r="13"/>
+            <path d="M24 4v6M24 38v6M4 24h6M38 24h6M10 10l4.5 4.5M33.5 33.5L38 38M38 10l-4.5 4.5M14.5 33.5L10 38"/>
+          </g>
+        </svg>
+        <b>ほる</b>
+      </div>
+    </div>
+
+    <!-- K セグメント 押し込み -->
+    <div id="pushBtn" class="ctl">
+      <div class="pedal-ring key"></div>
+      <div class="pedal-face key">
+        <svg viewBox="0 0 48 48" aria-hidden="true">
+          <path d="M24 40V10M15 19l9-9 9 9" fill="none" stroke="currentColor" stroke-width="4.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <b>ぐいっ</b>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 完成バナー -->
+  <div id="banner">
+    <div class="bcard">
+      <div class="sparkle">✦</div>
+      <p id="bannerText"></p>
+      <button id="againBtn" class="show">もっと ほる ▶</button>
+    </div>
+  </div>
+
+  <!-- タイトル -->
+  <div id="title">
+    <div class="tcard">
+      <div class="tart" aria-hidden="true">
+        <svg viewBox="0 0 200 120">
+          <defs>
+            <linearGradient id="tg" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#6f7a86"/><stop offset="1" stop-color="#333b45"/>
+            </linearGradient>
+          </defs>
+          <rect x="0" y="0" width="200" height="120" fill="none"/>
+          <g stroke="#20262e" stroke-width="2">
+            <ellipse cx="62" cy="60" rx="46" ry="46" fill="url(#tg)"/>
+            <ellipse cx="62" cy="60" rx="38" ry="38" fill="none" stroke="#8d99a6"/>
+            <g stroke="#c9d3dc" stroke-width="3">
+              <path d="M62 22v76M28 38l68 44M96 38L28 82"/>
+            </g>
+            <g fill="#e7edf3" stroke="none">
+              <circle cx="62" cy="34" r="4.6"/><circle cx="62" cy="86" r="4.6"/>
+              <circle cx="38" cy="47" r="4.6"/><circle cx="86" cy="73" r="4.6"/>
+              <circle cx="86" cy="47" r="4.6"/><circle cx="38" cy="73" r="4.6"/>
+              <circle cx="62" cy="60" r="7"/>
+            </g>
+            <rect x="104" y="26" width="70" height="68" rx="8" fill="#d8a520"/>
+            <rect x="112" y="34" width="54" height="52" rx="6" fill="#2b3138"/>
+            <g fill="#cfd6dc"><rect x="118" y="42" width="42" height="7" rx="3"/>
+              <rect x="118" y="56" width="42" height="7" rx="3"/>
+              <rect x="118" y="70" width="42" height="7" rx="3"/></g>
+          </g>
+        </svg>
+      </div>
+      <h1>シールドマシン<br><span>トンネルこうじ</span></h1>
+      <p class="sub">おおきな カッターヘッドで ほって、<br>うしろに まるい トンネルを つくろう</p>
+      <button id="startBtn">▶ はじめる</button>
+      <p class="hint">おと が でます・よこ でも たて でも あそべます</p>
+    </div>
+  </div>
+
+</div>
+
+<noscript><p style="color:#fff;padding:2em">このゲームには JavaScript が必要です。</p></noscript>
+<script src="dist/tbm.js"></script>
+</body>
+</html>
