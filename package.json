@@ -1,0 +1,28 @@
+{
+  "name": "surusuru-shizumete-umi-no-cable-sen",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "するする！しずめて！うみのケーブルせん - a submarine cable-laying game for 4-year-olds",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview --host",
+    "playtest": "node tools/playtest.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zan72122/260804.git"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "three": "^0.180.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.180.0",
+    "playwright": "^1.62.1",
+    "typescript": "^5.9.3",
+    "vite": "^6.4.3"
+  }
+}

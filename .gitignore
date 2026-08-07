@@ -1,0 +1,6 @@
+node_modules/
+dist/
+playtest/
+tools/_*.mjs
+*.log
+.DS_Store
