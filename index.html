@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="theme-color" content="#16305a" />
+<meta name="description" content="しばって！そめて！ひらくとびっくり！あいぞめラボ — 折って、縛って、藍甕に沈めて、空気で青く変え、ほどいて模様に出会う 3D 絞り染めゲーム" />
+<title>しばって！そめて！ひらくとびっくり！あいぞめラボ</title>
+<link rel="stylesheet" href="styles.css" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2316305a'/%3E%3Ccircle cx='32' cy='32' r='13' fill='%23f4f1e6'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%2316305a'/%3E%3C/svg%3E" />
+</head>
+<body>
+<div id="app">
+  <canvas id="gl"></canvas>
+
+  <!-- ===== 読み込み ===== -->
+  <div id="boot" class="screen">
+    <div class="boot-inner">
+      <div class="boot-mark"></div>
+      <div class="boot-text">じゅんび ちゅう…</div>
+    </div>
+  </div>
+
+  <!-- ===== タイトル ===== -->
+  <div id="title" class="screen hidden">
+    <div class="title-card">
+      <h1>しばって！そめて！<br />ひらくと びっくり！<br /><span class="big">あいぞめラボ</span></h1>
+      <p class="sub">おって、しばって、あいがめに しずめて、<br />かぜに あてて、ひらくと…？</p>
+      <button id="start-btn" class="big-btn">はじめる</button>
+      <p class="tiny">ゆびで タップ・なぞる・ぐるぐる・ながおし だけ</p>
+    </div>
+  </div>
+
+  <!-- ===== ゲーム中の UI ===== -->
+  <div id="hud" class="hidden">
+    <div id="topbar">
+      <div id="stage-title"><span id="stage-step"></span><span id="stage-name"></span></div>
+      <div id="topright">
+        <button id="sound-btn" class="icon-btn" aria-label="おと">🔊</button>
+        <button id="restart-btn" class="icon-btn" aria-label="はじめから">↻</button>
+      </div>
+    </div>
+
+    <div id="dips" class="hidden"></div>
+
+    <div id="colorbar" class="hidden">
+      <div class="cb-track"><div class="cb-marker"></div></div>
+      <div class="cb-label">きみどり</div>
+    </div>
+
+    <div id="tools" class="hidden"></div>
+
+    <div id="bottombar">
+      <div id="hint"><span id="hint-icon"></span><span id="hint-text"></span></div>
+      <button id="next-btn" class="next-btn hidden">つぎへ</button>
+    </div>
+
+    <div id="toast" class="hidden"></div>
+  </div>
+
+  <!-- ===== できあがり ===== -->
+  <div id="reveal" class="screen hidden">
+    <div class="reveal-card">
+      <div class="reveal-eyebrow">できた もよう</div>
+      <div id="reveal-name"></div>
+      <div id="reveal-note"></div>
+      <div id="reveal-recipe"></div>
+      <div class="reveal-actions">
+        <button id="again-btn" class="big-btn">もういちど あそぶ</button>
+        <button id="look-btn" class="ghost-btn">もっと みる</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="rotate-hint" class="hidden">よこむきに すると、もっと おおきく みえるよ</div>
+</div>
+
+<script type="module" src="src/main.js"></script>
+<noscript><p style="color:#fff;padding:2rem">このゲームには JavaScript が ひつようです。</p></noscript>
+</body>
+</html>
