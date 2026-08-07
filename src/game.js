@@ -308,7 +308,7 @@
       if (this.landed && !wasLanded && this.pumpVel < 0) {
         if (this.A) { this.A.thud(1.0); }
         this.landEvent = 1.0;
-        this.landDust = 26;
+        this.landDust = 60;
       }
       if (!this.landed && wasLanded) {
         if (this.A) this.A.splash(0.7);
@@ -530,12 +530,16 @@
       var n = Math.min(this.landDust, Math.ceil(dt * 90));
       this.landDust -= n;
       for (var i = 0; i < n; i++) {
-        var bx = rr(-80, 80);
+        var bt = rr(0.10, 0.90);
+        var bhw = G.halfBeamAt(bt);
+        var bsg = Math.random() < 0.5 ? 1 : -1;
         P.spawn({
-          x: bx, y: W.BLOCK_TOP - 0.4, z: rr(-3, 3),
-          vx: rr(-3, 3), vy: rr(0.4, 2.2), vz: rr(-3, 3),
-          life: rr(1.5, 3.2), size: rr(0.8, 1.8), size1: rr(3, 6),
-          kind: 1, r: 0.75, g: 0.71, b: 0.62, drag: 1.2, grav: -0.2
+          x: st.shipX + G.shipX(bt) + rr(-4, 4),
+          y: W.BLOCK_TOP * rr(0.15, 0.85),
+          z: bsg * (bhw * rr(0.75, 1.0)),
+          vx: rr(-2, 2), vy: rr(0.3, 1.8), vz: bsg * rr(2.5, 8.0),
+          life: rr(1.6, 3.6), size: rr(1.0, 2.4), size1: rr(4, 8),
+          kind: 1, r: 0.72, g: 0.69, b: 0.60, drag: 1.4, grav: -0.15
         });
       }
     }

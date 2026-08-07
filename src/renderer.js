@@ -66,7 +66,7 @@
     this.haze = [0.60, 0.685, 0.755];
     this.fogDensity = 0.00052;
     this.ambTop = [0.34, 0.435, 0.605];
-    this.ambBottom = [0.275, 0.258, 0.222];
+    this.ambBottom = [0.325, 0.305, 0.262];
     this.exposure = 0.96;
 
     this.buildScene();
