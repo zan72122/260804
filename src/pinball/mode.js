@@ -17,8 +17,22 @@ import { clamp, damp, easeOutBack } from '../engine/util.js';
 
 const STUCK_NUDGE = 2.5;    // seconds before the table shakes itself
 const STUCK_GIVEUP = 9.0;   // …and before the ball is written off
-const MAX_BALLS = 6;
+const MAX_BALLS = 5;
 const COOL = 0.22;          // grace after a transform, so results do not chain instantly
+
+/**
+ * A shift is three balls, as on any real table — three *losses*, not three
+ * loads. Feeding the lane stays free, because the chain needs pairs: a pizza
+ * takes two tomatoes crushed to sauce and two loaves rolled flat, so a limit
+ * of three loads would put every headline dish out of reach. Counting drains
+ * instead makes the flippers the thing that buys you the next dish.
+ */
+const SHIFT_BALLS = 3;
+
+// Score → wages. A counter order pays about 26 coins and 6 XP, so a working
+// shift on the table is worth a handful of orders, not a windfall.
+const COIN_PER = 120;
+const XP_PER = 600;
 
 const HEAT_DECAY = 0.045;   // per second — a ball off the fire cools slowly
 const HEAT = { bumper: 0.20, pot: 0.55, bank: 0.35, spinner: 0.05 };
@@ -49,13 +63,18 @@ export class Pinball {
     this.plungerV = TABLE.plungerRest;
     this.pull = 0;            // 0..1 charge
     this.charging = false;
-    this.respawn = 0;
     this.drains = 0;          // balls lost this session
     this.made = [];           // ids produced on the table this session
     this.delivered = [];      // dishes sent up the chute
     this.score = 0;
     this.bankResetIn = 0;
     this.tiltWarn = 0;
+    this.ballsLeft = SHIFT_BALLS;
+    this.shiftOver = true;
+    // 0 = flat counter, 1 = fully raised table. Driven every frame, including
+    // after exit(), so the table folds back down instead of blinking away.
+    this.fold = 0;
+    this.foldWant = 0;
     this._q = new THREE.Quaternion();
     this._axis = new THREE.Vector3();
     this._pos = new THREE.Vector3();
@@ -68,7 +87,7 @@ export class Pinball {
     this.table.build(this.world, dest);
     this.table.setVisible(true);
     this.root.visible = true;
-    this.stall.setCounterMode('pinball');
+    this.foldWant = 1;
 
     // Frame the whole tilted table without losing the town behind it.
     this.savedView = {
@@ -87,7 +106,10 @@ export class Pinball {
     this.delivered.length = 0;
     this.score = 0;
     this.bankResetIn = 0;
+    this.ballsLeft = SHIFT_BALLS;
+    this.shiftOver = false;
     this.table.clearStains();
+    this.table.resetTargets();
     this.loadBall(LOADABLE[0]);
   }
 
@@ -96,9 +118,10 @@ export class Pinball {
     this.active = false;
     for (const b of [...this.balls]) this.despawn(b);
     this.world.reset();
-    this.table.setVisible(false);
     this.root.visible = false;
-    this.stall.setCounterMode('merge');
+    // The table is left visible and folds back down under updateFold(); the
+    // counter's own dressing comes straight back so the board is usable now.
+    this.foldWant = 0;
     if (this.savedView) {
       this.view.want.az = this.savedView.az;
       this.view.want.el = this.savedView.el;
@@ -106,6 +129,50 @@ export class Pinball {
       this.view.wantTarget.copy(this.savedView.target);
     }
   }
+
+  /**
+   * The counter folding up into a table, and back down again.
+   *
+   * Runs every frame whether or not the mode is active — on the way out the
+   * mode goes inactive immediately (the board has to be usable at once) while
+   * the table is still standing, and this is what lays it down.
+   */
+  updateFold(dt) {
+    const to = this.foldWant;
+    this.fold = damp(this.fold, to, 10, dt);
+    if (to > 0.5 && this.fold > 0.999) this.fold = 1;
+    if (to < 0.5 && this.fold < 0.002) {
+      this.fold = 0;
+      this.table.setVisible(false);
+    }
+    this.table.setRaise(this.fold);
+    this.stall.setCounterFold(this.fold);
+  }
+
+  /**
+   * Wages for the shift just finished. Fires onShiftEnd exactly once, and
+   * `reason` is what separates running out of balls from walking away — the
+   * caller settles up either way, but only one of them earns a results screen.
+   */
+  _endShift(reason) {
+    if (this.shiftOver) return null;
+    this.shiftOver = true;
+    const summary = {
+      reason,
+      score: this.score,
+      coins: Math.round(this.score / COIN_PER),
+      xp: Math.round(this.score / XP_PER),
+      delivered: this.delivered.map((d) => ({ ...d })),
+      made: [...this.made],
+      drains: this.drains,
+    };
+    if (reason === 'drained') this.audio?.levelup();
+    this.onShiftEnd?.(summary);
+    return summary;
+  }
+
+  /** End early — the player walked away from the table mid-shift. */
+  endShiftNow() { return this._endShift('left'); }
 
   // ------------------------------------------------------------ balls ----
   spawnBall(itemId, u = TABLE.laneCentre, v = TABLE.plungerRest + TABLE.ballR + 0.004) {
@@ -205,6 +272,7 @@ export class Pinball {
   loadBall(itemId) {
     if (!this.active) return 'inactive';
     if (!ITEMS[itemId]) return 'unknown';
+    if (this.shiftOver || this.ballsLeft <= 0) return 'over';
     if (this.balls.length >= MAX_BALLS) return 'full';
     if (this.waitingBall) return 'occupied';
     this.spawnBall(itemId);
@@ -311,10 +379,10 @@ export class Pinball {
       }
     }
 
-    if (this.respawn > 0) {
-      this.respawn -= dt;
-      if (this.respawn <= 0) this.spawnBall('veg2');
-    }
+    // The shift is over once the last ball is spent and the table has cleared
+    // — by draining or by going up the chute, which is why this is checked
+    // here rather than inside _onDrain.
+    if (!this.shiftOver && this.ballsLeft <= 0 && this.balls.length === 0) this._endShift('drained');
 
     if (this.bankResetIn > 0) {
       this.bankResetIn -= dt;
@@ -499,11 +567,12 @@ export class Pinball {
 
   _onDrain(ball) {
     this.drains++;
+    this.ballsLeft = Math.max(0, this.ballsLeft - 1);
     const at = this.table.toWorld(ball.u, 0.02, 0.02);
     this.fx.dust(at, 6, 0.05);
     this.audio?.deny();
     this.despawn(ball);
-    if (this.balls.length === 0) this.respawn = 0.9;
+    this.onBallLost?.(this.ballsLeft);
   }
 
   _syncBall(ball, dt) {

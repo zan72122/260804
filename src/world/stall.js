@@ -47,9 +47,22 @@ export class Stall {
 
   /** Raise/lower the merge tray and the counter clutter for pinball mode. */
   setCounterMode(mode) {
-    const merge = mode !== 'pinball';
-    if (this.tray) this.tray.visible = merge;
-    if (this.props) this.props.visible = merge;
+    this.setCounterFold(mode === 'pinball' ? 1 : 0);
+  }
+
+  /**
+   * Clear the counter for the table. k = 0 is the working top, k = 1 is fully
+   * struck: the tray and the small props sink into the counter and are hidden
+   * once the slab is in front of them, so the changeover reads as putting the
+   * work away rather than as things blinking out.
+   */
+  setCounterFold(k) {
+    const drop = -0.16 * k;
+    for (const g of [this.tray, this.props]) {
+      if (!g) continue;
+      g.position.y = drop;
+      g.visible = k < 0.92;
+    }
   }
 
   // --------------------------------------------------------- counter ----

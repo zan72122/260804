@@ -30,6 +30,12 @@ export const easeOutBack = (t) => {
 };
 export const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
 
+/**
+ * Grouped digits, in full. Coins abbreviate happily to "12k"; a pinball score
+ * does not — the digits are the point of the display.
+ */
+export const fmtFull = (n) => Math.floor(n).toLocaleString('en-US');
+
 export const fmt = (n) => {
   n = Math.floor(n);
   if (n < 1000) return String(n);

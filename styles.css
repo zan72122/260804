@@ -222,6 +222,39 @@ html, body {
   color: var(--gold);
   text-shadow: 0 0 12px rgba(243,196,106,.35);
 }
+.pin-balls { letter-spacing: 3px; color: var(--gold); font-size: 14px; }
+.pin-balls .out { color: rgba(255,255,255,.22); }
+
+/* ---- end-of-shift takings ---- */
+.pinres-card { width: min(380px, 90vw); text-align: center; }
+.pinres-head {
+  font-size: 13px; letter-spacing: .22em; color: var(--ink-dim);
+  text-transform: uppercase;
+}
+.pinres-score { margin: 6px 0 14px; display: flex; align-items: baseline; justify-content: center; gap: 6px; }
+.pinres-score b {
+  font-size: 44px; font-weight: 800; color: var(--gold);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 26px rgba(243,196,106,.35);
+}
+.pinres-score span { font-size: 13px; color: var(--ink-dim); }
+.pinres-list {
+  display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;
+  min-height: 22px; margin-bottom: 14px;
+}
+.pinres-list .none { font-size: 12px; color: var(--ink-dim); }
+.pinres-pay {
+  display: flex; gap: 10px; margin-bottom: 16px;
+}
+.pinres-pay div {
+  flex: 1; padding: 10px 6px; border-radius: 12px;
+  border: 1px solid var(--line); background: rgba(0,0,0,.28);
+}
+.pinres-pay span { display: block; font-size: 10px; letter-spacing: .12em; color: var(--ink-dim); }
+.pinres-pay b { font-size: 20px; color: var(--gold); font-variant-numeric: tabular-nums; }
+.pinres-btns { display: flex; gap: 10px; }
+.pinres-btns .btn { flex: 1; justify-content: center; }
+
 .made-chip {
   font-size: 11px;
   font-weight: 700;

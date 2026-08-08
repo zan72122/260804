@@ -444,5 +444,16 @@ export class Table {
 
   spinWhisk(speed) { this.spinnerSpin = Math.max(this.spinnerSpin, speed); }
 
+  /**
+   * Fold the table up out of the counter. k = 0 lays it flat on the top, k = 1
+   * is the full playing tilt. Only the presentation moves: the solver works in
+   * table space and never sees this, so the ball parked in the lane behaves the
+   * same throughout the swing.
+   */
+  setRaise(k) {
+    this.group.rotation.x = TABLE.tilt * k;
+    this.group.position.y = COUNTER.topY + 0.006 * k;
+  }
+
   setVisible(on) { this.group.visible = on; }
 }

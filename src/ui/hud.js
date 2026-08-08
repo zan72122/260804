@@ -1,7 +1,7 @@
 // DOM overlay: resources, order list, toasts, travel dialog. The 3-D scene
 // carries the game; this layer only carries numbers and words.
 
-import { fmt } from '../engine/util.js';
+import { fmt, fmtFull } from '../engine/util.js';
 import { DESTINATIONS } from '../world/destinations.js';
 import { ITEMS } from '../game/items.js';
 
@@ -22,7 +22,10 @@ export class Hud {
       btnTravel: $('btn-travel'), btnCam: $('btn-cam'), btnQuality: $('btn-quality'),
       btnPinball: $('btn-pinball'),
       pinbar: $('pinbar'), pinLoad: $('pinbar-load'), made: $('pinbar-made'),
-      pinScore: $('pin-score'), pinDeliv: $('pin-deliv'),
+      pinScore: $('pin-score'), pinDeliv: $('pin-deliv'), pinBalls: $('pin-balls'),
+      pinres: $('pinres'), pinresScore: $('pinres-score'), pinresList: $('pinres-list'),
+      pinresCoin: $('pinres-coin'), pinresXp: $('pinres-xp'),
+      pinresAgain: $('pinres-again'), pinresLeave: $('pinres-leave'),
       btnSound: $('btn-sound'), btnReset: $('btn-reset'), travelClose: $('travel-close'),
     };
     this.orderNodes = new Map();
@@ -110,11 +113,49 @@ export class Hud {
   showPinball(on) {
     this.el.pinbar.classList.toggle('hidden', !on);
     if (on) this.el.made.innerHTML = '';
+    if (!on) this.closeResults();
   }
+
+  /** Balls left in the shift, as filled and spent markers. */
+  setPinBalls(left, total = 3) {
+    let s = '';
+    for (let i = 0; i < total; i++) {
+      s += i < left ? '●' : '<span class="out">○</span>';
+    }
+    this.el.pinBalls.innerHTML = s;
+  }
+
+  /** The takings for a finished shift. */
+  showResults(summary, actions, energyCost) {
+    this.el.pinresScore.textContent = fmtFull(summary.score);
+    this.el.pinresCoin.textContent = fmt(summary.coins);
+    this.el.pinresXp.textContent = fmt(summary.xp);
+
+    const list = this.el.pinresList;
+    list.innerHTML = '';
+    if (!summary.delivered.length) {
+      list.innerHTML = '<span class="none">納品なし — 料理を作って上の納品口へ</span>';
+    } else {
+      for (const d of summary.delivered) {
+        const chip = document.createElement('div');
+        chip.className = 'made-chip';
+        const hot = d.heat > 0.5 ? '🔥 ' : '';
+        chip.textContent = `${hot}${ITEMS[d.id]?.name ?? d.id}`;
+        list.appendChild(chip);
+      }
+    }
+
+    this.el.pinresAgain.textContent = `もう一度（⚡${energyCost}）`;
+    this.el.pinresAgain.onclick = actions.again;
+    this.el.pinresLeave.onclick = actions.leave;
+    this.el.pinres.classList.remove('hidden');
+  }
+
+  closeResults() { this.el.pinres.classList.add('hidden'); }
 
   /** Running total for the current session at the table. */
   setPinScore(score, delivered) {
-    this.el.pinScore.textContent = fmt(score);
+    this.el.pinScore.textContent = fmtFull(score);
     this.el.pinDeliv.textContent = delivered ? `納品 ${delivered}` : '';
   }
 

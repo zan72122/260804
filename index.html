@@ -58,7 +58,27 @@
       <span><b>加工品どうし</b> → 料理</span>
     </div>
     <div class="pinbar-made" id="pinbar-made"></div>
-    <div class="pinbar-score"><b id="pin-score">0</b><span id="pin-deliv"></span></div>
+    <div class="pinbar-score">
+      <b id="pin-score">0</b><span id="pin-deliv"></span>
+      <span class="pin-balls" id="pin-balls" title="このシフトの残り球"></span>
+    </div>
+  </div>
+
+  <!-- Pinball: end-of-shift takings -->
+  <div id="pinres" class="modal hidden">
+    <div class="modal-card pinres-card">
+      <div class="pinres-head">シフト終了</div>
+      <div class="pinres-score"><b id="pinres-score">0</b><span>点</span></div>
+      <div class="pinres-list" id="pinres-list"></div>
+      <div class="pinres-pay">
+        <div><span>コイン</span><b id="pinres-coin">0</b></div>
+        <div><span>経験値</span><b id="pinres-xp">0</b></div>
+      </div>
+      <div class="pinres-btns">
+        <button class="btn btn-accent" id="pinres-again">もう一度（⚡8）</button>
+        <button class="btn" id="pinres-leave">作業台へ戻る</button>
+      </div>
+    </div>
   </div>
 
   <div class="hud-bottom">

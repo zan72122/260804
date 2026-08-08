@@ -18,6 +18,9 @@ import { ITEMS, PRODUCERS, CHAINS, chainById } from './game/items.js';
 import { BOARD, PRODUCER_CELLS, cellPos } from './game/config.js';
 import { clamp } from './engine/util.js';
 
+// One shift at the table costs about four producer taps' worth of the day.
+const SHIFT_ENERGY = 8;
+
 const boot = document.getElementById('boot');
 const bootFill = document.getElementById('boot-fill');
 const bootStep = document.getElementById('boot-step');
@@ -169,10 +172,16 @@ class Game {
     this.input.setPinball(this.pinball);
     this.hud.setupPinball(LOADABLE, (id) => this.loadPinballBall(id));
     this.pinball.onMake = ({ def }) => this.hud.addMade(def);
-    this.pinball.onDeliver = ({ def, quality, score }) => {
+    this.pinball.onDeliver = ({ id, def, quality, score }) => {
       this.hud.addMade(def);
       this.hud.toast(`${def.name} 納品！ ${quality > 1.5 ? '熱々 ' : ''}+${score}`, 'gold');
+      this.stashDish(id);
     };
+    this.pinball.onBallLost = (left) => {
+      this.hud.setPinBalls(left);
+      if (left > 0) this.hud.toast(`球を落としました（残り ${left}）`, 'bad');
+    };
+    this.pinball.onShiftEnd = (s) => this.finishShift(s);
 
     this.orders.onChange = () => {
       this.hud.setOrders(this.orders.list());
@@ -195,20 +204,79 @@ class Game {
   /** Raise the counter into a pinball table, or lower it back. */
   togglePinball() {
     this.audio.resume();
-    if (this.pinball.active) {
-      this.pinball.exit();
-      this.board.root.visible = true;
-      this.hud.showPinball(false);
-      this.hud.el.btnPinball.textContent = '🕹 ピンボール';
-      this.hud.hint('食材をドラッグして重ねるとマージ。注文の品はお客さんへ。');
-    } else {
-      this.board.root.visible = false;
-      this.board.hover.visible = false;
-      this.pinball.enter(this.dest);
-      this.hud.showPinball(true);
-      this.hud.el.btnPinball.textContent = '🍅 作業台へ戻る';
-      this.hud.hint('麺棒を下へドラッグして離すと発射（Space長押しでも可）。画面左右タップ／←→キーでフリッパー。Z・Xで台を揺らす。');
+    if (this.pinball.active) this.leavePinball();
+    else this.startShift();
+  }
+
+  /**
+   * Open the table for one shift. A shift costs energy up front, the way a
+   * producer does — the table is another way to spend the same working day.
+   */
+  startShift() {
+    if (this.pinball.active) return false;
+    if (!this.state.spendEnergy(SHIFT_ENERGY)) {
+      this.hud.toast(`エネルギーが足りません（⚡${SHIFT_ENERGY} 必要）`, 'bad');
+      return false;
     }
+    this.hud.closeResults();
+    this.board.root.visible = false;
+    this.board.hover.visible = false;
+    this.pinball.enter(this.dest);
+    this.hud.showPinball(true);
+    this.hud.setPinBalls(this.pinball.ballsLeft);
+    this.hud.el.btnPinball.textContent = '🍅 作業台へ戻る';
+    this.hud.hint('麺棒を下へドラッグして離すと発射（Space長押しでも可）。画面左右タップ／←→キーでフリッパー。Z・Xで台を揺らす。');
+    this.hud.sync();
+    return true;
+  }
+
+  /**
+   * Back to the board. Anything earned so far is still paid — but by the
+   * onShiftEnd handler below, not here: ending the shift is what pays, and
+   * settling up on the return value as well would pay the player twice.
+   */
+  leavePinball() {
+    if (!this.pinball.active) return;
+    this.pinball.endShiftNow();
+    this.pinball.exit();
+    this.board.root.visible = true;
+    this.hud.showPinball(false);
+    this.hud.el.btnPinball.textContent = '🕹 ピンボール';
+    this.hud.hint('食材をドラッグして重ねるとマージ。注文の品はお客さんへ。');
+  }
+
+  /** The shift ended: settle up, and show the takings if it ran its course. */
+  finishShift(summary) {
+    if (summary.coins || summary.xp) {
+      this.state.addCoins(summary.coins);
+      this.state.addXp(summary.xp);
+      this.audio.coin(4);
+      this.hud.sync();
+      this.queueSave();
+    }
+    if (summary.reason !== 'drained') return;
+    this.hud.showResults(summary, {
+      again: () => { this.pinball.exit(); this.startShift(); },
+      leave: () => { this.hud.closeResults(); this.leavePinball(); },
+    }, SHIFT_ENERGY);
+  }
+
+  /**
+   * A dish delivered up the chute goes onto the merge board, so the table
+   * feeds the counter instead of being a side game. If the board is full it
+   * is bought off the player instead — never silently dropped.
+   */
+  stashDish(id) {
+    const free = this.board.findFree(3, 2);
+    if (!free) {
+      const def = ITEMS[id];
+      const paid = Math.round((def?.coin ?? 20) * 2.4);
+      this.state.addCoins(paid);
+      this.hud.toast(`作業台が満杯：${def?.name ?? '料理'}を ◉${paid} で買い取り`, 'gold');
+      return;
+    }
+    this.board.add(id, free.col, free.row, { animate: 'drop' });
+    this.queueSave();
   }
 
   /** Feed an ingredient into the shooter lane. */
@@ -217,6 +285,7 @@ class Game {
     const res = this.pinball.loadBall(id);
     if (res === 'occupied') this.hud.toast('レーンに球が残っています', 'bad');
     else if (res === 'full') this.hud.toast('台の上がいっぱいです', 'bad');
+    else if (res === 'over') this.hud.toast('このシフトの球は終わりです', 'bad');
   }
 
   cycleQuality() {
@@ -437,10 +506,14 @@ class Game {
     this.view.update(dt);
     this.env.update(dt, this.elapsed);
     this.stall.update(dt, this.elapsed);
+    // Runs in both modes: on the way out the table is still standing and has
+    // to be laid back down.
+    this.pinball.updateFold(dt);
     if (this.pinball.active) {
       this.pinball.update(dt, this.elapsed);
-      this.hud.setLoadersBusy(!!this.pinball.waitingBall || this.pinball.balls.length >= 6);
-      this.hud.setPinScore(this.pinball.score, this.pinball.delivered.length);
+      const p = this.pinball;
+      this.hud.setLoadersBusy(!!p.waitingBall || p.balls.length >= 5 || p.shiftOver);
+      this.hud.setPinScore(p.score, p.delivered.length);
     } else {
       this.board.update(dt, this.elapsed);
     }
