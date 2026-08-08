@@ -20,7 +20,7 @@ import { Flakes } from './scene/flakes.js';
 import { UI } from './ui.js';
 
 const PACKET_TOP = BOARD_TOP + 24 * 0.0021;   // top of the 24-sheet bundle
-const BOARD_HALF = 0.161;                     // 革盤 footprint, half width
+const BOARD_HALF = 0.180;                     // 革盤 footprint, half width
 const PACKET_HALF = 0.079;                    // 打紙束 footprint, half width
 const HAMMER_PIVOT = [0, 0.246, LAYOUT.packet[2]];
 const HAMMER_ARM = 0.140;
@@ -35,10 +35,10 @@ const BEAT_WIDTH = [LEAF_KOMA, 0.079, 0.103, LEAF_RAW];
 // so the same code frames a tall phone and a wide tablet correctly.
 const SHOTS = {
   intro: { target: [0, 0.03, -0.03], yaw: 0.22, pitch: 0.40, span: 1.15 },
-  uchi: { target: [0, 0.072, -0.115], yaw: 0.13, pitch: 0.42, span: 0.29 },
-  peron: { target: [0, 0.055, -0.115], yaw: 0.04, pitch: 0.36, span: 0.34 },
-  fuwa: { target: [0, 0.066, -0.115], yaw: -0.12, pitch: 0.26, span: 0.26 },
-  kiri: { target: [0, 0.032, 0.035], yaw: 0.03, pitch: 0.44, span: 0.30 },
+  uchi: { target: [0, 0.072, -0.140], yaw: 0.13, pitch: 0.42, span: 0.29 },
+  peron: { target: [0, 0.055, -0.140], yaw: 0.04, pitch: 0.36, span: 0.34 },
+  fuwa: { target: [0, 0.066, -0.140], yaw: -0.12, pitch: 0.26, span: 0.26 },
+  kiri: { target: [0, 0.032, 0.048], yaw: 0.03, pitch: 0.44, span: 0.31 },
   urushi: { target: [0, 0.030, 0.185], yaw: 0.08, pitch: 0.40, span: 0.30 },
   peta: { target: [0, 0.035, 0.055], yaw: 0.04, pitch: 0.52, span: 0.50 },
   kira: { target: [0, 0.030, 0.185], yaw: 0.10, pitch: 0.34, span: 0.32 },
@@ -689,7 +689,7 @@ class Game {
     const cruise = PACKET_TOP + 0.032;
     const rise = smoothstep(0, 1, clamp(t / 0.30, 0, 1));
     const farEdge = zNow - this.leaf.width * 0.5;
-    const clear = smoothstep(-0.048, -0.012, farEdge);
+    const clear = smoothstep(-0.070, -0.035, farEdge);
     const y = lerp(lerp(from[1], cruise, rise), BOARD_TOP + 0.0006, clear);
     vec3.set(this.leaf.pos, lerp(from[0], LAYOUT.cut[0], carry), y, zNow);
     vec3.set(this.leaf.posTarget, LAYOUT.cut[0], BOARD_TOP + 0.0006, LAYOUT.cut[2]);

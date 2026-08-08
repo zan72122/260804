@@ -13,9 +13,9 @@ import { MAT, makeNode, paperStack } from './atelier.js';
 const M = (t = [0, 0, 0], r = [0, 0, 0], s = [1, 1, 1]) => mat4.fromTRS(mat4.create(), t, r, s);
 
 export const LAYOUT = {
-  board: [0, 0, -0.055],       // 革盤 centre, its hide face at y = BOARD_TOP
-  packet: [0, 0, -0.115],      // 打紙束 sits at the back of the board
-  cut: [0, 0, 0.035],          // where the 枠 cuts the leaf, on bare hide
+  board: [0, 0, -0.045],       // 革盤 centre, its hide face at y = BOARD_TOP
+  packet: [0, 0, -0.140],      // 打紙束 sits at the back of the board
+  cut: [0, 0, 0.048],          // where the 枠 cuts the leaf, on bare hide
   base: [0, 0, 0.185],         // 下地 (lacquer object) centre on the bench
 };
 export const BOARD_TOP = 0.025;
@@ -41,9 +41,11 @@ export function buildProps(gl) {
   };
 
   // ---- 革板 : hardwood board faced with deer hide -------------------------
-  add('boardWood', G.translated(G.chamferBox(0.322, 0.020, 0.322, 0.003), 0, 0.010, 0),
+  // 革盤 — a hardwood board faced with deer hide. Wide enough that the bundle
+  // can sit at the back while the cutting is done on bare hide at the front.
+  add('boardWood', G.translated(G.chamferBox(0.360, 0.020, 0.360, 0.003), 0, 0.010, 0),
     MAT.postWood, M(LAYOUT.board));
-  add('boardHide', G.translated(G.box(0.298, 0.006, 0.298, { uvScale: 0.06 }), 0, 0.022, 0),
+  add('boardHide', G.translated(G.box(0.336, 0.006, 0.336, { uvScale: 0.06 }), 0, 0.022, 0),
     MAT.hide, M(LAYOUT.board));
 
   // ---- 打紙束 : the bundle you beat -------------------------------------
