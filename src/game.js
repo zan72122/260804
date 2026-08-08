@@ -511,12 +511,12 @@ class Game {
     this.rig.root.rotation.y = this.yaw;
     this.stance = 0; this.stanceTarget = 0;
     this.propMask.visible = true;
-    this.propMask.position.set(0.80, 1.30, 4.98);
+    this.propMask.position.set(0.98, 1.38, 5.06);
     this.propCyl.visible = false;
-    this.propCyl.position.set(-0.62, 0.42, 4.82);
-    this.propCyl.rotation.set(0, 0.4, 0);
-    this.camera.position.set(1.30, 1.46, 4.45);
-    this.camLook.set(0.35, 1.30, 5.5);
+    this.propCyl.position.set(-0.46, 1.16, 5.08);
+    this.propCyl.rotation.set(0.12, 0.4, 0.22);
+    this.camera.position.set(1.58, 1.52, 4.10);
+    this.camLook.set(0.35, 1.26, 5.5);
     this.coachWorld = this.propMask.position;
     this.coach('tap');
     document.getElementById('finds').classList.remove('hidden');
@@ -728,11 +728,17 @@ class Game {
 
     if (this.gearStep === 0) {
       this.propMask.visible = true;
-      this.propMask.position.y = 1.16 + bob;
+      this.propMask.position.y = 1.38 + bob;
       this.propMask.rotation.y = Math.PI + Math.sin(this.t * 0.7) * 0.35;
       this.propMask.userData.ring.material.opacity = 0.55 + Math.sin(this.t * 3.2) * 0.3;
       this.coachWorld = this.propMask.position;
       this.coach('tap');
+    }
+    if (this.gearStep === 1 && !this.gearAnim) {
+      this.propCyl.position.y = 1.16 + bob;
+      this.propCyl.rotation.y = 0.4 + Math.sin(this.t * 0.6) * 0.3;
+      this.propCyl.userData.ring.material.opacity = 0.55 + Math.sin(this.t * 3.2) * 0.3;
+      this.coachWorld = this.propCyl.position;
     }
 
     if (this.gearAnim) {
@@ -800,8 +806,8 @@ class Game {
 
     // Camera eases between a front three-quarter and a shot over the back.
     const wantBack = this.gearStep === 1;
-    const camT = wantBack ? new THREE.Vector3(-1.05, 1.50, 4.45) : new THREE.Vector3(1.30, 1.46, 4.45);
-    const lookT = wantBack ? new THREE.Vector3(0.35, 1.22, 5.5) : new THREE.Vector3(0.35, 1.30, 5.5);
+    const camT = wantBack ? new THREE.Vector3(-1.32, 1.54, 4.20) : new THREE.Vector3(1.58, 1.52, 4.10);
+    const lookT = wantBack ? new THREE.Vector3(0.35, 1.20, 5.5) : new THREE.Vector3(0.35, 1.26, 5.5);
     this.camera.position.lerp(camT, 1 - Math.exp(-2.0 * dt));
     this.camLook.lerp(lookT, 1 - Math.exp(-2.0 * dt));
   }
@@ -820,7 +826,7 @@ class Game {
     poseFirefighter(rig, 0, this.enterT * 7.2, 1, 1);
     if (this.enterT % 0.44 < dt) this.snd.thud(0.22, 120);
 
-    const camFrom = new THREE.Vector3(1.30, 1.46, 4.45);
+    const camFrom = new THREE.Vector3(1.58, 1.52, 4.10);
     const camTo = new THREE.Vector3(0.0, 1.55, 3.9);
     this.camera.position.lerpVectors(camFrom, camTo, e);
     this.camLook.lerp(new THREE.Vector3(0, 1.35, 2.0), 1 - Math.exp(-2.4 * dt));
