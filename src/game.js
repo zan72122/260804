@@ -2,7 +2,7 @@
 // 地下を透かす → 根鉢ごとスポンと抜く → 運ぶ → 穴へスポッ → 刃を抜く → 水。
 import * as THREE from '../vendor/three.module.js';
 import * as A from './audio.js';
-import { World, DIM, SOIL_TYPES, setCutaway } from './world.js';
+import { World, DIM, SOIL_TYPES, setCutaway, disposeTree } from './world.js';
 import { Tree, SPECIES } from './tree.js';
 import { Plug } from './rootball.js';
 import { TreeSpade, CONE, LIFT_MAX, makeWorker } from './spade.js';
@@ -23,6 +23,7 @@ export const DESTINATIONS = {
 const SITE_TREE = new THREE.Vector3(0, 0, 0);
 const SITE_HOLE = new THREE.Vector3(15, 0, 0);
 const DUMP_X = SITE_HOLE.x + 4.6;
+const UP = new THREE.Vector3(0, 1, 0);
 
 const P = {
   IDLE: 'idle',
@@ -97,12 +98,12 @@ export class Game {
     // 木 → 根鉢（切れた根の位置を根鉢に渡す）
     const seed = (Date.now() % 99991) | 0;
     this.tree = new Tree(treeKey, seed, { topR: DIM.BALL_TOP_R, botR: DIM.BALL_BOT_R, depth: DIM.BALL_DEPTH });
-    this.treePlug = new Plug(soil, { grassTone: dest.grass, withCutRoots: this.tree.cutRoots, seed: 1 });
+    this.treePlug = new Plug(soil, { grassTone: dest.grass, withCutRoots: this.tree.cutRoots, seed: 1 + (seed % 37) });
     this.treePlug.group.add(this.tree.group);
     this.treePlug.group.position.copy(SITE_TREE);
     scene.add(this.treePlug.group);
 
-    this.holePlug = new Plug(soil, { grassTone: dest.grass, seed: 2 });
+    this.holePlug = new Plug(soil, { grassTone: dest.grass, seed: 40 + (seed % 29) });
     this.holePlug.group.position.copy(SITE_HOLE);
     scene.add(this.holePlug.group);
 
@@ -175,16 +176,16 @@ export class Game {
   dispose() {
     if (!this.built) return;
     const scene = this.world.scene;
-    for (const o of [this.treePlug, this.holePlug]) if (o) { scene.remove(o.group); o.dispose(); }
-    if (this.tree) this.tree.dispose();
-    if (this.machine) scene.remove(this.machine.group);
-    if (this.props) scene.remove(this.props);
-    if (this.mound) scene.remove(this.mound);
-    if (this.mark) scene.remove(this.mark);
-    if (this.waterWorker) scene.remove(this.waterWorker.group);
+    const kill = (obj) => { if (!obj) return; scene.remove(obj); disposeTree(obj); };
+    if (this.treePlug) kill(this.treePlug.group);
+    if (this.holePlug) kill(this.holePlug.group);
+    if (this.machine) kill(this.machine.group);
+    kill(this.props); kill(this.mound); kill(this.mark);
+    if (this.waterWorker) kill(this.waterWorker.group);
     this.world.clearSites();
     this.particles.clear();
     this.tw.clear();
+    A.stopAll();
     this.built = false;
   }
 
@@ -464,6 +465,7 @@ export class Game {
 
   /* ================= 刃の操作 ================= */
   onBladeGrab(i) {
+    this.lastInteract = this.clock;
     this.ui.hideHint();
     const az = this.machine.blades[i].az;
     if (this.phase === P.BLADES_IN && !this.cutawayActive) {
@@ -475,6 +477,7 @@ export class Game {
   }
 
   onBladeChange(i, target, dragging) {
+    this.lastInteract = this.clock;
     const cur = this.machine.getBlade(i);
     const d = target - cur;
     if (Math.abs(d) < 1e-5) return;
@@ -487,7 +490,8 @@ export class Game {
     if (tip.y < 0.35 && Math.abs(d) > 0.004) {
       const az = this.machine.bladeAzimuthWorld(i);
       const dirv = this._tmp2.set(Math.cos(az), 0, Math.sin(az));
-      const n = d > 0 ? Math.abs(d) * 26 * this.soil.crumb : Math.abs(d) * 12;
+      const bias = [1.25, 0.8, 1.05, 0.9][i];
+      const n = (d > 0 ? Math.abs(d) * 26 * this.soil.crumb : Math.abs(d) * 12) * bias;
       this.particles.digSpray(
         new THREE.Vector3(tip.x, 0.02, tip.z), dirv, Math.min(2.2, n), 0);
       site.disturbGrass(az, Math.min(0.9, Math.abs(d) * 22 + 0.25));
@@ -778,15 +782,33 @@ export class Game {
   _bindCanvas() {
     const cv = this.renderer.domElement;
     let pid = null, startY = 0, startV = 0;
+    // 正確に刃を触れなくても、意図が明らかなら一番近い刃へ吸着させる
     const pick = (e) => {
       if (!this.machine || this.autoLock) return null;
       const r = cv.getBoundingClientRect();
       this.pointer.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
       this.raycaster.setFromCamera(this.pointer, this.dir.camera);
       const hits = this.raycaster.intersectObjects(this.machine.pickMeshes(), false);
-      if (!hits.length) return null;
-      let o = hits[0].object;
-      return this.machine.blades.findIndex((b) => b.pick === o);
+      if (hits.length) {
+        const o = hits[0].object;
+        const i = this.machine.blades.findIndex((b) => b.pick === o);
+        if (i >= 0) return i;
+      }
+      // 画面上でいちばん近い「まだ終わっていない刃」を探す
+      const inserting = this.phase !== P.BLADES_OUT;
+      const snapR = Math.min(r.width, r.height) * 0.30;
+      let best = -1, bestD = Infinity;
+      for (let i = 0; i < 4; i++) {
+        const t = this.machine.getBlade(i);
+        if (inserting ? t > 0.995 : t < 0.005) continue;
+        const p = this.machine.bladeMidWorld(i, this._tmp).clone().project(this.dir.camera);
+        if (p.z > 1) continue;
+        const sx = r.left + (p.x * 0.5 + 0.5) * r.width;
+        const sy = r.top + (-p.y * 0.5 + 0.5) * r.height;
+        const d = Math.hypot(e.clientX - sx, e.clientY - sy);
+        if (d < bestD) { bestD = d; best = i; }
+      }
+      return bestD < snapR ? best : null;
     };
     cv.addEventListener('pointerdown', (e) => {
       if (this.phase !== P.BLADES_IN && this.phase !== P.HOLE_BLADES && this.phase !== P.BLADES_OUT) return;
@@ -826,6 +848,16 @@ export class Game {
     cv.addEventListener('pointercancel', end);
   }
 
+  // タイトル画面用：ゆっくり回る全景
+  idleShowcase() {
+    this.phase = P.IDLE;
+    this.focusSite = SITE_TREE;
+    this.world.focusShadow(SITE_TREE);
+    this.dir.cut(SHOTS.title(this.treeH), SITE_TREE);
+    this.machine.setGate(0);
+    this.ui.show(false);
+  }
+
   /* ================= 毎フレーム ================= */
   update(dt) {
     this.clock += dt;
@@ -862,7 +894,7 @@ export class Game {
     const speed = Math.abs(vx);
     this.machine.update(dt, vx);
     // 根鉢が宙にあるときは作業灯で照らして、土の塊がはっきり見えるようにする
-    const wl = this.carried ? 26 : (this.phase === P.BLADES_IN || this.phase === P.LIFT ? 10 : 4);
+    const wl = this.carried ? 46 : (this.phase === P.BLADES_IN || this.phase === P.LIFT ? 16 : 5);
     this.machine.setWorkLight(lerp(this.machine.workLight.intensity, wl, Math.min(1, dt * 3)));
     if (this.tree) {
       if (this.carried && speed > 0.02) {
@@ -876,6 +908,25 @@ export class Game {
       this.tree.setWind(0.030 + (this.carried ? 0.012 : 0));
     }
     if (speed > 0.05) A.engine.rev(clamp01(speed / 5));
+
+    // しばらく触らないと、次に動かす刃がゆっくり光る
+    const bladePhase = this.phase === P.HOLE_BLADES || this.phase === P.BLADES_IN || this.phase === P.BLADES_OUT;
+    if (bladePhase) {
+      const inserting = this.phase !== P.BLADES_OUT;
+      let target = -1;
+      for (let i = 0; i < 4; i++) {
+        const t = this.machine.getBlade(i);
+        if (inserting ? t < 0.995 : t > 0.005) { target = i; break; }
+      }
+      const idleFor = this.clock - (this.lastInteract || 0);
+      for (let i = 0; i < 4; i++) {
+        const on = (i === target && idleFor > 2.2 && this.dragBlade === null) ? 1 : 0;
+        const pulse = on * (0.55 + 0.45 * Math.sin(this.clock * 3.4));
+        this.machine.highlight(i, this.dragBlade === i ? 1 : pulse);
+        const lv = this.levers[i];
+        if (lv && lv.root) lv.root.classList.toggle('hintpulse', on > 0);
+      }
+    }
 
     // 草がもどる
     this.treeSite.settleGrass(dt);
@@ -897,6 +948,11 @@ export class Game {
     if (this.birdTimer < 0) {
       this.birdTimer = rr(this.rng, 7, 16);
       if (this.phase === P.FINISH || this.phase === P.IDLE) A.bird();
+    }
+
+    // タイトル中はショットの方向をゆっくり回す
+    if (this.phase === P.IDLE && this.dir.shot && this.dir.shot.dir) {
+      this.dir.shot.dir.applyAxisAngle(UP, dt * 0.045);
     }
 
     // カメラ

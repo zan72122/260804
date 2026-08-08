@@ -44,7 +44,7 @@ export function unlock() {
 }
 export function setEnabled(v) {
   enabled = v;
-  if (master) master.gain.setTargetAtTime(v ? 0.85 : 0.0, ctx.currentTime, 0.05);
+  if (master && ctx) master.gain.setTargetAtTime(v ? 0.85 : 0.0, ctx.currentTime, 0.05);
 }
 export function isEnabled() { return enabled; }
 export function isReady() { return !!ctx && enabled; }

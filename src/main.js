@@ -106,8 +106,21 @@ const destThumb = (key) => {
     <ellipse cx="72" cy="70" rx="14" ry="6" fill="#7a6a4a"/></svg>`;
 };
 
+// タイトル画面の背後に実際の 3D 風景を出す
+function ensureShowcase() {
+  if (game.built) { game.idleShowcase(); return; }
+  try {
+    game.build({ treeKey: state.tree, destKey: state.dest, mode: 'story' });
+    game.idleShowcase();
+  } catch (e) {
+    die(e.message + '\n' + e.stack);
+  }
+}
+
 function screenTitle() {
   ui.show(false);
+  A.stopAll();
+  ensureShowcase();
   ui.showScreen(`
     <h1 class="title">き の おひっこし<small>ツリースペード</small></h1>
     <p class="sub">おおきな き を、つち ごと スポン と ぬいて<br>あたらしい ばしょ へ うえかえよう</p>
@@ -119,13 +132,11 @@ function screenTitle() {
     root.querySelector('#go').onclick = () => { A.unlock(); screenSelect(); };
     root.querySelector('#free').onclick = () => { A.unlock(); startGame('free'); };
   });
-  if (game.built) {
-    game.dir.move(game.dir.shot, 3.0);
-  }
 }
 
 function screenSelect() {
   ui.show(false);
+  ensureShowcase();
   const cards = (items, thumbFn, sel, cls) => items.map((k) =>
     `<button class="card ${k === sel ? 'sel' : ''}" data-k="${k}" data-g="${cls}">
        <span class="thumb">${thumbFn(k)}</span><span>${cls === 'tree' ? SPECIES[k].label : DESTINATIONS[k].label}</span>
@@ -212,11 +223,16 @@ function startGame(mode) {
 /* ================= 上部ボタン ================= */
 document.getElementById('btn-menu').onclick = () => screenPause();
 const soundBtn = document.getElementById('btn-sound');
+const SOUND_KEY = 'treespade.sound';
+try {
+  if (localStorage.getItem(SOUND_KEY) === 'off') { A.setEnabled(false); soundBtn.classList.add('muted'); }
+} catch (e) { /* プライベートモードなど */ }
 soundBtn.onclick = () => {
   A.unlock();
   const on = !A.isEnabled();
   A.setEnabled(on);
   soundBtn.classList.toggle('muted', !on);
+  try { localStorage.setItem(SOUND_KEY, on ? 'on' : 'off'); } catch (e) { }
 };
 
 // 最初のタッチで音声を解禁
@@ -262,9 +278,12 @@ function loop(now) {
 }
 
 resize();
-screenTitle();
-loading.classList.add('hidden');
 requestAnimationFrame(loop);
+// 最初のフレームを描いてから重い生成を行い、タイトルを実景の上に出す
+requestAnimationFrame(() => requestAnimationFrame(() => {
+  screenTitle();
+  loading.classList.add('hidden');
+}));
 
 // デバッグ / 自動テスト用（実機の動作には影響しない）
 window.__game = game;

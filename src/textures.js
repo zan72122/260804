@@ -242,6 +242,7 @@ export function leafCardTexture(kind = 'broad', color = [78, 132, 54]) {
         g.lineTo(wid * 0.5, len * 0.5);
         g.lineTo(-wid * 0.5, len * 0.5);
       } else if (kind === 'blossom') {
+        g.fillStyle = hex(r * 1.02, gg * 0.86, b * 0.94);
         for (let p = 0; p < 5; p++) {
           const a = (p / 5) * Math.PI * 2;
           g.ellipse(Math.cos(a) * wid * 0.34, Math.sin(a) * wid * 0.34, wid * 0.34, wid * 0.30, a, 0, 7);

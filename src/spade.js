@@ -26,6 +26,12 @@ function bladeGeometry(arcDeg = 58, thickness = 0.085, seed = 1) {
   const NS = 10, NA = 18;
   const half = (arcDeg * Math.PI) / 360;
   const rng = makeRng(seed);
+  const wear = rng();                       // 刃ごとの摩耗ぐあい
+  const nz = [];
+  for (let j = 0; j <= NS; j++) {
+    nz[j] = [];
+    for (let i = 0; i <= NA; i++) nz[j][i] = rng() - 0.5;
+  }
   const pos = [], nor = [], uv = [], col = [], idx = [];
   const steelTop = new THREE.Color(0.115, 0.125, 0.140);
   const steelMid = new THREE.Color(0.075, 0.062, 0.050);
@@ -60,7 +66,9 @@ function bladeGeometry(arcDeg = 58, thickness = 0.085, seed = 1) {
         push(r, y, a, thick * edge, side);
         uv.push(i / NA, v);
         const c = colorAt(v);
-        col.push(c.r, c.g, c.b);
+        // 刃ごと・場所ごとの摩耗ムラ
+        const w = 0.82 + wear * 0.4 + (nz[j][i] * 0.20);
+        col.push(c.r * w, c.g * w, c.b * w);
       }
     }
   }
@@ -255,7 +263,7 @@ export class TreeSpade {
       c.add(lens);
     }
     this.workLight = new THREE.PointLight(0xfff0d2, 0, 11, 1.3);
-    this.workLight.position.set(3.4, 3.2, 0);
+    this.workLight.position.set(2.7, 3.6, 0);
     c.add(this.workLight);
 
     // 排気
@@ -433,10 +441,13 @@ export class TreeSpade {
 
     // ハイライト（操作対象を示す）
     const hlMat = new THREE.MeshBasicMaterial({
-      color: 0xffe66a, transparent: true, opacity: 0, depthWrite: false, side: THREE.BackSide,
+      color: 0xffdc5e, transparent: true, opacity: 0, depthWrite: false, depthTest: false,
+      side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
     });
-    const hl = new THREE.Mesh(bladeGeometry(62, 0.30, i * 13 + 3), hlMat);
-    hl.scale.setScalar(1.03);
+    const hl = new THREE.Mesh(bladeGeometry(63, 0.17, i * 13 + 3), hlMat);
+    hl.scale.set(1.03, 1.01, 1.03);
+    hl.renderOrder = 12;
+    hl.visible = false;
     bladeUnit.add(hl);
 
     const unit = {
@@ -500,7 +511,8 @@ export class TreeSpade {
 
   highlight(i, v) {
     const u = this.blades[i];
-    u.hlMat.opacity = v * 0.34;
+    u.hlMat.opacity = v * 0.42;
+    u.hl.visible = v > 0.01;
   }
 
   /* ---------- 座標取得 ---------- */

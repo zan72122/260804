@@ -125,8 +125,8 @@ export const SHOTS = {
   }),
   // タイトル用のゆったりした全景
   title: (treeH = 9) => makeShot({
-    dir: D(-0.70, 0.34, 1.0), look: L(3.0, treeH * 0.44, 0),
-    fitW: 15.5, fitH: treeH * 0.68, fov: 42, margin: 1.18, minY: 3.2, widthPull: 1.5,
+    dir: D(-0.72, 0.30, 1.0), look: L(2.6, treeH * 0.34, 0),
+    fitW: 15.5, fitH: treeH * 0.80, fov: 42, margin: 1.20, minY: 3.0, widthPull: 1.6,
   }),
   // 斜め上 3/4：刃が木を囲んでいるのを見る
   threeQuarter: () => makeShot({

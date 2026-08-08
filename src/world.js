@@ -393,6 +393,15 @@ export function mergeGeoms(list) {
   return out;
 }
 
+// ジオメトリ／マテリアルを解放（テクスチャは共有キャッシュなので残す）
+export function disposeTree(root) {
+  root.traverse((o) => {
+    if (o.geometry) o.geometry.dispose();
+    const m = o.material;
+    if (m) (Array.isArray(m) ? m : [m]).forEach((x) => x.dispose && x.dispose());
+  });
+}
+
 /* ================= 環境マップ ================= */
 function buildEnvironment(renderer) {
   const pmrem = new THREE.PMREMGenerator(renderer);
@@ -513,7 +522,7 @@ export class World {
   }
 
   clearSites() {
-    for (const s of this.sites) this.scene.remove(s.group);
+    for (const s of this.sites) { this.scene.remove(s.group); disposeTree(s.group); }
     this.sites.length = 0;
   }
 
