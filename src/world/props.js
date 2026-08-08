@@ -205,33 +205,73 @@ export function makeClapper(metalKey, { arm = 1.3, ball = 0.16 } = {}) {
 }
 
 /** yoke, wheel and rope: how a bell is actually made to swing */
+/**
+ * Yoke, straps, gudgeons and wheel: how a swinging bell is actually hung.
+ *
+ * The wheel matters more than it looks.  A bell wheel is nearly as wide as the
+ * bell, the rope lies in a groove around its rim, and the rope therefore leaves
+ * it on a tangent -- which is what lets a pull on the rope read as a torque on
+ * the bell rather than as a string tied to a hook.
+ */
 export function makeHeadstock(bellTopY, radius) {
   const g = new THREE.Group();
-  const wood = new THREE.MeshStandardMaterial({ color: 0x53381f, roughness: 0.9 });
-  const iron = new THREE.MeshStandardMaterial({ color: 0x3a3630, roughness: 0.55, metalness: 0.85 });
+  const wood = new THREE.MeshStandardMaterial({ color: 0x5c3f24, roughness: 0.92 });
+  const woodPale = new THREE.MeshStandardMaterial({ color: 0x6d4d2c, roughness: 0.9 });
+  const iron = new THREE.MeshStandardMaterial({ color: 0x39352f, roughness: 0.5, metalness: 0.9 });
+  const pivotY = bellTopY + 0.34;
 
-  const beam = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.26, 0.34), wood);
-  beam.position.y = bellTopY + 0.34; beam.castShadow = true; g.add(beam);
+  // the timber headstock the bell bolts up to
+  const beam = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.30, 0.38), wood);
+  beam.position.y = pivotY; beam.castShadow = true; g.add(beam);
+
+  // straps down each side of the crown, with visible bolt heads
   for (const s of [-1, 1]) {
-    const strap = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.5, 0.4), iron);
-    strap.position.set(s * 0.34, bellTopY + 0.2, 0); g.add(strap);
-    const gudgeon = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.3, 10), iron);
-    gudgeon.position.set(s * 0.86, bellTopY + 0.34, 0);
+    const strap = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.62, 0.44), iron);
+    strap.position.set(s * 0.30, pivotY - 0.28, 0); strap.castShadow = true; g.add(strap);
+    for (const dy of [-0.14, 0.14]) {
+      const bolt = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.1, 6), iron);
+      bolt.position.set(s * 0.30, pivotY - 0.28 + dy, 0.23);
+      bolt.rotation.x = Math.PI / 2; g.add(bolt);
+    }
+    // gudgeon pin: what the bell actually turns on
+    const gudgeon = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.34, 12), iron);
+    gudgeon.position.set(s * 0.95, pivotY, 0);
     gudgeon.rotation.z = Math.PI / 2; g.add(gudgeon);
   }
-  const R = Math.max(0.42, radius * 0.52);
-  const wheel = new THREE.Mesh(new THREE.TorusGeometry(R, 0.042, 8, 28), wood);
-  wheel.position.set(0.0, bellTopY + 0.34, 0.42);
-  g.add(wheel);
-  for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * TAU;
-    const spoke = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, R * 2, 6), wood);
-    spoke.position.set(0, bellTopY + 0.34, 0.42);
-    spoke.rotation.z = a;
+
+  // ---- the wheel ----
+  const R = Math.max(0.72, radius * 0.95);
+  const Z = 0.44;
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(R, 0.048, 8, 34), woodPale);
+  rim.position.set(0, pivotY, Z); rim.castShadow = true; g.add(rim);
+  // the shroud the rope runs in
+  const shroud = new THREE.Mesh(new THREE.CylinderGeometry(R + 0.03, R + 0.03, 0.11, 34, 1, true), wood);
+  shroud.position.set(0, pivotY, Z);
+  shroud.rotation.x = Math.PI / 2;
+  shroud.material.side = THREE.DoubleSide;
+  g.add(shroud);
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.2, 12), wood);
+  hub.position.set(0, pivotY, Z); hub.rotation.x = Math.PI / 2; g.add(hub);
+  // spokes run hub to rim -- not straight through, which reads as an asterisk
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * TAU;
+    const len = R - 0.10;
+    const spoke = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.032, len, 6), wood);
+    spoke.position.set(Math.cos(a) * (0.10 + len * 0.5), pivotY + Math.sin(a) * (0.10 + len * 0.5), Z);
+    spoke.rotation.z = a - Math.PI / 2;
     g.add(spoke);
   }
+  // stay bars tying the wheel back to the headstock
+  for (const s of [-1, 1]) {
+    const stay = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, Z, 6), iron);
+    stay.position.set(s * R * 0.62, pivotY + R * 0.38, Z * 0.5);
+    stay.rotation.x = Math.PI / 2;
+    g.add(stay);
+  }
+
   g.userData.wheelR = R;
-  g.userData.wheelY = bellTopY + 0.34;
+  g.userData.wheelZ = Z;
+  g.userData.wheelY = pivotY;
   return g;
 }
 

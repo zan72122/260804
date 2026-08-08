@@ -339,6 +339,29 @@ export class AudioEngine {
     }
   }
 
+  /**
+   * One piece of fired earth hitting the ground.  Fired per landing rather
+   * than as a canned rattle at the moment of the blow, so what you hear is
+   * what you just watched land -- big slabs low and slow, chips bright and
+   * short.
+   * @param {number} force 0..1 from the impact speed
+   * @param {number} size  the piece's radius in metres
+   */
+  earthThud(force = 0.5, size = 0.3) {
+    const f = clamp(force, 0.05, 1);
+    const big = clamp01((size - 0.15) / 0.45);          // 0 chip .. 1 slab
+    this._burst({
+      freq: lerp(900, 260, big), q: 0.7,
+      dur: 0.09 + big * 0.16, gain: (0.10 + f * 0.26) * (0.6 + big * 0.6), sweep: 0.25,
+    });
+    this._tone({
+      freq: lerp(150, 62, big), to: lerp(90, 38, big),
+      dur: 0.10 + big * 0.22, gain: (0.05 + f * 0.16) * (0.4 + big * 0.9), type: 'sine',
+    });
+    // loose grit thrown off by the impact
+    if (f > 0.35) this._burst({ freq: 2400, q: 2.5, dur: 0.07, gain: 0.05 * f, sweep: 0.5 });
+  }
+
   /** the dust cloud blooming out */
   dustPuff() { this._burst({ freq: 900, q: 0.4, dur: 0.9, gain: 0.3, sweep: 0.12 }); }
 

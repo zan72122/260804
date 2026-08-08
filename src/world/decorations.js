@@ -173,8 +173,10 @@ export function decorGeometry(key) {
     s.closePath();
     return s;
   });
+  // Cast relief on a bell stands 10-20 mm proud, not 100 mm.  The old depth
+  // made every ornament read as a separate slab leaning against the bell.
   const geo = new THREE.ExtrudeGeometry(shapes, {
-    depth: 0.55, bevelEnabled: true, bevelThickness: 0.16, bevelSize: 0.12,
+    depth: 0.26, bevelEnabled: true, bevelThickness: 0.085, bevelSize: 0.075,
     bevelSegments: 2, curveSegments: 4,
   });
   geo.computeVertexNormals();
@@ -202,14 +204,38 @@ export function orientDecor(obj, theta, y, r, slope, size) {
   const meridian = new THREE.Vector3().crossVectors(n, tangent).normalize();
   const m = new THREE.Matrix4().makeBasis(tangent, meridian, n);
   obj.quaternion.setFromRotationMatrix(m);
-  obj.position.set(cx * r, y, cz * r).addScaledVector(n, -size * 0.16);
+  obj.position.set(cx * r, y, cz * r).addScaledVector(n, -size * 0.055);
   obj.scale.setScalar(size);
 }
 
-/** Build the relief mesh for one placement. */
-export function makeDecorMesh(key, material) {
-  const m = new THREE.Mesh(decorGeometry(key), material);
+/**
+ * Build the relief mesh for one placement.
+ *
+ * The ornament is bent to the curvature of the body it sits on.  A flat-backed
+ * plate on a curved bell lifts at its corners by the sagitta of the chord --
+ * three centimetres on this geometry -- and that gap is exactly what made the
+ * decorations look stuck on with glue rather than cast into the surface.
+ *
+ * @param {number} bendR surface radius in the mesh's own local units
+ */
+export function makeDecorMesh(key, material, bendR = 0) {
+  let geo = decorGeometry(key);
+  if (bendR > 0.2) {
+    geo = geo.clone();
+    const p = geo.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+      // wrap around the axis of revolution, and drop away up the meridian too
+      const dz = (x * x) / (2 * bendR) + (y * y) / (2 * bendR * 3.2);
+      p.setZ(i, z - dz);
+    }
+    p.needsUpdate = true;
+    geo.computeVertexNormals();
+    geo.computeBoundingSphere();
+  }
+  const m = new THREE.Mesh(geo, material);
   m.castShadow = true;
   m.userData.decorKey = key;
+  m.userData.bent = bendR > 0.2;
   return m;
 }

@@ -27,6 +27,8 @@ export class Rig {
     this._parallaxTarget = new THREE.Vector2();
     this.canvas = canvas;
     this.snapNext = true;
+    this._move = 1;
+    this.moveDur = 1.15;
   }
 
   resize(w, h) {
@@ -55,6 +57,7 @@ export class Rig {
       yaw: land.yaw ?? this.shot.yaw, pitch: land.pitch ?? this.shot.pitch,
     } : null;
     if (snap) this.snapNext = true;
+    else { this._move = 0; this.moveDur = 1.15; }
     this._solve();
   }
 
@@ -80,7 +83,12 @@ export class Rig {
     this._t += dt;
     this._solve();
     const s = this.active;
-    const k = this.snapNext ? 1 : 1 - Math.exp(-4.6 * dt);
+    // Ease in and out of a reframe instead of crawling asymptotically toward
+    // it: the old exponential chase was still visibly gliding several seconds
+    // in, so the player's first action always happened on a moving camera.
+    this._move = Math.min(1, (this._move ?? 1) + dt / this.moveDur);
+    const ease = this._move * this._move * (3 - 2 * this._move);
+    const k = this.snapNext ? 1 : Math.min(1, (1 - Math.exp(-4.6 * dt)) + ease * ease * dt * 6);
     this.current.lerp(this.target, k);
     this._distNow = lerp(this._distNow, this._dist, k);
     this._yawNow = lerp(this._yawNow, s.yaw, k);
@@ -99,15 +107,22 @@ export class Rig {
     const py = this.current.y + Math.sin(pitch) * d;
     const pz = this.current.z + Math.cos(yaw) * cp * d;
 
-    let sx = 0, sy = 0;
+    // Shake.  A person watching a mould crack from two metres away does not
+    // have their head thrown 15 cm sideways; their view jolts a centimetre or
+    // two and settles within a third of a second.  So the amplitude is small,
+    // the decay is quick, and most of the motion is a slight roll rather than
+    // translation -- which is what a startled head actually does.
+    let sx = 0, sy = 0, roll = 0;
     if (this.shake > 0.001) {
-      this.shake = Math.max(0, this.shake - dt * 1.5);
-      const a = this.shake * this.shake * 0.075;
-      sx = Math.sin(this._t * 47) * a;
-      sy = Math.cos(this._t * 39) * a;
+      this.shake = Math.max(0, this.shake - dt * 4.2);
+      const a = this.shake * this.shake * 0.016;
+      sx = Math.sin(this._t * 38) * a;
+      sy = Math.cos(this._t * 31) * a * 0.7;
+      roll = Math.sin(this._t * 26) * this.shake * this.shake * 0.011;
     }
     this.camera.position.set(px + sx, py + sy, pz);
     this.camera.lookAt(this.current.x, this.current.y + sy * 0.4, this.current.z);
+    if (roll) this.camera.rotateZ(roll);
   }
 
   /** project a world point to css pixels inside the canvas */

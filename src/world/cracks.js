@@ -23,16 +23,18 @@ void main(){
 const FRAG = `
 uniform float uGrow;
 uniform float uHeat;
+uniform float uFade;
 varying float vT;
 varying float vW;
 void main(){
   if ( vT > uGrow ) discard;
+  if ( uFade <= 0.003 ) discard;
   float edge = 1.0 - abs( vW );
   float dark = smoothstep( 0.0, 0.55, edge );
   // the newest millimetre of the crack still shows the heat behind it
   float tip = smoothstep( uGrow - 0.10, uGrow, vT ) * uHeat;
   vec3 col = mix( vec3( 0.035, 0.026, 0.020 ), vec3( 1.0, 0.46, 0.13 ), tip * 0.9 );
-  gl_FragColor = vec4( col, dark );
+  gl_FragColor = vec4( col, dark * uFade );
   #include <colorspace_fragment>
 }`;
 
@@ -119,7 +121,7 @@ export class CrackField {
     geo.setIndex(idx);
     geo.computeBoundingSphere();
 
-    const uniforms = { uGrow: { value: 0 }, uHeat: { value: 1 } };
+    const uniforms = { uGrow: { value: 0 }, uHeat: { value: 1 }, uFade: { value: 1 } };
     const mat = new THREE.ShaderMaterial({
       uniforms, vertexShader: VERT, fragmentShader: FRAG,
       transparent: true, depthWrite: false, side: THREE.DoubleSide,
@@ -127,7 +129,7 @@ export class CrackField {
     const mesh = new THREE.Mesh(geo, mat);
     mesh.renderOrder = 2;
     this.parent.add(mesh);
-    const rec = { mesh, uniforms, grow: 0 };
+    const rec = { mesh, uniforms, grow: 0, theta, u, fade: 1 };
     this.groups.push(rec);
     return rec;
   }
@@ -138,8 +140,29 @@ export class CrackField {
         g.grow = Math.min(1, g.grow + dt * speed);
         g.uniforms.uGrow.value = g.grow;
       }
+      if (g.fade < 1) {
+        // A crack is a mark ON a surface.  Once the earth it split has fallen
+        // away there is nothing left for it to be drawn on, so it must go with
+        // the piece rather than hang in the air over the bare bell.
+        g.fade = Math.max(0, g.fade - dt * 5.0);
+        g.uniforms.uFade.value = g.fade;
+        if (g.fade <= 0) g.mesh.visible = false;
+      }
     }
   }
+
+  /** start retiring the crack star nearest (theta, u) */
+  retireNear(theta, u, radius = 0.5) {
+    for (const g of this.groups) {
+      if (g.fade < 1) continue;
+      let d = g.theta - theta;
+      d = Math.atan2(Math.sin(d), Math.cos(d));
+      if (Math.hypot(d * 0.5, g.u - u) < radius) g.fade = 0.999;
+    }
+  }
+
+  /** retire everything (the shell is gone) */
+  retireAll() { for (const g of this.groups) if (g.fade >= 1) g.fade = 0.999; }
 
   setHeat(h) { for (const g of this.groups) g.uniforms.uHeat.value = h; }
 

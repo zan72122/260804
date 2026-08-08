@@ -31,6 +31,7 @@ export const STAGE_ORDER = [
  * ================================================================== */
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
+const UP = new THREE.Vector3(0, 1, 0);
 
 // Jib angle that stows the ladle over by the furnace.  The jib's pivot happens
 // to stand about one ladle-radius from the casting axis, so most angles sweep
@@ -1176,7 +1177,7 @@ const breakup = {
     g.world.ladleRig.rotation.y = LADLE_PARK;
     g.world.ladle.rotation.z = 0;
     g.world.ladleMelt.visible = false;
-    this.chunks = rm.buildChunks(5, 12);
+    this.chunks = rm.buildChunks(26);
     this.cracks = new CrackField(rm.group, S);
     this.cracks.setHeat(0.55);
 
@@ -1241,20 +1242,25 @@ const breakup = {
       audio.crackSnap(1.15);
       g.shake(0.85);
       g.shakeRoom(0.35);
-      this._dust(g, hit.point, 8, 0.5);
+      this._dust(g, hit.point, 16, 0.5, 0.6);
     } else {
       audio.crackSnap(0.55 * power);
-      audio.rubble(0.7);
       g.shake(0.5 * power);
-      this._dust(g, hit.point, 14, 0.8);
+      this._dust(g, hit.point, 26, 0.8, 0.75);
       // PARA-PARA -- pieces start letting go around the blow
+      // A blow does not free a ring of pieces at once: the failure runs
+      // outward from the impact, so each piece lets go a little later than
+      // the one nearer the crack.
       const radius = 0.55 + this.hits * 0.22;
       let n = 0;
       for (const c of this.chunks) {
         if (c.state !== 0) continue;
         const dth = Math.abs(angDelta(c.theta, theta));
         const d = Math.hypot(dth * 0.9, (c.u - u) * 2.4);
-        if (d < radius && n < 5 + this.hits * 2) { this._detach(c, 1.1); n++; }
+        if (d < radius && n < 3 + this.hits * 2) {
+          this._detach(c, 0.9 + Math.random() * 0.4, d * 0.28 + Math.random() * 0.12);
+          n++;
+        }
       }
     }
 
@@ -1263,23 +1269,45 @@ const breakup = {
     if (this.hits >= 4 || gone > 0.5) this._collapse(g);
   },
 
-  _detach(c, power) {
+  _detach(c, power, delay = 0) {
     c.state = 1;
+    if (this.cracks) this.cracks.retireNear(c.theta, c.u, 0.42);
     c.age = 0;
+    c.hold = delay;                       // it lets go a moment after the blow
+    // Earth peels off a casting; it is not launched.  Just enough outward
+    // push to clear the bell's belly, and then gravity does the work.
     const dir = _v.set(Math.cos(c.theta), 0, Math.sin(c.theta));
-    c.vel.set(
-      dir.x * (1.1 + Math.random() * 1.5) * power,
-      0.6 + Math.random() * 1.7,
-      dir.z * (1.1 + Math.random() * 1.5) * power
+    const push = (0.30 + Math.random() * 0.5) * power;
+    c.vel.set(dir.x * push, -0.05 * Math.random(), dir.z * push);
+    // a small shard tumbles faster than a big slab: less inertia to turn
+    const spin = (0.85 / Math.max(0.2, c.radius)) * power;
+    c.spin.set(
+      (Math.random() - 0.5) * spin,
+      (Math.random() - 0.5) * spin * 0.5,
+      (Math.random() - 0.5) * spin
     );
-    c.spin.set((Math.random() - 0.5) * 7, (Math.random() - 0.5) * 7, (Math.random() - 0.5) * 7);
+    // where it ends up lying: on its back, outer face to the sky
+    c.restQuat = new THREE.Quaternion()
+      .setFromAxisAngle(UP, Math.random() * TAU)
+      .multiply(new THREE.Quaternion().setFromUnitVectors(dir.clone().normalize(), UP));
+    c.settle = -1;
+    c.landed = false;
   },
 
-  _dust(g, at, n, size) {
+  /** the height of whatever this piece is about to land on, in rig space */
+  _ground(x, z) {
+    const d = Math.hypot(x, z);
+    if (d < 1.30) return 0.0;             // the brick plinth
+    if (d < 1.88) return -0.13;           // the sand ring around it
+    return -0.22;                          // the shop floor
+  },
+
+  _dust(g, at, n, size, scale = 1) {
     for (let i = 0; i < n; i++) {
       g.pDust.spawn(FX.dustCloud(
         at.clone().add(V((Math.random() - 0.5) * 0.5, (Math.random() - 0.5) * 0.5, (Math.random() - 0.5) * 0.5)),
-        { x: (Math.random() - 0.5) * 1.8 * size, y: 0.3 + Math.random() * 1.1, z: (Math.random() - 0.5) * 1.8 * size }
+        { x: (Math.random() - 0.5) * 1.8 * size, y: 0.3 + Math.random() * 1.1, z: (Math.random() - 0.5) * 1.8 * size },
+        scale
       ));
     }
   },
@@ -1289,19 +1317,29 @@ const breakup = {
     this.collapsed = true;
     this.revealT = 0;
     const rm = g.rigMold;
-    for (const c of this.chunks) if (c.state === 0) this._detach(c, 1.5);
+    // the whole shell fails, but it fails as a wave from the last blow down
+    for (const c of this.chunks) {
+      if (c.state !== 0) continue;
+      this._detach(c, 1.0 + Math.random() * 0.5, (1 - c.u) * 0.45 + Math.random() * 0.25);
+    }
     audio.crackSnap(1.4);
-    audio.rubble(1.4);
     audio.dustPuff();
     g.shake(1.3);
     g.shakeRoom(0.7);
     // the ground disappears in earth
-    for (let i = 0; i < 46; i++) {
+    for (let i = 0; i < 150; i++) {
       const a = Math.random() * TAU, u = Math.random();
       const r = moldR(this.S, u) * (0.8 + Math.random() * 0.5);
+      // the cloud rolls outward along the ground, densest at the base
+      const low = Math.pow(Math.random(), 2.2);
       g.pDust.spawn(FX.dustCloud(
-        V(Math.cos(a) * r, u * this.H * 0.9 + rm.group.position.y, Math.sin(a) * r),
-        { x: Math.cos(a) * (1.0 + Math.random() * 1.8), y: 0.2 + Math.random() * 1.4, z: Math.sin(a) * (1.0 + Math.random() * 1.8) }
+        V(Math.cos(a) * r, low * this.H * 0.85 + rm.group.position.y, Math.sin(a) * r),
+        {
+          x: Math.cos(a) * (1.4 + Math.random() * 2.2),
+          y: 0.15 + Math.random() * 0.9 * (1 - low),
+          z: Math.sin(a) * (1.4 + Math.random() * 2.2),
+        },
+        1.1 + Math.random() * 0.8
       ));
     }
     // pull back so the bell arrives at full size
@@ -1318,34 +1356,41 @@ const breakup = {
     this.cracks.update(dt, 3.0);
     getBeacon(g).update(g.clock);
 
-    // broken earth falling, bouncing once and settling into the sand
-    const floorY = -rm.group.position.y + 0.06;
+    // Broken earth falls, thuds and stays.  Fired clay has essentially no
+    // restitution, so a bounce is the fastest way to make two-metre slabs of
+    // mould read as plastic chips.  Each piece topples onto its back and the
+    // rubble is still lying there when the bell is hoisted out of it.
     for (const c of this.chunks) {
       if (c.state !== 1) continue;
+      if (c.hold > 0) { c.hold -= dt; continue; }
       c.age += dt;
-      c.vel.y -= 11.5 * dt;
-      c.mesh.position.addScaledVector(c.vel, dt);
-      c.mesh.rotation.x += c.spin.x * dt;
-      c.mesh.rotation.y += c.spin.y * dt;
-      c.mesh.rotation.z += c.spin.z * dt;
-      if (c.mesh.position.y < floorY) {
-        c.mesh.position.y = floorY;
-        if (Math.abs(c.vel.y) > 1.2) {
-          c.vel.y *= -0.24; c.vel.x *= 0.5; c.vel.z *= 0.5;
-          c.spin.multiplyScalar(0.4);
-        } else { c.vel.set(0, 0, 0); c.spin.multiplyScalar(0.85); c.state = 2; }
-      }
-      if (c.age > 6) c.state = 2;
-    }
-    // let the rubble linger a moment, then sink out of the way
-    for (const c of this.chunks) {
-      if (c.state !== 2) continue;
-      c.age += dt;
-      if (c.age > 3.4) {
-        const k = clamp01((c.age - 3.4) / 1.2);
-        c.mesh.position.y = floorY - k * 0.5;
-        c.mesh.scale.setScalar(Math.max(0.001, 1 - k));
-        if (k >= 1) { c.mesh.visible = false; c.state = 3; }
+
+      if (c.settle < 0) {
+        c.vel.y -= 9.81 * dt;
+        c.mesh.position.addScaledVector(c.vel, dt);
+        c.mesh.rotation.x += c.spin.x * dt;
+        c.mesh.rotation.y += c.spin.y * dt;
+        c.mesh.rotation.z += c.spin.z * dt;
+        const gy = this._ground(c.mesh.position.x, c.mesh.position.z);
+        if (c.mesh.position.y <= gy + c.radius * 0.42) {
+          c.settle = 0;
+          c.settleFrom = c.mesh.quaternion.clone();
+          c.settleY0 = c.mesh.position.y;
+          c.settleY1 = gy + c.thick * 0.55;
+          c.slide = c.vel.clone().setY(0).multiplyScalar(0.28);
+          const impact = Math.abs(c.vel.y);
+          audio.earthThud(clamp01(impact / 5.5), c.radius);
+          this._dust(g, c.mesh.position.clone().add(rm.group.position), 3, 0.35, 0.5);
+        }
+      } else {
+        // it tips over onto its face and slides a hand's width to a stop
+        c.settle = Math.min(1, c.settle + dt / 0.38);
+        const k = smoothstep(0, 1, c.settle);
+        c.mesh.quaternion.slerpQuaternions(c.settleFrom, c.restQuat, k);
+        c.mesh.position.y = lerp(c.settleY0, c.settleY1, k);
+        c.mesh.position.x += c.slide.x * dt * (1 - k);
+        c.mesh.position.z += c.slide.z * dt * (1 - k);
+        if (c.settle >= 1) c.state = 2;
       }
     }
 
@@ -1355,7 +1400,7 @@ const breakup = {
       this.cracks.setHeat(Math.max(0, 0.55 - T * 0.5));
       // the crack web belonged to a shell that no longer exists; take it away
       // under cover of the dust rather than leaving it hanging in the air
-      if (T > 0.35) this.cracks.hide();
+      if (T > 0.1) this.cracks.retireAll();
       // the dust thins, the light comes up, and the bell is simply there
       rm.setBellClean(smoothstep(0.9, 2.6, T) * 0.62);
       this.reveal.intensity = 90 * smoothstep(0.5, 2.4, T);
@@ -1605,7 +1650,7 @@ const ring = {
     swing.add(head);
     this.head = head;
     this.wheelR = head.userData.wheelR;
-    this.wheelZ = 0.42;                       // the wheel stands off to one side
+    this.wheelZ = head.userData.wheelZ;        // the wheel stands off to one side
 
     // clapper: swings on its own inside the bell
     const clap = g.state.clapper;
@@ -1653,7 +1698,6 @@ const ring = {
 
     // Expanding shells of sound.  A plain translucent sphere just greys the
     // picture out; a fresnel rim reads as a wave front leaving the bell.
-    this.waves = [];
     for (let i = 0; i < 3; i++) {
       const mat = new THREE.ShaderMaterial({
         uniforms: { uFade: { value: 0 }, uCol: { value: new THREE.Color(0xffd9a8) } },
@@ -1678,7 +1722,6 @@ const ring = {
       const m = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 16), mat);
       m.visible = false; m.renderOrder = 5; m.frustumCulled = false;
       g.scene.add(m);
-      this.waves.push({ mesh: m, t: -1 });
     }
 
     // The finished bell should be the brightest thing in the room.  Everything
@@ -1709,7 +1752,7 @@ const ring = {
     g.scene.remove(this.key); g.scene.remove(this.key.target);
     g.scene.remove(this.backLight);
     if (this.rope) g.scene.remove(this.rope.mesh);
-    for (const w of this.waves) g.scene.remove(w.mesh);
+
   },
   resize(g) { this._shot(g); },
   _shot(g) {
@@ -1728,22 +1771,38 @@ const ring = {
     const S = this.S, rm = g.rigMold, W = g.world;
     getBeacon(g).update(g.clock);
 
-    /* ---- the rope drives the wheel directly: pull down, the bell turns ---- */
+    /* ---- rope, wheel, bell ---- *
+     * The rope does not steer the bell, it pulls on it.  Slaving the angle
+     * straight to the finger gave a three-quarter-tonne casting an angular
+     * velocity of 3 rad/s within 100 ms of first touch, which is the single
+     * clearest way to tell a player that nothing here has any mass.  So the
+     * pull becomes a TORQUE: the rope goes taut, the bell leans into it, and
+     * it keeps going after the hand stops.  A child still gets an immediate
+     * response, because the rope itself moves under the finger at once. */
+    const L = Math.max(0.7, S.height * 0.55);
+    const gravAcc = -(9.81 / L) * Math.sin(this.bellAng);
+    let acc = gravAcc - 0.42 * this.bellVel;
+
     if (this.pulling) {
       const mpp = g.metresPerPixel(this.handle.position);
-      const pulled = (g.input.y - this.pullStartY) * mpp;        // metres of rope taken in
-      const targetAng = clamp(this.pullStartAng + pulled / (this.wheelR * 2.6), -0.62, 0.62);
-      const newVel = (targetAng - this.bellAng) / Math.max(dt, 0.001);
-      this.bellVel = lerp(this.bellVel, clamp(newVel, -6, 6), 0.55);
-      this.bellAng = targetAng;
-      if (Math.abs(newVel) > 0.7 && Math.random() < dt * 8) audio.whoosh(clamp01(Math.abs(newVel) / 4));
+      const pulled = (g.input.y - this.pullStartY) * mpp;      // metres of rope taken in
+      // how far the hand is ahead of where the wheel has actually turned to
+      const want = this.pullStartAng + pulled / (this.wheelR * 2.6);
+      const lead = clamp(want - this.bellAng, -0.9, 0.9);
+      // rope tension only pulls, never pushes, and it slackens near the stop
+      const tension = lead > 0 ? lead : lead * 0.25;
+      acc += tension * 26 - this.bellVel * 0.9;
+      this.ropeLead = lead;
       g.hud.suppress();
     } else {
-      // free pendulum
-      const L = Math.max(0.7, S.height * 0.55);
-      const acc = -(9.81 / L) * Math.sin(this.bellAng) - 0.50 * this.bellVel;
-      this.bellVel += acc * dt;
-      this.bellAng += this.bellVel * dt;
+      this.ropeLead = damp(this.ropeLead ?? 0, 0, 6, dt);
+    }
+
+    this.bellVel = clamp(this.bellVel + acc * dt, -4.2, 4.2);
+    this.bellAng = clamp(this.bellAng + this.bellVel * dt, -0.85, 0.85);
+    // air moved by a swinging bell, at the speed it is actually moving
+    if (Math.abs(this.bellVel) > 1.1 && Math.random() < dt * 5) {
+      audio.whoosh(clamp01((Math.abs(this.bellVel) - 1.0) / 2.6));
     }
 
     /* ---- the clapper lags behind, then catches up and hits ---- */
@@ -1782,16 +1841,6 @@ const ring = {
     W.hook.rotation.z = this.bellAng * 0.12;
     W.setChain(5.5, this.pivotY + 0.45, 0, 0, Math.abs(this.bellVel) * 0.02);
 
-    /* ---- sound made visible ---- */
-    for (const w of this.waves) {
-      if (w.t < 0) continue;
-      w.t += dt;
-      const k = w.t / 2.4;
-      if (k >= 1) { w.t = -1; w.mesh.visible = false; continue; }
-      const r = 0.6 + k * 13;
-      w.mesh.scale.setScalar(r);
-      w.mesh.material.uniforms.uFade.value = 0.85 * (1 - k) * (1 - k);
-    }
   },
 
   _strike(g, power) {
@@ -1810,28 +1859,30 @@ const ring = {
     g.hud.doRipple();
     if (this.strikes === 1) g.hud.doFlash();
 
-    // a shell of sound leaving the bell
-    for (const w of this.waves) {
-      if (w.t < 0) {
-        w.t = 0;
-        w.mesh.visible = true;
-        w.mesh.position.set(0, this.pivotY - S.height * 0.5, 0);
-        break;
-      }
-    }
-    // dust jarred loose from the roof, drifting down through the light
-    for (let i = 0; i < 26; i++) {
+    // Dust shaken off the roof timbers, drifting down through the window
+    // shafts.  This is the sound made visible: not a drawn wave, but the room
+    // reacting to a pressure it cannot ignore.
+    const p = 0.5 + power * 0.5;
+    for (let i = 0; i < Math.round(40 * p); i++) {
       g.pDust.spawn(FX.dustCloud(
-        V((Math.random() - 0.5) * 9, 4.5 + Math.random() * 2.2, -5 + Math.random() * 7),
-        { x: (Math.random() - 0.5) * 0.5, y: -0.35 - Math.random() * 0.4, z: (Math.random() - 0.5) * 0.4 }
+        V((Math.random() - 0.5) * 10, 4.6 + Math.random() * 2.4, -5 + Math.random() * 7.5),
+        { x: (Math.random() - 0.5) * 0.4, y: -0.30 - Math.random() * 0.35, z: (Math.random() - 0.5) * 0.35 },
+        0.5 + Math.random() * 0.5
       ));
     }
-    for (let i = 0; i < 16; i++) {
+    // and the motes already hanging in the air around the bell are pushed out
+    for (let i = 0; i < Math.round(30 * p); i++) {
       const a = Math.random() * TAU;
-      g.pGlow.spawn(FX.mote(
-        V(Math.cos(a) * (S.rim + 0.4), this.pivotY - S.height * 0.6 + Math.random(), Math.sin(a) * (S.rim + 0.4)),
-        { x: Math.cos(a) * 1.4, y: 0.4, z: Math.sin(a) * 1.4 }
-      ));
+      const rr = S.rim + 0.2 + Math.random() * 1.4;
+      const spd = (2.6 / rr) * p;
+      g.pGlow.spawn({
+        ...FX.mote(
+          V(Math.cos(a) * rr, this.pivotY - S.height * (0.25 + Math.random() * 0.6), Math.sin(a) * rr),
+          { x: Math.cos(a) * spd, y: 0.25 * p, z: Math.sin(a) * spd }
+        ),
+        life: 1.6 + Math.random() * 1.6, drag: 1.5,
+        color0: [1, 0.9, 0.76, 0.5], color1: [1, 0.9, 0.76, 0],
+      });
     }
     if (this.strikes === 1) {
       setTimeout(() => { if (g.stageName === 'ring') g.hud.showReplay(true); }, 2600);

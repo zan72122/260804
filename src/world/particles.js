@@ -180,12 +180,24 @@ export const FX = {
     color0: [0.85, 0.83, 0.8, 0.28], color1: [0.8, 0.8, 0.8, 0],
     turbulence: 0.2,
   }),
-  dustCloud: (p, v) => ({
-    p, v, life: 2.0 + Math.random() * 2.4, gravity: -0.1, drag: 0.9,
-    size0: 0.22 + Math.random() * 0.3, size1: 1.5 + Math.random() * 1.2,
-    color0: [0.66, 0.58, 0.48, 0.5], color1: [0.6, 0.55, 0.48, 0],
-    turbulence: 0.3,
-  }),
+  /**
+   * Mineral dust off broken earth.  Deliberately many small grains rather
+   * than a few big discs: one 2 m sprite reads as a sprite, forty 0.4 m ones
+   * read as a cloud.  Each grain gets its own brightness so the cloud has
+   * internal structure instead of being one flat wash, and it sinks and
+   * spreads along the ground the way heavy dust actually does.
+   */
+  dustCloud: (p, v, scale = 1) => {
+    const b = 0.52 + Math.random() * 0.38;
+    return {
+      p, v, life: 2.6 + Math.random() * 3.4, gravity: 0.18, drag: 1.25,
+      size0: (0.10 + Math.random() * 0.16) * scale,
+      size1: (0.5 + Math.random() * 0.55) * scale,
+      color0: [b * 0.80, b * 0.71, b * 0.60, 0.34 + Math.random() * 0.16],
+      color1: [b * 0.66, b * 0.60, b * 0.53, 0],
+      turbulence: 0.26,
+    };
+  },
   mote: (p, v) => ({
     p, v, life: 5 + Math.random() * 6, gravity: 0.02, drag: 0.15,
     size0: 0.012 + Math.random() * 0.014, size1: 0.012,

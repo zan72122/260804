@@ -2,7 +2,7 @@
 // game boots instantly and works offline.
 
 import * as THREE from '../core/three.js';
-import { clamp01, lerp, hash2, makeRng } from '../core/util.js';
+import { clamp01, lerp, smoothstep, hash2, makeRng } from '../core/util.js';
 
 /* ------------------------------------------------------------------ *
  *  value noise on a canvas                                            *
@@ -57,6 +57,50 @@ export function makeTexture(size, octaves, seed, paint, { repeat = 1, srgb = tru
   tex.repeat.set(repeat, repeat);
   tex.anisotropy = 4;
   if (srgb) tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+/**
+ * Build a normal map from a procedural height field.
+ *
+ * Nothing in this shop had one, which is why every surface read as "a colour"
+ * rather than as a material: with a perfectly flat normal, baked earth, sand,
+ * brick and clay all respond to a moving light in exactly the same way, and
+ * the eye reads the whole room as painted card.  Micro-relief is what makes a
+ * surface argue with the light.
+ */
+export function makeNormalTexture(size, octaves, seed, heightFn, { strength = 1, repeat = 1 } = {}) {
+  const f = fbmField(size, octaves, seed);
+  const rng = makeRng(seed * 331 + 7);
+  const hgt = new Float32Array(size * size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = y * size + x;
+      hgt[i] = heightFn(f[i], x / size, y / size, rng);
+    }
+  }
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = size;
+  const ctx = cv.getContext('2d');
+  const img = ctx.createImageData(size, size);
+  const at = (x, y) => hgt[((y + size) % size) * size + ((x + size) % size)];
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const dx = (at(x + 1, y) - at(x - 1, y)) * strength * size * 0.02;
+      const dy = (at(x, y + 1) - at(x, y - 1)) * strength * size * 0.02;
+      const len = Math.hypot(dx, dy, 1);
+      const i = (y * size + x) * 4;
+      img.data[i] = ((-dx / len) * 0.5 + 0.5) * 255;
+      img.data[i + 1] = ((-dy / len) * 0.5 + 0.5) * 255;
+      img.data[i + 2] = ((1 / len) * 0.5 + 0.5) * 255;
+      img.data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(repeat, repeat);
+  tex.anisotropy = 4;
   return tex;
 }
 
@@ -132,6 +176,32 @@ export function buildTextures() {
     return [158 * g, 101 * g, 78 * g];
   }, { repeat: 3 });
 
+  /* ---- micro-relief.  Same seeds as the colour maps above, so the bumps
+     line up with the grain instead of fighting it. ---- */
+  TEX.clayCoreN = makeNormalTexture(256, 5, 3, (n, x, y, rng) => n + (rng() - 0.5) * 0.10,
+    { strength: 0.9, repeat: 9 });
+  TEX.clayFalseN = makeNormalTexture(256, 5, 11, (n, x, y, rng) => n + (rng() - 0.5) * 0.09,
+    { strength: 0.8, repeat: 9 });
+  // earth gets coarse lumps plus the odd protruding grain
+  TEX.moldEarthN = makeNormalTexture(256, 7, 23, (n, x, y, rng) => {
+    let h = n;
+    if (rng() > 0.975) h += 0.30;
+    return h + (rng() - 0.5) * 0.22;
+  }, { strength: 1.5, repeat: 3.5 });
+  TEX.floorN = makeNormalTexture(256, 5, 91, (n, x, y, rng) => n * 0.7 + (rng() - 0.5) * 0.30,
+    { strength: 0.8, repeat: 11 });
+  // brick: the mortar courses are the relief that matters
+  TEX.brickN = makeNormalTexture(256, 4, 113, (n, x, y) => {
+    const row = Math.floor(y * 12);
+    const off = (row % 2) * 0.5;
+    const bx = (x * 6 + off) % 1, by = (y * 12) % 1;
+    const inset = Math.min(
+      smoothstep(0, 0.055, bx), smoothstep(0, 0.055, 1 - bx),
+      smoothstep(0, 0.11, by), smoothstep(0, 0.11, 1 - by)
+    );
+    return inset * 0.75 + n * 0.25;
+  }, { strength: 2.2, repeat: 3 });
+
   TEX.built = true;
   return TEX;
 }
@@ -141,59 +211,78 @@ export function buildTextures() {
  * ------------------------------------------------------------------ */
 
 /**
- * A hand-painted equirectangular sky for reflections: dark rafters overhead,
- * cool daylight from the tall windows, a hot orange bloom at the furnace, and
- * a dusty floor bounce.  The bell's surface has to *read* as metal, and metal
- * reads through what it reflects.
+ * Shared environment maps.  `room` lights the shop; `metal` is the one the
+ * bronze reflects and is deliberately far brighter.
  */
-export function buildEnvMap(renderer) {
-  const W = 512, H = 256;
-  const cv = document.createElement('canvas');
-  cv.width = W; cv.height = H;
-  const g = cv.getContext('2d');
+export const ENV = { room: null, metal: null };
 
-  // Bright enough to be believable metal.  A polished bell is almost entirely
-  // reflection: if this image is dark, the finished bell reads as dark plastic
-  // no matter how many lamps are pointed at it.
-  const grad = g.createLinearGradient(0, 0, 0, H);
-  grad.addColorStop(0.00, '#16110c');
-  grad.addColorStop(0.30, '#54402e');
-  grad.addColorStop(0.48, '#a8825c');
-  grad.addColorStop(0.58, '#7b6046');
-  grad.addColorStop(0.80, '#3d2e21');
-  grad.addColorStop(1.00, '#1c1510');
-  g.fillStyle = grad; g.fillRect(0, 0, W, H);
+/**
+ * Paint the shop's radiance as a floating-point equirectangular map.
+ *
+ * This has to be HDR, not a canvas.  A canvas clamps at 1.0, and a metal
+ * surface is *nothing but* its reflection -- so with an LDR environment the
+ * brightest thing a polished bell can ever be is roughly the brightness of a
+ * wall, which is exactly why it was reading as painted cardboard.  Real
+ * windows are tens of times brighter than the brick beside them; give the map
+ * that range and the bell grows a proper travelling highlight instead.
+ */
+function paintRadiance(punch, winR = 0.030) {
+  const W = 256, H = 128;
+  const data = new Float32Array(W * H * 4);
+  const gauss = (d, r) => Math.exp(-(d * d) / (2 * r * r));
 
-  const blob = (x, y, rx, ry, col, a) => {
-    const rg = g.createRadialGradient(x, y, 0, x, y, Math.max(rx, ry));
-    rg.addColorStop(0, col); rg.addColorStop(1, 'rgba(0,0,0,0)');
-    g.save(); g.globalAlpha = a; g.translate(x, y); g.scale(1, ry / Math.max(rx, ry));
-    g.fillStyle = rg; g.beginPath(); g.arc(0, 0, Math.max(rx, ry), 0, Math.PI * 2); g.fill(); g.restore();
-  };
+  for (let y = 0; y < H; y++) {
+    const v = (y + 0.5) / H;                       // 0 = straight up
+    // roof timbers overhead, warm wall, then the dusty floor bounce
+    let r, g, b;
+    if (v < 0.30) { const k = v / 0.30; r = lerp(0.015, 0.09, k); g = lerp(0.012, 0.075, k); b = lerp(0.010, 0.060, k); }
+    else if (v < 0.62) { const k = (v - 0.30) / 0.32; r = lerp(0.09, 0.34, k); g = lerp(0.075, 0.27, k); b = lerp(0.060, 0.21, k); }
+    else { const k = (v - 0.62) / 0.38; r = lerp(0.34, 0.16, k); g = lerp(0.27, 0.125, k); b = lerp(0.21, 0.095, k); }
 
-  // Tall cool windows along the back wall.  Kept soft on purpose: a hard-edged
-  // rectangle here shows up on the finished bell as a painted white stripe
-  // instead of a reflection.
-  for (let i = 0; i < 4; i++) {
-    const x = 40 + i * 118;
-    blob(x, 92, 52, 86, 'rgba(226,240,255,1)', 1.0);
-    blob(x, 88, 26, 54, 'rgba(240,248,255,1)', 0.75);
+    for (let x = 0; x < W; x++) {
+      const u = (x + 0.5) / W;
+      let rr = r, gg = g, bb = b;
+
+      // four tall windows down the back wall
+      for (let i = 0; i < 4; i++) {
+        const cu = 0.085 + i * 0.25;
+        let du = u - cu; if (du > 0.5) du -= 1; if (du < -0.5) du += 1;
+        const w = gauss(du, winR) * gauss(v - 0.33, 0.105) * 20 * punch;
+        rr += w * 0.80; gg += w * 0.88; bb += w * 1.00;
+      }
+      // the furnace mouth: the one warm source, and much smaller than it feels
+      {
+        let du = u - 0.60; if (du > 0.5) du -= 1; if (du < -0.5) du += 1;
+        const w = gauss(du, 0.055) * gauss(v - 0.56, 0.075) * 7.5 * punch;
+        rr += w * 1.00; gg += w * 0.50; bb += w * 0.18;
+      }
+      const i4 = (y * W + x) * 4;
+      data[i4] = rr; data[i4 + 1] = gg; data[i4 + 2] = bb; data[i4 + 3] = 1;
+    }
   }
-  // furnace mouth -- the dominant warm source
-  blob(300, 150, 84, 60, 'rgba(255,168,84,1)', 1.0);
-  blob(300, 150, 34, 30, 'rgba(255,240,210,1)', 1.0);
-  // dusty floor bounce
-  blob(256, 232, 280, 52, 'rgba(196,152,106,1)', 0.85);
-
-  const tex = new THREE.CanvasTexture(cv);
+  const tex = new THREE.DataTexture(data, W, H, THREE.RGBAFormat, THREE.FloatType);
   tex.mapping = THREE.EquirectangularReflectionMapping;
-  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.colorSpace = THREE.LinearSRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
 
+export function buildEnvMap(renderer) {
   const pmrem = new THREE.PMREMGenerator(renderer);
   pmrem.compileEquirectangularShader();
-  const rt = pmrem.fromEquirectangular(tex);
-  tex.dispose(); pmrem.dispose();
-  return rt.texture;
+
+  // The room's ambient bounce and the mirror image the bronze sees are two
+  // different jobs.  Letting the windows drive the ambient washes every
+  // surface flat; the directional key already represents that daylight.
+  const soft = paintRadiance(0.05, 0.075);   // ambient bounce only
+  const hot = paintRadiance(1.0, 0.020);     // sharp bands for the bell to catch
+  const rtRoom = pmrem.fromEquirectangular(soft);
+  const rtMetal = pmrem.fromEquirectangular(hot);
+  soft.dispose(); hot.dispose(); pmrem.dispose();
+
+  ENV.room = rtRoom.texture;
+  ENV.metal = rtMetal.texture;
+  return ENV.room;
 }
 
 /* ------------------------------------------------------------------ *
@@ -202,15 +291,15 @@ export function buildEnvMap(renderer) {
 
 export function clayCoreMaterial() {
   return new THREE.MeshStandardMaterial({
-    map: TEX.clayCore, color: 0xffffff, roughness: 0.99, metalness: 0.0,
-    envMapIntensity: 0.30,
+    map: TEX.clayCore, normalMap: TEX.clayCoreN, normalScale: new THREE.Vector2(0.75, 0.75),
+    color: 0xffffff, roughness: 0.99, metalness: 0.0, envMapIntensity: 0.30,
   });
 }
 
 export function clayFalseMaterial() {
   return new THREE.MeshStandardMaterial({
-    map: TEX.clayFalse, color: 0xffffff, roughness: 0.96, metalness: 0.0,
-    envMapIntensity: 0.30,
+    map: TEX.clayFalse, normalMap: TEX.clayFalseN, normalScale: new THREE.Vector2(0.65, 0.65),
+    color: 0xffffff, roughness: 0.96, metalness: 0.0, envMapIntensity: 0.30,
   });
 }
 
@@ -221,7 +310,8 @@ export function clayFalseMaterial() {
  */
 export function moldMaterial() {
   const m = new THREE.MeshStandardMaterial({
-    map: TEX.moldEarth, color: 0xc2a98c, roughness: 1.0, metalness: 0.0,
+    map: TEX.moldEarth, normalMap: TEX.moldEarthN, normalScale: new THREE.Vector2(1.15, 1.15),
+    color: 0xc2a98c, roughness: 1.0, metalness: 0.0,
     envMapIntensity: 0.30, side: THREE.DoubleSide, alphaTest: 0.001,
   });
   m.userData.uniforms = {
@@ -282,7 +372,11 @@ export function bronzeMaterial(metalKey) {
     roughnessMap: TEX.bronzeRough,
     roughness: M.rough,
     metalness: 1.0,
-    envMapIntensity: 2.0,
+    // Metal is pure reflection, so it must see the bright map, not the tame
+    // one used to light the room.  Without this the bell can never be lighter
+    // than the wall behind it.
+    envMap: ENV.metal,
+    envMapIntensity: 1.0,
   });
   m.userData.metal = M;
   return m;

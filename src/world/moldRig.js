@@ -16,10 +16,10 @@ import {
   moldHeight, SPRUE_R,
 } from './profiles.js';
 import {
-  clayCoreMaterial, clayFalseMaterial, moldMaterial, bronzeMaterial, METALS, TEX,
+  clayCoreMaterial, clayFalseMaterial, moldMaterial, bronzeMaterial, METALS, TEX, ENV,
 } from './materials.js';
 import { makeDecorMesh, orientDecor, decorTone } from './decorations.js';
-import { clamp01, lerp, smoothstep, TAU, angNoise } from '../core/util.js';
+import { clamp01, lerp, smoothstep, TAU, angNoise, hash2, makeRng } from '../core/util.js';
 
 const CORE_ROWS = 46, CORE_COLS = 60;
 const FALSE_ROWS = 50, FALSE_COLS = 68;
@@ -108,7 +108,9 @@ export class MoldRig {
     this.decorGroup.visible = false;
     this.group.add(this.decorGroup);
     this.decorMat = new THREE.MeshStandardMaterial({
-      map: TEX.clayFalse, color: 0xfff0e4, roughness: 0.94, metalness: 0, envMapIntensity: 0.3,
+      map: TEX.clayFalse, normalMap: TEX.clayFalseN,
+      normalScale: new THREE.Vector2(0.5, 0.5),
+      color: 0xf2ded2, roughness: 0.93, metalness: 0, envMapIntensity: 0.3,
     });
     this.refreshFalse();
   }
@@ -142,7 +144,8 @@ export class MoldRig {
 
   addDecoration(key, theta, t, size = 0.20) {
     const S = this.shape;
-    const mesh = makeDecorMesh(key, this.decorMat);
+    // radius of the surface, expressed in the ornament's own local units
+    const mesh = makeDecorMesh(key, this.decorMat, outerR(S, t) / size);
     orientDecor(mesh, theta, t * S.height, outerR(S, t), this.slopeAt(t), size);
     this.decorGroup.add(mesh);
     const rec = { key, theta, t, size, mesh };
@@ -320,7 +323,7 @@ export class MoldRig {
    * Swap the single mould shell for a wall of independent chunks so the shell
    * can come apart in the player's hands.
    */
-  buildChunks(rowsN = 5, colsN = 12) {
+  buildChunks(pieces = 26) {
     const S = this.shape, H = moldHeight(S);
     this.moldMesh.visible = false;
     this.paintProxy.visible = false;
@@ -331,25 +334,32 @@ export class MoldRig {
     // Broken earth, not eggshell: knock the value down and keep it warm, so
     // the pale bronze underneath is what the eye goes to.
     const mat = new THREE.MeshStandardMaterial({
-      map: TEX.moldEarth, color: 0xa08a70, roughness: 1.0, metalness: 0, envMapIntensity: 0.3, side: THREE.DoubleSide,
+      map: TEX.moldEarth, normalMap: TEX.moldEarthN,
+      normalScale: new THREE.Vector2(1.2, 1.2),
+      color: 0xa08a70, roughness: 1.0, metalness: 0,
+      envMapIntensity: 0.3, side: THREE.DoubleSide,
     });
+    // A fresh fracture face is paler, drier and coarser than the smoked
+    // outside of a flask that has just been through a bake.
+    const inner = mat.clone();
+    inner.color = new THREE.Color(0xd8c6a8);
+    inner.envMapIntensity = 0.12;
     this.chunkMat = mat;
+    this.chunkInnerMat = inner;
 
-    for (let r = 0; r < rowsN; r++) {
-      const u0 = r / rowsN, u1 = (r + 1) / rowsN;
-      for (let c = 0; c < colsN; c++) {
-        const t0 = (c / colsN) * TAU, t1 = ((c + 1) / colsN) * TAU;
-        const { geo, center } = buildChunkGeo(S, H, u0, u1, t0, t1);
-        const m = new THREE.Mesh(geo, mat);
-        m.castShadow = true; m.receiveShadow = true;
-        m.position.copy(center);
-        grp.add(m);
-        this.chunks.push({
-          mesh: m, u: (u0 + u1) / 2, theta: (t0 + t1) / 2,
-          home: center.clone(), state: 0,
-          vel: new THREE.Vector3(), spin: new THREE.Vector3(),
-        });
-      }
+    const shards = buildShards(S, H, pieces);
+    for (const sh of shards) {
+      const m = new THREE.Mesh(sh.geo, [mat, inner]);
+      m.castShadow = true; m.receiveShadow = true;
+      m.position.copy(sh.center);
+      grp.add(m);
+      this.chunks.push({
+        mesh: m, u: sh.u, theta: sh.theta,
+        home: sh.center.clone(), state: 0,
+        // half-height of the piece: what it has to rest ON, not float above
+        half: sh.half, radius: sh.radius, thick: sh.thick,
+        vel: new THREE.Vector3(), spin: new THREE.Vector3(),
+      });
     }
     return this.chunks;
   }
@@ -427,7 +437,7 @@ export class MoldRig {
     this.bellDecorGroup = new THREE.Group();
     grp.add(this.bellDecorGroup);
     for (const d of this.decorations) {
-      const m = makeDecorMesh(d.key, mat);
+      const m = makeDecorMesh(d.key, mat, outerR(S, d.t) / d.size);
       orientDecor(m, d.theta, d.t * S.height, outerR(S, d.t), this.slopeAt(d.t), d.size);
       this.bellDecorGroup.add(m);
     }
@@ -438,19 +448,32 @@ export class MoldRig {
   }
 
   /** 0 = filthy from the mould, 1 = wiped clean and reflective */
+  /**
+   * 0 = straight out of the ground, 1 = wiped clean and reflective.
+   *
+   * The dirty state cannot just be dark metal.  A metal has no diffuse
+   * response at all, so turning the reflection down to hide the shine makes
+   * the casting render as a black hole -- which is exactly what the player saw
+   * through the first gap in the mould.  A bell caked in dry mould dust is
+   * optically not metal but dust: a dielectric with a pale albedo.  So the
+   * clean-up drives METALNESS as well, and the bell literally becomes metal as
+   * the earth comes off it.
+   */
   setBellClean(k) {
     const M = METALS[this.metal];
     const dirty = 1 - clamp01(k);
+    const dust = new THREE.Color(0x9a8a72);
     if (this.bellMat) {
-      this.bellMat.roughness = lerp(M.rough, 0.92, dirty);
-      this.bellMat.envMapIntensity = lerp(2.2, 0.2, dirty);
-      this.bellMat.color.setHex(M.color).lerp(new THREE.Color(0x6d6053), dirty * 0.85);
-      this.bellMat.needsUpdate = false;
+      this.bellMat.metalness = lerp(1.0, 0.12, dirty);
+      this.bellMat.roughness = lerp(M.rough, 0.95, dirty);
+      this.bellMat.envMapIntensity = lerp(0.42, 0.10, dirty);
+      this.bellMat.color.setHex(M.color).lerp(dust, dirty * 0.92);
     }
     if (this.bellInnerMat) {
-      this.bellInnerMat.roughness = lerp(M.rough + 0.22, 0.95, dirty);
-      this.bellInnerMat.envMapIntensity = lerp(1.4, 0.15, dirty);
-      this.bellInnerMat.color.copy(this.bellMat.color);
+      this.bellInnerMat.metalness = lerp(1.0, 0.12, dirty);
+      this.bellInnerMat.roughness = lerp(M.rough + 0.22, 0.97, dirty);
+      this.bellInnerMat.envMapIntensity = lerp(0.22, 0.06, dirty);
+      this.bellInnerMat.color.copy(this.bellMat.color).multiplyScalar(0.8);
     }
   }
 
@@ -480,64 +503,172 @@ export class MoldRig {
 }
 
 /* ------------------------------------------------------------------ *
- *  one broken piece of the outer mould                                *
+ *  fracture                                                           *
  * ------------------------------------------------------------------ */
-function buildChunkGeo(S, H, u0, u1, th0, th1, nu = 4, nth = 4) {
-  const pos = [], nor = [], uv = [], idx = [];
-  const ring = (u, th, outer) => {
-    const r = outer ? moldSurfaceR(S, u, th) : moldInnerR(S, u) + 0.012;
-    return [Math.cos(th) * r, u * H, Math.sin(th) * r];
+
+/**
+ * Break the flask into irregular shards.
+ *
+ * A grid of rectangles is the single loudest "this is a mesh" signal a
+ * shattering object can give, because fired earth never cracks on a lattice.
+ * So the shell is diced into a fine grid of cells, each cell is assigned to
+ * the nearest of N weighted seeds, and one shard is welded from each region.
+ * Shared grid nodes are displaced by a hash of their index, so neighbouring
+ * shards jitter by exactly the same amount and still interlock along a ragged
+ * seam.  Seeds are biased low, because the wall is thickest at the base and
+ * real flasks come off in bigger slabs down there.
+ */
+function buildShards(S, H, pieces) {
+  const GT = 60, GU = 26;                      // dicing grid: theta x height
+  const jit = (i, j) => {
+    const a = hash2(i * 1.7 + 3.1, j * 2.3 + 7.9);
+    const b = hash2(i * 5.3 + 11.7, j * 0.9 + 2.1);
+    return [(a - 0.5) * 0.85, (b - 0.5) * 0.85];   // in cell fractions
   };
-  const pushGrid = (outer, flip) => {
-    const base = pos.length / 3;
-    for (let i = 0; i <= nu; i++) {
-      const u = lerp(u0, u1, i / nu);
-      for (let j = 0; j <= nth; j++) {
-        const th = lerp(th0, th1, j / nth);
-        const p = ring(u, th, outer);
-        pos.push(p[0], p[1], p[2]);
-        nor.push(0, 0, 0);
-        uv.push(th / TAU * 3, u * 2.4);
+  // node position in (theta, u), with wrap-safe jitter
+  const nodeT = (i, j) => {
+    const ii = ((i % GT) + GT) % GT;
+    const [dt] = jit(ii, j);
+    return ((i + dt) / GT) * TAU;
+  };
+  const nodeU = (i, j) => {
+    const ii = ((i % GT) + GT) % GT;
+    const [, du] = jit(ii, j);
+    if (j === 0) return 0;
+    if (j === GU) return 1;
+    return clamp01((j + du) / GU);
+  };
+
+  // ---- seeds ----
+  const rng = makeRng(1337);
+  const seeds = [];
+  for (let k = 0; k < pieces; k++) {
+    // stratified so no part of the shell is left as one huge slab
+    const u = clamp01(Math.pow((k + rng()) / pieces, 0.78));
+    seeds.push({
+      th: rng() * TAU,
+      u,
+      // bigger pieces low down, where the mould is thickest
+      w: lerp(1.45, 0.75, u) * (0.8 + rng() * 0.45),
+    });
+  }
+
+  // ---- assign every cell to a seed ----
+  const owner = new Int16Array(GT * GU);
+  for (let j = 0; j < GU; j++) {
+    const uc = (j + 0.5) / GU;
+    const ring = Math.max(0.25, moldR(S, uc));
+    for (let i = 0; i < GT; i++) {
+      const tc = ((i + 0.5) / GT) * TAU;
+      let best = 0, bestD = Infinity;
+      for (let k = 0; k < seeds.length; k++) {
+        const sd = seeds[k];
+        let dth = tc - sd.th;
+        dth = Math.atan2(Math.sin(dth), Math.cos(dth));
+        // measure in metres so shards are isotropic on the real surface
+        const d = Math.hypot(dth * ring, (uc - sd.u) * H) / sd.w;
+        if (d < bestD) { bestD = d; best = k; }
+      }
+      owner[j * GT + i] = best;
+    }
+  }
+
+  // ---- weld one mesh per region ----
+  const out = [];
+  const outerAt = (th, u, v) => {
+    const r = moldSurfaceR(S, clamp01(u), th);
+    v.set(Math.cos(th) * r, clamp01(u) * H, Math.sin(th) * r);
+    return v;
+  };
+  const innerAt = (th, u, v) => {
+    const r = moldInnerR(S, clamp01(u)) + 0.012;
+    v.set(Math.cos(th) * r, clamp01(u) * H, Math.sin(th) * r);
+    return v;
+  };
+  const tmp = new THREE.Vector3();
+
+  for (let k = 0; k < seeds.length; k++) {
+    const pos = [], uv = [], idxOuter = [], idxInner = [];
+    const push = (th, u, outer) => {
+      const p = outer ? outerAt(th, u, tmp) : innerAt(th, u, tmp);
+      pos.push(p.x, p.y, p.z);
+      uv.push((th / TAU) * 3, u * 2.6);
+      return pos.length / 3 - 1;
+    };
+    let cells = 0;
+    let sumT = 0, sumTs = 0, sumTc = 0, sumU = 0;
+
+    for (let j = 0; j < GU; j++) {
+      for (let i = 0; i < GT; i++) {
+        if (owner[j * GT + i] !== k) continue;
+        cells++;
+        const tc = ((i + 0.5) / GT) * TAU, uc = (j + 0.5) / GU;
+        sumTs += Math.sin(tc); sumTc += Math.cos(tc); sumU += uc; sumT++;
+
+        const t00 = nodeT(i, j), u00 = nodeU(i, j);
+        const t10 = nodeT(i + 1, j), u10 = nodeU(i + 1, j);
+        const t01 = nodeT(i, j + 1), u01 = nodeU(i, j + 1);
+        const t11 = nodeT(i + 1, j + 1), u11 = nodeU(i + 1, j + 1);
+        // keep the seam continuous when a cell straddles theta = 0
+        const un = (a, b) => (b - a > Math.PI ? b - TAU : b - a < -Math.PI ? b + TAU : b);
+        const T10 = un(t00, t10), T01 = un(t00, t01), T11 = un(t00, t11);
+
+        // outer face
+        const a = push(t00, u00, true), b = push(T10, u10, true);
+        const c = push(T01, u01, true), d = push(T11, u11, true);
+        idxOuter.push(a, c, b, b, c, d);
+        // inner face (wound the other way)
+        const e = push(t00, u00, false), f = push(T10, u10, false);
+        const g = push(T01, u01, false), h = push(T11, u11, false);
+        idxInner.push(e, f, g, f, h, g);
+
+        // torn side walls, only where this shard actually ends
+        const wall = (tA, uA, tB, uB) => {
+          const o1 = push(tA, uA, true), i1 = push(tA, uA, false);
+          const o2 = push(tB, uB, true), i2 = push(tB, uB, false);
+          idxInner.push(o1, i1, o2, i1, i2, o2);
+        };
+        const nb = (di, dj) => {
+          const jj = j + dj;
+          if (jj < 0 || jj >= GU) return -1;
+          const ii = ((i + di) % GT + GT) % GT;
+          return owner[jj * GT + ii];
+        };
+        if (nb(0, -1) !== k) wall(t00, u00, T10, u10);   // bottom
+        if (nb(0, 1) !== k) wall(T11, u11, T01, u01);    // top
+        if (nb(-1, 0) !== k) wall(T01, u01, t00, u00);   // left
+        if (nb(1, 0) !== k) wall(T10, u10, T11, u11);    // right
       }
     }
-    for (let i = 0; i < nu; i++) {
-      for (let j = 0; j < nth; j++) {
-        const a = base + i * (nth + 1) + j, b = a + 1, c = a + nth + 1, d = c + 1;
-        if (flip) idx.push(a, b, c, b, d, c);
-        else idx.push(a, c, b, b, c, d);
-      }
-    }
-  };
-  pushGrid(true, false);
-  pushGrid(false, true);
+    if (!cells) continue;
 
-  // torn side faces, so the broken pieces have real thickness
-  const sideQuad = (uA, thA, uB, thB) => {
-    const base = pos.length / 3;
-    const pts = [ring(uA, thA, true), ring(uA, thA, false), ring(uB, thB, true), ring(uB, thB, false)];
-    for (const p of pts) { pos.push(p[0], p[1], p[2]); nor.push(0, 0, 0); uv.push(0, 0); }
-    idx.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
-  };
-  for (let i = 0; i < nu; i++) {
-    const a = lerp(u0, u1, i / nu), b = lerp(u0, u1, (i + 1) / nu);
-    sideQuad(a, th0, b, th0); sideQuad(b, th1, a, th1);
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    geo.setIndex([...idxOuter, ...idxInner]);
+    // group 0 = weathered outside, group 1 = fresh fracture + cavity face
+    geo.addGroup(0, idxOuter.length, 0);
+    geo.addGroup(idxOuter.length, idxInner.length, 1);
+    geo.computeVertexNormals();
+
+    geo.computeBoundingBox();
+    const center = new THREE.Vector3();
+    geo.boundingBox.getCenter(center);
+    const size = new THREE.Vector3();
+    geo.boundingBox.getSize(size);
+    geo.translate(-center.x, -center.y, -center.z);
+    geo.computeBoundingSphere();
+
+    const uc = sumU / sumT;
+    out.push({
+      geo, center,
+      theta: Math.atan2(sumTs / sumT, sumTc / sumT),
+      u: uc,
+      half: size.y * 0.5,
+      // the wall it was cut from: what it rests on once it has toppled flat
+      thick: Math.max(0.08, moldR(S, uc) - moldInnerR(S, uc)),
+      radius: geo.boundingSphere.radius,
+    });
   }
-  for (let j = 0; j < nth; j++) {
-    const a = lerp(th0, th1, j / nth), b = lerp(th0, th1, (j + 1) / nth);
-    sideQuad(u0, b, u0, a); sideQuad(u1, a, u1, b);
-  }
-
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-  geo.setIndex(idx);
-  geo.computeVertexNormals();
-
-  // recentre so the piece can tumble about itself
-  geo.computeBoundingBox();
-  const center = new THREE.Vector3();
-  geo.boundingBox.getCenter(center);
-  geo.translate(-center.x, -center.y, -center.z);
-  geo.computeBoundingSphere();
-  return { geo, center };
+  return out;
 }

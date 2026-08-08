@@ -8,7 +8,7 @@
 // own warm haze, so distance costs contrast the way it does in a real shop.
 
 import * as THREE from '../core/three.js';
-import { TEX, buildTextures, buildEnvMap, spriteMaterial, makeDotTexture } from './materials.js';
+import { TEX, buildTextures, buildEnvMap, makeDotTexture, ENV } from './materials.js';
 import { makeRng, TAU, lerp } from '../core/util.js';
 
 export const FOG_COLOR = new THREE.Color(0x2b1d15);
@@ -44,7 +44,7 @@ export function buildWorkshop(scene, renderer) {
   const W = { group: new THREE.Group() };
   scene.add(W.group);
 
-  scene.fog = new THREE.FogExp2(FOG_COLOR.getHex(), 0.040);
+  scene.fog = new THREE.FogExp2(FOG_COLOR.getHex(), 0.056);
   scene.background = FOG_COLOR.clone().multiplyScalar(0.8);
   const env = buildEnvMap(renderer);
   scene.environment = env;
@@ -52,9 +52,16 @@ export function buildWorkshop(scene, renderer) {
 
   /* ================= materials ================= */
   const M = {
-    floor: new THREE.MeshStandardMaterial({ map: TEX.floor, color: 0xffffff, roughness: 1.0, metalness: 0, envMapIntensity: 0.4 }),
-    brick: new THREE.MeshStandardMaterial({ map: TEX.brick, color: 0xffffff, roughness: 0.98, metalness: 0, envMapIntensity: 0.45 }),
-    brickDark: new THREE.MeshStandardMaterial({ map: TEX.brick, color: 0x6f5a4c, roughness: 0.98, metalness: 0 }),
+    floor: new THREE.MeshStandardMaterial({ map: TEX.floor, normalMap: TEX.floorN,
+      normalScale: new THREE.Vector2(0.8, 0.8), color: 0xffffff, roughness: 1.0, metalness: 0, envMapIntensity: 0.4 }),
+    brick: new THREE.MeshStandardMaterial({ map: TEX.brick, normalMap: TEX.brickN,
+      normalScale: new THREE.Vector2(1.0, 1.0), color: 0xffffff, roughness: 0.98, metalness: 0, envMapIntensity: 0.45 }),
+    brickDark: new THREE.MeshStandardMaterial({ map: TEX.brick, normalMap: TEX.brickN,
+      normalScale: new THREE.Vector2(0.9, 0.9), color: 0x6f5a4c, roughness: 0.98, metalness: 0 }),
+    // the casting pit: sooty stone, not brick -- a red disc under the bell
+    // was the most obviously plastic object left in the frame
+    stone: new THREE.MeshStandardMaterial({ map: TEX.floor, normalMap: TEX.floorN,
+      normalScale: new THREE.Vector2(1.1, 1.1), color: 0x6a6158, roughness: 0.99, metalness: 0, envMapIntensity: 0.25 }),
     iron: new THREE.MeshStandardMaterial({ color: 0x3b3630, roughness: 0.62, metalness: 0.85, envMapIntensity: 0.6 }),
     ironDark: new THREE.MeshStandardMaterial({ color: 0x211d1a, roughness: 0.72, metalness: 0.7, envMapIntensity: 0.5 }),
     wood: new THREE.MeshStandardMaterial({ color: 0x6b4a30, roughness: 0.88, metalness: 0 }),
@@ -199,7 +206,7 @@ export function buildWorkshop(scene, renderer) {
   for (const y of [1.05, 3.06]) { const rail = box(3.4, 0.08, 0.2, M.ironDark); at(rail, -0.8, y, 1.26); furnace.add(rail); }
 
   /* ================= casting pit / mould plinth ================= */
-  const plinth = cyl(1.34, 1.46, 0.22, 40, M.brickDark);
+  const plinth = cyl(1.34, 1.46, 0.22, 40, M.stone);
   at(plinth, 0, 0.11, 0); plinth.receiveShadow = true; plinth.castShadow = true;
   W.group.add(plinth); W.plinth = plinth;
   const sandRing = cyl(1.9, 2.0, 0.09, 40, M.floor);

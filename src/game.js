@@ -51,7 +51,7 @@ export class Game {
     this.rig = new Rig(this.canvas);
     this.world = buildWorkshop(this.scene, renderer);
 
-    this.pDust = new ParticlePool(this.scene, { max: 340, additive: false, soft: 0.35 });
+    this.pDust = new ParticlePool(this.scene, { max: 620, additive: false, soft: 0.30 });
     this.pGlow = new ParticlePool(this.scene, { max: 260, additive: true, soft: 0.55, renderOrder: 4 });
 
     this.hud = new Hud(this.rig);
