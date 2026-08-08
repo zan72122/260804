@@ -443,14 +443,61 @@ const decor = {
     return _v2.set(Math.cos(theta) * r, t * this.S.height, Math.sin(theta) * r).add(rm.group.position).clone();
   },
 
+  /**
+   * Slide a placement clear of the relief already on the bell.
+   *
+   * Nothing stopped two ornaments occupying the same clay, and overlapping
+   * relief does not read as "a busy bell" -- it reads as two solids passing
+   * through each other, which is one of the loudest ways to say none of this
+   * is real.  A four-year-old must never be refused, so the stamp is nudged to
+   * the nearest free clay instead of being rejected.
+   */
+  _findSpot(g, theta, t, size) {
+    const S = this.S, rm = g.rigMold;
+    const band = S.decorBand;
+    // measure in metres on the surface, not in radians
+    const arc = (a, b, r) => {
+      let d = a - b;
+      d = Math.atan2(Math.sin(d), Math.cos(d));
+      return d * r;
+    };
+    const clash = (th, tt) => {
+      const r = outerR(S, tt);
+      let worst = 0;
+      for (const d of rm.decorations) {
+        const need = (size + d.size) * 0.95;
+        const dist = Math.hypot(arc(th, d.theta, r), (tt - d.t) * S.height);
+        if (dist < need) worst = Math.max(worst, need - dist);
+      }
+      return worst;
+    };
+    if (!clash(theta, t)) return { theta, t };
+    // spiral outward from where they aimed until the clay is clear
+    for (let step = 1; step <= 7; step++) {
+      const rad = step * size * 0.75;
+      for (let k = 0; k < 8; k++) {
+        const a = (k / 8) * TAU + step * 0.4;
+        const tt = clamp(t + (Math.sin(a) * rad) / S.height, band[0], band[1]);
+        const th = theta + (Math.cos(a) * rad) / Math.max(0.2, outerR(S, tt));
+        if (!clash(th, tt)) return { theta: th, t: tt };
+      }
+    }
+    return { theta, t };
+  },
+
   _place(g, worldPoint) {
     const S = this.S;
     const rm = g.rigMold;
     const local = _v.copy(worldPoint).sub(rm.group.position);
-    const theta = Math.atan2(local.z, local.x);
     const band = S.decorBand;
-    const t = clamp(local.y / S.height, band[0], band[1]);
     const size = 0.19 + Math.random() * 0.05;
+    const spot = this._findSpot(
+      g,
+      Math.atan2(local.z, local.x),
+      clamp(local.y / S.height, band[0], band[1]),
+      size
+    );
+    const theta = spot.theta, t = spot.t;
     const rec = rm.addDecoration(this.selected, theta, t, size);
     rec.mesh.scale.setScalar(0.001);
     this.pops.push({ mesh: rec.mesh, t: 0, size });
@@ -458,9 +505,11 @@ const decor = {
     g.state.decorCount = this.count;
     audio.clayPat(1.3);
     audio.blip(0.9 + Math.random() * 0.4);
-    // clay squeezing out from under the relief
+    // clay squeezing out from under the relief, where it actually landed
+    const at = V(Math.cos(theta) * outerR(S, t), t * S.height, Math.sin(theta) * outerR(S, t))
+      .add(rm.group.position);
     for (let i = 0; i < 8; i++) {
-      g.pDust.spawn(FX.redSpeck(worldPoint.clone(), {
+      g.pDust.spawn(FX.redSpeck(at.clone(), {
         x: (Math.random() - 0.5) * 0.9, y: 0.3 + Math.random() * 0.5, z: (Math.random() - 0.5) * 0.9,
       }));
     }
