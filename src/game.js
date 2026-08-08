@@ -50,6 +50,7 @@ export class Game {
     this.scene = new THREE.Scene();
     this.rig = new Rig(this.canvas);
     this.world = buildWorkshop(this.scene, renderer);
+    this.world.camera = this.rig.camera;      // the shafts need to face it
 
     this.pDust = new ParticlePool(this.scene, { max: 620, additive: false, soft: 0.30 });
     this.pGlow = new ParticlePool(this.scene, { max: 260, additive: true, soft: 0.55, renderOrder: 4 });
@@ -152,10 +153,32 @@ export class Game {
     this.input.tick(dt);
     this.rig.update(dt);
     updateWorkshop(this.world, dt, this.clock);
+    this._placeSounds();
     if (this.stage?.update) this.stage.update(this, dt);
     this.pDust.update(dt);
     this.pGlow.update(dt);
     this.hud.update(dt, this.input.active);
+  }
+
+  /**
+   * Put the looping sources where they actually are.  The furnace is across
+   * the shop from the casting pit; when the camera is at the pit it should be
+   * quieter and off to one side, and it should swing across the stereo field
+   * as the camera moves between them.
+   */
+  _placeSounds() {
+    const cam = this.rig.camera;
+    const put = (name, wp) => {
+      this.tmpV.copy(wp).project(cam);
+      const behind = this.tmpV.z > 1;
+      const d = cam.position.distanceTo(wp);
+      audio.place(name, behind ? 0 : clamp(this.tmpV.x, -1, 1) * 0.75, 1 / (1 + Math.max(0, d - 3) / 7));
+    };
+    put('furnace', this.tmpV2.set(-3.85, 2.0, -1.0));
+    put('pour', this.tmpV2.set(0, 2.4, 0));
+    put('scrape', this.tmpV2.set(0, 1.2, 0));
+    put('brush', this.tmpV2.set(0, 1.4, 0));
+    put('chain', this.tmpV2.set(0, 4.6, 0));
   }
 
   /* ============================ stage machine ============================ */

@@ -167,16 +167,45 @@ export class AudioEngine {
   _loop(name, build) {
     if (!this.ready) return null;
     let l = this._loops.get(name);
-    if (!l) { l = build(); this._loops.set(name, l); }
+    if (!l) {
+      l = build();
+      // Everything used to arrive at the same level from dead centre, however
+      // far away it was and whichever side of the frame it sat on.  A furnace
+      // that roars just as loudly when the camera is across the shop from it
+      // is a furnace that is not in the room.
+      if (this.ctx.createStereoPanner) {
+        l.pan = this.ctx.createStereoPanner();
+        l.gain.disconnect();
+        l.gain.connect(l.pan);
+        l.pan.connect(this.master);
+      }
+      l.dist = 1;
+      this._loops.set(name, l);
+    }
     return l;
+  }
+
+  /**
+   * Place a looping source in the room.
+   * @param {string} name
+   * @param {number} pan  -1 left .. 1 right
+   * @param {number} atten 0..1 distance attenuation
+   */
+  place(name, pan, atten) {
+    const l = this._loops.get(name);
+    if (!l) return;
+    const t = this.t;
+    if (l.pan) l.pan.pan.setTargetAtTime(clamp(pan, -1, 1), t, 0.12);
+    l.dist = clamp01(atten);
+    l.gain.gain.setTargetAtTime((l.level ?? 0) * l.scale * l.dist, t, 0.12);
   }
 
   /** Set the level of a looping bed. level 0 fades it out (nodes stay alive). */
   setLoop(name, level, rampMs = 220) {
     const l = this._loops.get(name);
     if (!l) return;
-    l.gain.gain.setTargetAtTime(clamp01(level) * l.scale, this.t, rampMs / 3000);
-    if (l.setLevel) l.setLevel(clamp01(level));
+    l.level = clamp01(level);
+    l.gain.gain.setTargetAtTime(l.level * l.scale * (l.dist ?? 1), this.t, rampMs / 3000);
   }
 
   /** low steady room tone -- kiln breath, distant yard */

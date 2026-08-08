@@ -19,7 +19,7 @@ export class LatheGrid {
    * @param {boolean} o.capBottom
    * @param {boolean} o.capTop
    */
-  constructor({ rows = 48, cols = 64, y0 = 0, y1 = 2, capBottom = true, capTop = true }) {
+  constructor({ rows = 48, cols = 64, y0 = 0, y1 = 2, capBottom = true, capTop = true, aspect = 1 }) {
     this.rows = rows; this.cols = cols;
     this.y0 = y0; this.y1 = y1;
     this.capBottom = capBottom; this.capTop = capTop;
@@ -73,15 +73,20 @@ export class LatheGrid {
       const th = (c / cols) * TAU;
       this.cos[c] = Math.cos(th); this.sin[c] = Math.sin(th);
     }
+    // UVs must be area-correct or every texture on the body is stretched.  A
+    // bell is roughly twice as far around as it is tall, so mapping 0..1 both
+    // ways smeared the grain into vertical streaks that read as cloth folds
+    // rather than as clay.
+    this.aspect = aspect;
     for (let r = 0; r < nr; r++) {
       for (let c = 0; c < nc; c++) {
         const i = (r * nc + c) * 2;
-        this.uv[i] = c / cols; this.uv[i + 1] = r / rows;
+        this.uv[i] = (c / cols) * aspect; this.uv[i + 1] = r / rows;
       }
     }
     for (let c = 0; c < nc; c++) {
-      if (capBottom) { const i = (this.botStart + c) * 2; this.uv[i] = c / cols; this.uv[i + 1] = 0; }
-      if (capTop) { const i = (this.topStart + c) * 2; this.uv[i] = c / cols; this.uv[i + 1] = 1; }
+      if (capBottom) { const i = (this.botStart + c) * 2; this.uv[i] = (c / cols) * aspect; this.uv[i + 1] = 0; }
+      if (capTop) { const i = (this.topStart + c) * 2; this.uv[i] = (c / cols) * aspect; this.uv[i + 1] = 1; }
     }
     if (capBottom) { const i = (this.botStart + nc) * 2; this.uv[i] = 0.5; this.uv[i + 1] = 0; }
     if (capTop) { const i = (this.topStart + nc) * 2; this.uv[i] = 0.5; this.uv[i + 1] = 1; }

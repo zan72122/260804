@@ -1523,8 +1523,11 @@ const breakup = {
           { x: 0, y: -0.2, z: 0 }
         ));
       }
-      g.hud.setProgress(clamp01(T / 3.4), STEP_ICONS.break);
-      if (T > 3.4) g.setStage('lift');
+      // Let it stand there.  This is the moment the whole game is built
+      // around, and cutting away 1.6 s after the dust starts to thin threw it
+      // away; the earth is still settling at that point.
+      g.hud.setProgress(clamp01(T / 5.0), STEP_ICONS.break);
+      if (T > 5.0) g.setStage('lift');
     }
   },
 };

@@ -90,12 +90,15 @@ export function buildWorkshop(scene, renderer) {
   at(wall, 0, 4.75, -8.2); wall.receiveShadow = true; far.add(wall);
 
   const glowTex = makeDotTexture(0.62, 128);
-  const winMat = new THREE.MeshBasicMaterial({ color: 0xbcd4f2, fog: true });
+  // Daylight is orders of magnitude brighter than a lamplit interior; glass
+  // that reads as a pale grey rectangle is a picture of a window, not a window.
+  const winMat = new THREE.MeshBasicMaterial({ color: 0xf4f8ff, fog: false, toneMapped: false });
   const shaftMat = new THREE.MeshBasicMaterial({
-    map: glowTex, color: 0xa9c6ea, transparent: true, opacity: 0.16,
+    map: glowTex, color: 0x9fbde4, transparent: true, opacity: 0.10,
     blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
   });
   W.windows = [];
+  W.shafts = [];
   for (let i = -2; i <= 2; i++) {
     const x = i * 4.6;
     const s = new THREE.Shape();
@@ -109,11 +112,25 @@ export function buildWorkshop(scene, renderer) {
     // mullions
     for (const mx of [-0.26, 0.26]) { const b = box(0.07, 3.9, 0.1, M.brickDark); at(b, x + mx, 4.6, -7.84); far.add(b); }
     const bm = box(1.6, 0.08, 0.1, M.brickDark); at(bm, x, 5.1, -7.84); far.add(bm);
-    // volumetric-ish light shaft
-    const shaft = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 9.5), shaftMat);
-    at(shaft, x + 1.1, 3.0, -5.4); shaft.rotation.y = 0.22; shaft.rotation.z = -0.30;
+    // A shaft of light is a volume, and a flat card pretending to be one gives
+    // itself away the moment the camera moves off its face.  This one spins
+    // about its own axis to keep its face to the camera, so it never flattens.
+    const shaft = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 9.0), shaftMat);
+    at(shaft, x + 1.0, 3.2, -5.2);
     shaft.renderOrder = 3;
+    shaft.frustumCulled = false;
     far.add(shaft);
+    W.shafts.push(shaft);
+
+    // and the pool of daylight it lays on the floor
+    const pool = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 4.4), new THREE.MeshBasicMaterial({
+      map: glowTex, color: 0x9dbbe2, transparent: true, opacity: 0.10,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    }));
+    pool.rotation.x = -Math.PI / 2;
+    at(pool, x + 2.0, 0.02, -3.0);
+    pool.renderOrder = 2;
+    far.add(pool);
   }
 
   // left wall closes the frame in landscape
@@ -703,6 +720,18 @@ function updateFounder(W, dt, t) {
 export function updateWorkshop(W, dt, t) {
   W.time = t;
   updateFounder(W, dt, t);
+
+  // Keep each shaft's face to the camera.  It only rotates about its own
+  // vertical axis, so the direction the light travels never changes -- it just
+  // stops being a card seen edge-on.
+  if (W.shafts && W.camera) {
+    for (const sh of W.shafts) {
+      const dx = W.camera.position.x - sh.position.x;
+      const dz = W.camera.position.z - sh.position.z;
+      sh.rotation.y = Math.atan2(dx, dz);
+      sh.rotation.z = -0.26;
+    }
+  }
 
   // lantern flicker
   if (W.lanternFlame) {

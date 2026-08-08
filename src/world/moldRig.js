@@ -64,6 +64,7 @@ export class MoldRig {
     const S = this.shape;
     this.coreGrid = new LatheGrid({
       rows: CORE_ROWS, cols: CORE_COLS, y0: 0, y1: S.height, capBottom: true, capTop: true,
+      aspect: (TAU * S.rim * 0.62) / S.height,
     });
     this.coreProgress = new Float32Array(CORE_COLS).fill(0);
     this.coreSeed = Math.random() * 10;
@@ -96,6 +97,7 @@ export class MoldRig {
     const S = this.shape;
     this.falseGrid = new LatheGrid({
       rows: FALSE_ROWS, cols: FALSE_COLS, y0: 0, y1: S.height, capBottom: false, capTop: true,
+      aspect: (TAU * S.rim * 0.72) / S.height,
     });
     this.falseProgress = new Float32Array(FALSE_COLS).fill(0);
     this.falseSeed = Math.random() * 10 + 5;
@@ -168,6 +170,7 @@ export class MoldRig {
     const H = moldHeight(S);
     this.moldGrid = new LatheGrid({
       rows: MOLD_ROWS, cols: MOLD_COLS, y0: 0, y1: H, capBottom: false, capTop: false,
+      aspect: (TAU * S.rim * 0.85) / H,
     });
     this.moldCover = new Float32Array((MOLD_ROWS + 1) * MOLD_COLS).fill(0);
     this.moldMat = moldMaterial();
@@ -379,7 +382,8 @@ export class MoldRig {
 
     // body
     const rows = 64, cols = 72;
-    const g = new LatheGrid({ rows, cols, y0: 0, y1: S.height, capBottom: false, capTop: false });
+    const aspect = (TAU * S.rim * 0.72) / S.height;
+    const g = new LatheGrid({ rows, cols, y0: 0, y1: S.height, capBottom: false, capTop: false, aspect });
     g.update((t) => outerR(S, t));
     const body = new THREE.Mesh(g.geometry, mat);
     body.castShadow = true; body.receiveShadow = true;
@@ -388,7 +392,7 @@ export class MoldRig {
     this.bellGrid = g;
 
     // inner wall, so looking up into the mouth reads as a hollow casting
-    const gi = new LatheGrid({ rows, cols, y0: 0, y1: S.height, capBottom: false, capTop: true });
+    const gi = new LatheGrid({ rows, cols, y0: 0, y1: S.height, capBottom: false, capTop: true, aspect });
     gi.update((t) => innerR(S, t));
     const innerMat = mat.clone();
     innerMat.side = THREE.BackSide;
