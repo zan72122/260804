@@ -1,28 +1,38 @@
-/* Barista game — full-bleed canvas, no scroll, no zoom, iOS safe. */
+/* Barista — two stacked full-bleed canvases: WebGL scene + 2D gesture hints. */
 * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 html, body {
   width:100%; height:100%; overflow:hidden; position:fixed; overscroll-behavior:none;
-  background:#241713;
-  touch-action:none; -webkit-user-select:none; user-select:none;
-  -webkit-touch-callout:none;
+  background:#14100e;
+  touch-action:none; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
   font-family:-apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif;
 }
-#stage {
-  position:fixed; inset:0; width:100%; height:100%; display:block;
-  touch-action:none;
+#stage, #overlay {
+  position:fixed; inset:0; width:100%; height:100%; display:block; touch-action:none;
 }
+#overlay { z-index:2; }
 #gate {
   position:fixed; inset:0; z-index:10;
   display:flex; align-items:center; justify-content:center;
-  background:radial-gradient(circle at 50% 42%, #55372c 0%, #34211b 45%, #1d120e 100%);
+  background:radial-gradient(circle at 50% 44%, #3b2a20 0%, #201612 52%, #0d0907 100%);
   touch-action:none;
 }
 #gate.hidden { opacity:0; pointer-events:none; transition:opacity .45s ease; }
-#gateArt {
-  width:min(64vw, 46vh); height:auto;
-  animation:breathe 1.9s ease-in-out infinite;
+#gateRing {
+  width:min(52vw, 38vh); height:min(52vw, 38vh); border-radius:50%;
+  background:radial-gradient(circle at 38% 30%, #6b4632 0%, #3a251a 70%);
+  box-shadow:0 0 0 6px rgba(255,222,170,.16), 0 24px 70px rgba(0,0,0,.6);
+  display:flex; align-items:center; justify-content:center;
+  animation:breathe 2s ease-in-out infinite;
+}
+#gateCup {
+  width:58%; height:58%;
+  background:
+    radial-gradient(circle at 50% 52%, #f6ead7 0 46%, transparent 47%),
+    radial-gradient(circle at 50% 50%, #c08b52 0 60%, transparent 61%);
+  clip-path:polygon(50% 4%,84% 26%,72% 62%,50% 96%,28% 62%,16% 26%);
+  filter:drop-shadow(0 6px 14px rgba(0,0,0,.45));
 }
 @keyframes breathe {
-  0%,100% { transform:scale(1)   translateY(0); }
-  50%     { transform:scale(1.06) translateY(-1.2%); }
+  0%,100% { transform:scale(1); }
+  50%     { transform:scale(1.05); }
 }

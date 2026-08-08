@@ -24,75 +24,47 @@ const angDiff = (a, b) => { let d = (b - a) % TAU; if (d > Math.PI) d -= TAU; if
 /** frame-rate independent exponential approach; rate = fraction remaining after 1s */
 const approach = (cur, target, rate, dt) => target + (cur - target) * Math.pow(rate, dt * 60);
 
-/* ---------------------------------------------------------------- camera */
-/* One shared "world" (see game.js WORLD). The camera maps world -> screen so
-   that portrait can zoom onto the hands while landscape shows the counter.  */
-const Cam = {
-  x: 500, y: 340, scale: 1,          // current (eased)
-  tx: 500, ty: 340, tscale: 1,       // target
-  shake: 0, sx: 0, sy: 0,
-  snap() { this.x = this.tx; this.y = this.ty; this.scale = this.tscale; },
-  update(dt) {
-    this.x = approach(this.x, this.tx, 0.0005, dt);
-    this.y = approach(this.y, this.ty, 0.0005, dt);
-    this.scale = approach(this.scale, this.tscale, 0.0005, dt);
-    if (this.shake > 0.001) {
-      this.shake *= Math.pow(0.02, dt);
-      this.sx = rnd(-1, 1) * this.shake;
-      this.sy = rnd(-1, 1) * this.shake;
-    } else { this.shake = 0; this.sx = this.sy = 0; }
-  },
-  kick(a) { this.shake = Math.max(this.shake, a); },
-  dpr: 1,
-  /** apply transform: after this, ctx draws in world units */
-  apply(ctx, W, H) {
-    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    ctx.translate(W / 2 + this.sx, H / 2 + this.sy);
-    ctx.scale(this.scale, this.scale);
-    ctx.translate(-this.x, -this.y);
-  },
-  toWorld(px, py, W, H) {
-    return { x: (px - W / 2 - this.sx) / this.scale + this.x,
-             y: (py - H / 2 - this.sy) / this.scale + this.y };
-  }
-};
-
 /* --------------------------------------------------------------- pointer */
-/* Single-finger model: we only ever track the first active pointer.        */
+/* One finger only.  Raw screen pixels are kept here; the game turns them into
+   world points by intersecting the camera ray with an interaction plane.     */
 const Ptr = {
   down: false, justDown: false, justUp: false,
-  x: 0, y: 0, px: 0, py: 0,       // world coords, current & previous frame
-  dx: 0, dy: 0,                    // world delta this frame
-  vx: 0, vy: 0,                    // smoothed world velocity (units/sec)
-  downX: 0, downY: 0, downT: 0,
-  travel: 0,                       // total path length since press
-  id: null,
-  _rawX: 0, _rawY: 0, _q: [],
-  // Events are queued, never overwritten: a tap whose press and release land in
-  // the same frame must still produce one justDown frame and one justUp frame.
+  sx: 0, sy: 0, psx: 0, psy: 0, dsx: 0, dsy: 0,   // screen space
+  x: 0, y: 0, z: 0, px: 0, py: 0, dx: 0, dy: 0,   // world, on the active plane
+  vx: 0, vy: 0, travel: 0, downT: 0,
+  id: null, _q: [], _rawX: 0, _rawY: 0,
   begin(x, y) { this._q.push({ type: 'down', x, y }); },
   move(x, y) { this._rawX = x; this._rawY = y; },
   end() { this._q.push({ type: 'up' }); },
-  /** called once per frame before scene update */
-  sync(W, H, t, dt) {
+
+  /** step 1: consume one queued event and update screen-space state */
+  sync(t, dt) {
     this.justDown = false; this.justUp = false;
     const ev = this._q.length ? this._q.shift() : null;
+    this.psx = this.sx; this.psy = this.sy;
     if (ev && ev.type === 'down') {
-      const w = Cam.toWorld(ev.x, ev.y, W, H);
-      this.x = this.px = w.x; this.y = this.py = w.y;
-      this._rawX = ev.x; this._rawY = ev.y;
+      this.sx = this.psx = this._rawX = ev.x;
+      this.sy = this.psy = this._rawY = ev.y;
       this.down = true; this.justDown = true;
-      this.downX = w.x; this.downY = w.y; this.downT = t;
-      this.travel = 0; this.vx = this.vy = 0;
-      this.dx = this.dy = 0;
+      this.downT = t; this.travel = 0;
+      this.dsx = this.dsy = 0; this.vx = this.vy = 0;
       return;
     }
-    if (ev && ev.type === 'up') {
-      this.down = false; this.justUp = true;
-    }
-    this.px = this.x; this.py = this.y;
-    const w = Cam.toWorld(this._rawX, this._rawY, W, H);
-    this.x = w.x; this.y = w.y;
+    if (ev && ev.type === 'up') { this.down = false; this.justUp = true; }
+    this.sx = this._rawX; this.sy = this._rawY;
+    this.dsx = this.sx - this.psx; this.dsy = this.sy - this.psy;
+  },
+
+  /** step 2: project onto the interaction plane the current step cares about */
+  place(plane, dt) {
+    const p = [0, 0, 0];
+    if (plane.axis === 'y') R3.rayPlaneY(this.sx, this.sy, plane.v, p);
+    else R3.rayPlaneZ(this.sx, this.sy, plane.v, p);
+    if (this.justDown) { this.px = p[0]; this.py = (plane.axis === 'y' ? p[2] : p[1]); }
+    else { this.px = this.x; this.py = this.y; }
+    this.x = p[0];
+    this.y = plane.axis === 'y' ? p[2] : p[1];
+    this.z = plane.axis === 'y' ? plane.v : p[2];
     this.dx = this.x - this.px; this.dy = this.y - this.py;
     if (this.down) this.travel += Math.hypot(this.dx, this.dy);
     const k = dt > 0 ? 1 / dt : 0;
@@ -101,59 +73,6 @@ const Ptr = {
   },
   speed() { return Math.hypot(this.vx, this.vy); }
 };
-
-/* ------------------------------------------------------------- particles */
-class Particles {
-  constructor(max = 700) { this.p = []; this.max = max; }
-  add(o) {
-    if (this.p.length >= this.max) this.p.shift();
-    this.p.push(Object.assign({
-      x: 0, y: 0, vx: 0, vy: 0, g: 0, life: 1, age: 0, r: 3, r1: null,
-      col: '#fff', kind: 'dot', rot: 0, vrot: 0, drag: 1, a0: 1
-    }, o));
-  }
-  update(dt) {
-    for (let i = this.p.length - 1; i >= 0; i--) {
-      const q = this.p[i];
-      q.age += dt;
-      if (q.age >= q.life) { this.p.splice(i, 1); continue; }
-      q.vy += q.g * dt;
-      if (q.drag !== 1) { const d = Math.pow(q.drag, dt * 60); q.vx *= d; q.vy *= d; }
-      q.x += q.vx * dt; q.y += q.vy * dt;
-      q.rot += q.vrot * dt;
-      if (q.onStep) q.onStep(q, dt);
-    }
-  }
-  clear() { this.p.length = 0; }
-  draw(ctx) {
-    for (const q of this.p) {
-      const t = q.age / q.life;
-      const a = q.a0 * (1 - t * t);
-      ctx.globalAlpha = a;
-      const r = q.r1 === null ? q.r : lerp(q.r, q.r1, t);
-      ctx.save();
-      if (q.kind === 'dot') {
-        ctx.fillStyle = q.col;
-        ctx.beginPath(); ctx.arc(q.x, q.y, Math.max(0.2, r), 0, TAU); ctx.fill();
-      } else if (q.kind === 'star') {
-        ctx.translate(q.x, q.y); ctx.rotate(q.rot);
-        ctx.fillStyle = q.col; Art.starPath(ctx, 0, 0, r, r * 0.45, 5); ctx.fill();
-      } else if (q.kind === 'heart') {
-        ctx.translate(q.x, q.y); ctx.rotate(q.rot);
-        ctx.fillStyle = q.col; Art.heartPath(ctx, 0, 0, r * 2); ctx.fill();
-      } else if (q.kind === 'ring') {
-        ctx.strokeStyle = q.col; ctx.lineWidth = Math.max(0.5, r * 0.22);
-        ctx.beginPath(); ctx.arc(q.x, q.y, r, 0, TAU); ctx.stroke();
-      } else if (q.kind === 'puff') {
-        const g = ctx.createRadialGradient(q.x, q.y, 0, q.x, q.y, r);
-        g.addColorStop(0, q.col); g.addColorStop(1, 'rgba(255,255,255,0)');
-        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(q.x, q.y, r, 0, TAU); ctx.fill();
-      }
-      ctx.restore();
-    }
-    ctx.globalAlpha = 1;
-  }
-}
 
 /* ------------------------------------------------------------------ sfx */
 /* Everything is synthesized with WebAudio — zero asset loading, so sounds

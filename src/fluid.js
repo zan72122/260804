@@ -328,7 +328,6 @@ const Fluid = {
         const k = i + j * N;
         const mk = this.mask[k];
         const o = k * 4;
-        if (mk <= 0.001) { d[o + 3] = 0; continue; }
         const x = (i + 0.5) / N - 0.5, y = (j + 0.5) / N - 0.5;
         const r = Math.hypot(x, y) * 2;
         // crema base: brighter in the middle, darker toward the wall
@@ -351,7 +350,11 @@ const Fluid = {
         d[o] = R < 0 ? 0 : R > 255 ? 255 : R;
         d[o + 1] = G < 0 ? 0 : G > 255 ? 255 : G;
         d[o + 2] = B < 0 ? 0 : B > 255 ? 255 : B;
-        d[o + 3] = 255 * mk;
+        // Keep the canvas fully opaque: a 2D canvas stores premultiplied alpha,
+        // so anything written to the alpha channel would destroy the crema
+        // colour on readback.  The shader recovers milk coverage from the
+        // blue/red ratio instead — milk is neutral, crema and cocoa are orange.
+        d[o + 3] = 255;
       }
     }
     this.ctx.putImageData(this.img, 0, 0);
