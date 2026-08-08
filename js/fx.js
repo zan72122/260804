@@ -17,22 +17,32 @@
     this.group.position.copy(pos);
     scene.add(this.group);
 
-    const tex = new THREE.CanvasTexture(T.flameSprite());
-    tex.encoding = THREE.sRGBEncoding;
+    const texes = [];
+    for (let i = 0; i < 5; i++) {
+      const t = new THREE.CanvasTexture(T.flameSprite(i + 1));
+      t.encoding = THREE.sRGBEncoding;
+      texes.push(t);
+    }
     this.tongues = [];
-    for (let i = 0; i < 10; i++) {
+    const N = 16;
+    for (let i = 0; i < N; i++) {
+      const u = i / N;
+      const back = i % 3 === 0;                       // 奥に低い炎、手前に高い炎
       const m = new THREE.SpriteMaterial({
-        map: tex, blending: THREE.AdditiveBlending,
+        map: texes[i % texes.length], blending: THREE.AdditiveBlending,
         depthWrite: false, transparent: true,
-        color: new THREE.Color().setHSL(0.055 + Math.random() * 0.02, 1, 0.6)
+        color: new THREE.Color().setHSL(0.045 + Math.random() * 0.028, 1, 0.58 + Math.random() * 0.1)
       });
       const s = new THREE.Sprite(m);
-      s.center.set(0.5, 0.02);
+      s.center.set(0.5, 0.0);
       this.group.add(s);
       this.tongues.push({
-        s: s, ph: Math.random() * TAU, sp: 0.8 + Math.random() * 0.9,
-        ox: (Math.random() - 0.5) * 0.26, oz: (Math.random() - 0.5) * 0.16,
-        h: 0.30 + Math.random() * 0.34
+        s: s, ph: Math.random() * TAU, sp: 0.7 + Math.random() * 1.5,
+        ox: (u - 0.5) * 0.34 + (Math.random() - 0.5) * 0.07,
+        oz: (Math.random() - 0.5) * 0.20,
+        oy: Math.random() * 0.03,
+        h: back ? 0.16 + Math.random() * 0.14 : 0.30 + Math.random() * 0.44,
+        w: 0.30 + Math.random() * 0.16
       });
     }
 
@@ -46,10 +56,10 @@
     this.group.add(this.coals);
 
     // 光源
-    this.light = new THREE.PointLight(0xff7418, 2.0, 3.6, 2);
+    this.light = new THREE.PointLight(0xff8232, 2.0, 3.0, 2);
     this.light.position.set(0, 0.24, 0);
     this.group.add(this.light);
-    this.spill = new THREE.PointLight(0xff8c38, 0.6, 2.2, 2);
+    this.spill = new THREE.PointLight(0xff8c38, 0.6, 1.7, 2);
     this.spill.position.set(0, 0.1, 1.1);
     this.group.add(this.spill);
 
@@ -66,18 +76,18 @@
     for (let i = 0; i < this.tongues.length; i++) {
       const f = this.tongues[i];
       const w = 0.5 + 0.5 * Math.sin(this.t * f.sp * 3.1 + f.ph);
-      const h = f.h * L * (0.55 + w * 0.65) * flick;
-      f.s.scale.set(h * 0.58, h, 1);
+      const h = f.h * L * (0.42 + w * 0.78) * flick;
+      f.s.scale.set(h * f.w, h, 1);
       f.s.position.set(
-        f.ox + Math.sin(this.t * f.sp * 1.7 + f.ph) * 0.05,
-        0.01,
+        f.ox + Math.sin(this.t * f.sp * 1.7 + f.ph) * 0.045,
+        f.oy,
         f.oz + Math.cos(this.t * f.sp * 1.3 + f.ph) * 0.03
       );
-      f.s.material.opacity = U.clamp(L * (0.46 + w * 0.48), 0, 1);
+      f.s.material.opacity = U.clamp(L * (0.30 + w * 0.52), 0, 1);
     }
     const cg = 0.7 + 0.3 * Math.sin(this.t * 2.3);
     this.coals.material.opacity = 0.72 * L * cg;
-    this.light.intensity = (1.9 + 1.3 * flick) * L;
+    this.light.intensity = (1.55 + 1.05 * flick) * L;
     this.light.position.y = 0.2 + 0.05 * flick;
     this.spill.intensity = 0.8 * L * flick;
   };

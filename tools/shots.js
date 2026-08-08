@@ -18,7 +18,7 @@ fs.mkdirSync(OUT, { recursive: true });
 const ROOT = path.resolve(__dirname, '..');
 
 const SETUPS = {
-  CHOOSE: 'g.setStage("CHOOSE")',
+  CHOOSE: 'g.setStage("CHOOSE"); run(1.4)',
   SHAPE: 'seedDough(0.35); g.setStage("SHAPE"); run(0.5)',
   SHAPE2: 'seedDough(1); g.setStage("SHAPE"); run(0.5)',
   TOSS: 'seedDough(1); g.setStage("TOSS"); PZ.stages.TOSS.launch(g,0.85); run(0.55)',
@@ -31,7 +31,7 @@ const SETUPS = {
   RETRIEVE: 'seedDough(1); seedSauce(); seedTops(30); g.pizza.startBake(); bakeTo(0.9); g.setStage("RETRIEVE"); PZ.stages.RETRIEVE.peelIn=1; PZ.stages.RETRIEVE.v=-0.35; run(0.4)',
   CUT: 'seedDough(1); seedSauce(); seedTops(30); g.pizza.startBake(); bakeTo(0.9); g.setStage("CUT"); run(1.2); PZ.stages.CUT.cutN=4; g.pizza.setCuts(8); run(0.6)',
   LIFT: 'seedDough(1); seedSauce(); seedTops(30); g.pizza.startBake(); bakeTo(0.9); g.setStage("CUT"); run(1.2); PZ.stages.CUT.cutN=4; g.pizza.setCuts(8); PZ.stages.CUT.lift={index:1,k:0,target:1}; run(1.0)',
-  DONE: 'seedDough(1); seedSauce(); seedTops(30); g.pizza.startBake(); bakeTo(0.9); g.pizza.setCuts(8); g.setStage("DONE"); run(2.0)'
+  DONE: 'seedDough(1); seedSauce(); seedTops(30); g.pizza.startBake(); bakeTo(0.9); g.pizza.setCuts(8); g.pz.pos.set(-0.30, 0.95, -0.30); g.setStage("DONE"); run(2.0)'
 };
 
 (async () => {

@@ -15,15 +15,20 @@
   const GUIDE_DELAY = 1.1;
   const FOV = 38;
 
-  /* カメラの構え：見る点・画面に収める幅(m)・振り角・伏せ角 */
+  /* カメラの構え：見る点・画面に収める幅(m)・振り角・伏せ角。
+     t は縦横共通。tL があれば横画面ではそちらを使う
+     （横は「職人 → ピール → 石窯」をひと続きに収めたいので見る点がずれる）。*/
   const CAMS = {
-    choose: { t: [-0.34, 1.08, -0.48], frame: [1.55, 2.0], yaw: [6, -8], pitch: [30, 26] },
+    choose: { t: [-0.34, 0.99, -0.30], frame: [0.80, 1.22], yaw: [5, -8], pitch: [46, 32] },
     bench: { t: [-0.62, 0.965, -0.34], frame: [0.62, 0.70], yaw: [4, -10], pitch: [44, 40] },
     toss: { t: [-0.62, 1.22, -0.34], frame: [1.18, 1.25], yaw: [4, -10], pitch: [28, 26] },
     topping: { t: [-0.62, 0.98, -0.22], frame: [0.86, 1.00], yaw: [4, -10], pitch: [42, 38] },
-    oven: { t: [0.55, 1.13, -1.15], frame: [0.98, 1.62], yaw: [3, -20], pitch: [25, 20] },
-    bake: { t: [0.57, 1.15, -1.98], frame: [0.80, 0.98], yaw: [2, -6], pitch: [22, 20] },
-    serve: { t: [-0.30, 0.99, -0.30], frame: [0.72, 0.82], yaw: [6, -12], pitch: [40, 34] }
+    oven: {
+      t: [0.55, 1.13, -1.15], tL: [0.18, 1.15, -1.24],
+      frame: [0.98, 1.74], yaw: [3, -11], pitch: [25, 19]
+    },
+    bake: { t: [0.55, 1.14, -1.62], frame: [1.02, 1.34], yaw: [2, -6], pitch: [21, 17] },
+    serve: { t: [-0.30, 0.98, -0.18], frame: [0.86, 1.02], yaw: [6, -12], pitch: [42, 34] }
   };
 
   function Game(canvas) {
@@ -166,11 +171,15 @@
     this.gRing.visible = false;
     g.add(this.gRing);
 
-    const dashMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
+    const dashMat = new THREE.MeshBasicMaterial({
+      color: 0xffb45a, transparent: true, opacity: 0, depthWrite: false,
+      blending: THREE.AdditiveBlending, side: THREE.DoubleSide
+    });
     this.gChevrons = [];
     for (let i = 0; i < 9; i++) {
-      const m = new THREE.Mesh(G.chevron(0.13, 0.10, 0.035), dashMat.clone());
+      const m = new THREE.Mesh(G.chevron(0.115, 0.085, 0.030), dashMat.clone());
       m.visible = false;
+      m.renderOrder = 5;
       g.add(m);
       this.gChevrons.push(m);
     }
@@ -223,7 +232,7 @@
       m.position.set(p.x, p.y, p.z);
       m.rotation.y = (p.yaw !== undefined ? p.yaw : (yaw || 0));
       const wave = 0.5 + 0.5 * Math.sin(this.t * 3.4 - u * 4.2);
-      m.material.opacity = alpha * (0.16 + wave * 0.62);
+      m.material.opacity = alpha * (0.10 + wave * 0.38);
       const s = p.s || 1;
       m.scale.set(s, s, s);
     }
@@ -271,8 +280,9 @@
   Game.prototype.camPreset = function (name) {
     const c = CAMS[name] || CAMS.bench;
     const i = this.land ? 1 : 0;
+    const t = (this.land && c.tL) ? c.tL : c.t;
     return {
-      tx: c.t[0], ty: c.t[1], tz: c.t[2],
+      tx: t[0], ty: t[1], tz: t[2],
       frame: c.frame[i], yaw: c.yaw[i] * Math.PI / 180, pitch: c.pitch[i] * Math.PI / 180
     };
   };
@@ -550,38 +560,42 @@
     S.updateMusic(dt);
   };
 
-  /* 職人：ピールを持っているときは柄を握り、体を寄せる */
-  const _hp = new THREE.Vector3();
+  /* 職人：ピールを操るのはプレイヤー自身なので、職人はそれを握らない。
+     ふだんは作業台の向こう側に立って手を台に置き、窯を使うあいだは
+     そちらへ体を向けて見守る。カット（chefHand）のときだけ手を出す。   */
+  const _hp = new THREE.Vector3(), _hq = new THREE.Vector3();
   Game.prototype.updateChef = function (dt) {
     const ch = PZ.scene3.chef;
     const L = PZ.LAY;
     let targetX = L.chefX, targetZ = L.chefZ, rotY = 0.28;
     let hR = null, hL = null;
-    if (this.peel.held) {
-      const peel = PZ.scene3.peel;
-      const gz = PZ.scene3.peelGripZ;
-      hR = new THREE.Vector3(0, 0.02, gz - 0.10).applyEuler(peel.rotation).add(peel.position);
-      hL = new THREE.Vector3(0, 0.02, gz + 0.16).applyEuler(peel.rotation).add(peel.position);
-      targetX = hR.x - 0.42;
-      targetZ = hR.z + 0.30;
-      rotY = 0.10;
-    } else if (this.chefHand) {
-      hR = this.chefHand;
-      targetX = hR.x - 0.34; targetZ = hR.z + 0.34;
-      rotY = 0.2;
-    }
-    targetX = U.clamp(targetX, L.chefX - 0.35, L.chefX + 1.15);
-    targetZ = U.clamp(targetZ, L.chefZ - 0.30, L.chefZ + 0.42);
-    ch.group.position.x = U.approach(ch.group.position.x, targetX, 4.5, dt);
-    ch.group.position.z = U.approach(ch.group.position.z, targetZ, 4.5, dt);
-    ch.group.rotation.y = U.approach(ch.group.rotation.y, rotY, 4, dt);
 
-    if (!hR) {
-      const sw = Math.sin(this.t * 1.4) * 0.02;
-      hR = new THREE.Vector3().copy(ch.group.position).add(new THREE.Vector3(0.24, 0.92 + sw, 0.10));
-      hL = new THREE.Vector3().copy(ch.group.position).add(new THREE.Vector3(-0.24, 0.92 - sw, 0.10));
+    if (this.chefHand) {
+      // 手が届く位置まで寄る（腕が伸びきらないように）
+      targetX = U.clamp(this.chefHand.x - 0.30, L.chefX - 0.15, L.chefX + 0.80);
+      targetZ = U.clamp(this.chefHand.z + 0.42, L.chefZ - 0.20, L.chefZ + 0.34);
+      rotY = 0.20;
+    } else if (this.peel.visible) {
+      // 窯を使っているあいだは、少し窯側へ寄って体をひねる
+      targetX = L.chefX + 0.16;
+      targetZ = L.chefZ - 0.06;
+      rotY = -0.30;
     }
-    if (!hL) hL = hR;
+    ch.group.position.x = U.approach(ch.group.position.x, targetX, 3.0, dt);
+    ch.group.position.z = U.approach(ch.group.position.z, targetZ, 3.0, dt);
+    ch.group.rotation.y = U.approach(ch.group.rotation.y, rotY, 3.0, dt);
+    ch.group.updateMatrixWorld(true);
+
+    const br = Math.sin(this.t * 1.3) * 0.014;         // 呼吸
+    if (this.chefHand) {
+      hR = this.chefHand;
+      hL = _hq.copy(ch.group.position).add(new THREE.Vector3(-0.27, 0.95 + br, 0.30)).clone();
+    } else {
+      // 台の縁に手を置いて待つ
+      const y = L.counterY + 0.03;
+      hR = _hp.copy(ch.group.position).add(new THREE.Vector3(0.235, 0, 0.34)).setY(y + br).clone();
+      hL = _hq.copy(ch.group.position).add(new THREE.Vector3(-0.235, 0, 0.34)).setY(y - br).clone();
+    }
     PZ.scene3.solveArm(ch, ch.armR, ch.shoulderR, hR, 1);
     PZ.scene3.solveArm(ch, ch.armL, ch.shoulderL, hL, -1);
   };

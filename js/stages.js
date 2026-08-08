@@ -114,13 +114,27 @@
         }
       }
       this.group.visible = true;
+      // 板が皿を飲み込んでしまうので、えらぶあいだは片づける
+      PZ.scene3.board.visible = false;
+      PZ.scene3.flourDecal.visible = false;
       const n = this.cards.length;
-      for (let i = 0; i < n; i++) {
-        const x = L.counterX + (i - (n - 1) / 2) * 0.31;
-        this.cards[i].position.set(x, L.counterY, L.counterZ - 0.03);
+      if (g.land) {
+        for (let i = 0; i < n; i++) {
+          this.cards[i].position.set(-0.34 + (i - (n - 1) / 2) * 0.335, L.counterY, L.counterZ - 0.02);
+        }
+      } else {
+        // たて画面：カメラが近づけるように 2 列 2 段に並べる（的も大きくなる）
+        for (let i = 0; i < n; i++) {
+          const col = i % 2, row = (i / 2) | 0;
+          this.cards[i].position.set(-0.34 + (col - 0.5) * 0.34, L.counterY, L.counterZ - 0.17 + row * 0.30);
+        }
       }
     },
-    exit(g) { if (this.group) this.group.visible = false; },
+    exit(g) {
+      if (this.group) this.group.visible = false;
+      PZ.scene3.board.visible = true;
+      PZ.scene3.flourDecal.visible = true;
+    },
     update(g, dt) {
       this.t += dt;
       g.pz.visible = false;
@@ -1132,6 +1146,8 @@
       this.t = 0;
       S.fanfare();
       sparkle(g, g.pz.pos, 26);
+      PZ.scene3.board.visible = false;
+      PZ.scene3.flourDecal.visible = false;
       if (!this.cards) {
         this.cards = [];
         for (let i = 0; i < 3; i++) {
@@ -1163,10 +1179,15 @@
           }
         }
         grp.visible = true;
-        grp.position.set(-0.62 + i * 0.30, L.counterY, L.counterZ + 0.20);
+        grp.position.set(-0.30 + (i - 1) * 0.30, L.counterY, L.counterZ + 0.33);
       }
     },
-    exit(g) { for (let i = 0; i < this.cards.length; i++) this.cards[i].visible = false; PZ.scene3.servePlate.visible = false; },
+    exit(g) {
+      for (let i = 0; i < this.cards.length; i++) this.cards[i].visible = false;
+      PZ.scene3.servePlate.visible = false;
+      PZ.scene3.board.visible = true;
+      PZ.scene3.flourDecal.visible = true;
+    },
     update(g, dt) {
       this.t += dt;
       const p = g.pizza;

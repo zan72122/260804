@@ -249,8 +249,8 @@
         const vein = Math.abs(Math.sin((x * 0.012 + y * 0.006 + w) * Math.PI));
         const v2 = Math.pow(1 - vein, 8);
         const spec = fbm(nf, x * 0.28, y * 0.28, 3) - 0.5;
-        const base = 236 + spec * 14;
-        const c = base - v2 * 62;
+        const base = 214 + spec * 12;
+        const c = base - v2 * 30;
         ai.data[i] = U.clamp(c + 4, 0, 255);
         ai.data[i + 1] = U.clamp(c + 1, 0, 255);
         ai.data[i + 2] = U.clamp(c - 4, 0, 255);
@@ -311,18 +311,29 @@
     const alb = cv(S), hei = cv(S), rou = cv(S);
     const a = alb.getContext('2d'), h = hei.getContext('2d'), r = rou.getContext('2d');
     const nf = noiseField(51);
-    const n = 4, t = S / n;
-    a.fillStyle = '#5a4a3a'; a.fillRect(0, 0, S, S);
-    h.fillStyle = '#3a3a3a'; h.fillRect(0, 0, S, S);
-    r.fillStyle = '#e0e0e0'; r.fillRect(0, 0, S, S);
+    // 耐火レンガの芋目地ではなく、half-bond（互い違い）の細い目地で積む
+    const rows = 7, cols = 4;
+    const th = S / rows, tw = S / cols;
+    const joint = 3;
+    a.fillStyle = '#4a3f34'; a.fillRect(0, 0, S, S);
+    h.fillStyle = '#2e2e2e'; h.fillRect(0, 0, S, S);
+    r.fillStyle = '#e6e6e6'; r.fillRect(0, 0, S, S);
     const rnd = U.mulberry32(13);
-    for (let iy = 0; iy < n; iy++) {
-      for (let ix = 0; ix < n; ix++) {
+    for (let iy = 0; iy < rows; iy++) {
+      const off = (iy % 2) * tw * 0.5;
+      for (let ix = -1; ix <= cols; ix++) {
         const v = rnd();
-        a.fillStyle = U.css([176 + v * 30, 152 + v * 26, 124 + v * 22]);
-        a.fillRect(ix * t + 4, iy * t + 4, t - 8, t - 8);
-        h.fillStyle = 'rgb(' + (200 + v * 26 | 0) + ',' + (200 + v * 26 | 0) + ',' + (200 + v * 26 | 0) + ')';
-        h.fillRect(ix * t + 4, iy * t + 4, t - 8, t - 8);
+        const x = ix * tw + off, y = iy * th;
+        a.fillStyle = U.css([172 + v * 34, 150 + v * 28, 122 + v * 22]);
+        a.fillRect(x + joint, y + joint, tw - joint * 2, th - joint * 2);
+        const hv = 198 + v * 30 | 0;
+        h.fillStyle = 'rgb(' + hv + ',' + hv + ',' + hv + ')';
+        h.fillRect(x + joint, y + joint, tw - joint * 2, th - joint * 2);
+        // 角の欠け
+        if (v > 0.72) {
+          a.fillStyle = 'rgba(60,48,38,0.55)';
+          a.fillRect(x + joint, y + joint, tw * (0.12 + v * 0.14), th * 0.20);
+        }
       }
     }
     // すす・焼けあと
@@ -343,6 +354,8 @@
   /* ================================================================
      すす（窯口まわりに重ねる汚し）
   ================================================================ */
+  /* すすの濃さをグレースケールで返す（alphaMap として使う）。
+     縁で必ず 0 に落として、四角い板に見えないようにする。          */
   T.sootAlpha = function () {
     const S = 256;
     const c = cv(S);
@@ -351,9 +364,16 @@
     const img = x.createImageData(S, S);
     for (let y = 0; y < S; y++) for (let i2 = 0; i2 < S; i2++) {
       const i = (y * S + i2) * 4;
-      const v = Math.pow(fbm(nf, i2 * 0.02, y * 0.02, 5), 1.6);
-      img.data[i] = img.data[i + 1] = img.data[i + 2] = 12;
-      img.data[i + 3] = U.clamp(v * 320 - 40, 0, 255);
+      const v = Math.pow(fbm(nf, i2 * 0.022, y * 0.022, 5), 1.5);
+      // 中央から縁へのなめらかな減衰（下ほど濃く＝窯口から立ちのぼる）
+      const u = (i2 / S) * 2 - 1;
+      const w = (y / S);
+      const fx = Math.pow(Math.max(0, 1 - u * u), 1.1);
+      const fy = Math.pow(w, 1.4) * Math.pow(Math.max(0, 1 - Math.pow(1 - w, 6)), 0.4);
+      const k = U.clamp((v * 1.5 - 0.30) * fx * fy * 2.4, 0, 1);
+      const g = k * 255;
+      img.data[i] = img.data[i + 1] = img.data[i + 2] = g;
+      img.data[i + 3] = 255;
     }
     x.putImageData(img, 0, 0);
     return c;
@@ -374,21 +394,65 @@
     return c;
   };
 
-  T.flameSprite = function () {
+  /* 炎の舌。seed ごとに揺れかたの違う細長い形をつくる。
+     根元が白熱し、先へ行くほど橙〜赤へ抜けて消える。               */
+  T.flameSprite = function (seed) {
     const S = 128, c = cv(S), x = c.getContext('2d');
-    const g = x.createRadialGradient(S / 2, S * 0.72, 0, S / 2, S * 0.6, S * 0.55);
-    g.addColorStop(0, 'rgba(255,244,214,1)');
-    g.addColorStop(0.25, 'rgba(255,206,96,0.92)');
-    g.addColorStop(0.55, 'rgba(255,128,26,0.55)');
-    g.addColorStop(0.8, 'rgba(214,58,10,0.16)');
-    g.addColorStop(1, 'rgba(160,30,0,0)');
-    x.fillStyle = g;
+    const rn = U.mulberry32((seed || 0) * 977 + 17);
+    const wob = [];
+    for (let i = 0; i < 5; i++) wob.push((rn() - 0.5) * 2);
+
+    // 舌の輪郭（下＝根元、上＝先端）
+    function edge(sgn) {
+      const pts = [];
+      const n = 16;
+      for (let i = 0; i <= n; i++) {
+        const t = i / n;                       // 0=根元 1=先端
+        const taper = Math.pow(1 - t, 0.62) * Math.sin(Math.min(1, t * 6) * Math.PI / 2);
+        const w = S * 0.30 * taper;
+        const sway = (Math.sin(t * 5.2 + wob[0] * 3) * wob[1] + Math.sin(t * 9.1 + wob[2] * 3) * wob[3] * 0.5)
+          * S * 0.055 * t;
+        pts.push([S / 2 + sway + sgn * w, S * (1 - t) - 2]);
+      }
+      return pts;
+    }
+    const right = edge(1), left = edge(-1).reverse();
     x.beginPath();
-    x.moveTo(S / 2, 4);
-    x.bezierCurveTo(S * 0.92, S * 0.42, S * 0.86, S * 0.94, S / 2, S - 4);
-    x.bezierCurveTo(S * 0.14, S * 0.94, S * 0.08, S * 0.42, S / 2, 4);
+    x.moveTo(right[0][0], right[0][1]);
+    for (let i = 1; i < right.length; i++) x.lineTo(right[i][0], right[i][1]);
+    for (let i = 0; i < left.length; i++) x.lineTo(left[i][0], left[i][1]);
     x.closePath();
+
+    const g = x.createLinearGradient(0, S, 0, 0);
+    g.addColorStop(0.00, 'rgba(255,250,232,1.00)');
+    g.addColorStop(0.12, 'rgba(255,232,150,0.96)');
+    g.addColorStop(0.34, 'rgba(255,176,52,0.72)');
+    g.addColorStop(0.62, 'rgba(240,96,16,0.36)');
+    g.addColorStop(0.86, 'rgba(178,40,6,0.10)');
+    g.addColorStop(1.00, 'rgba(120,20,0,0)');
+    x.fillStyle = g;
     x.fill();
+
+    // 根元の白熱コア
+    const core = x.createRadialGradient(S / 2, S * 0.94, 0, S / 2, S * 0.90, S * 0.24);
+    core.addColorStop(0, 'rgba(255,255,246,0.95)');
+    core.addColorStop(0.5, 'rgba(255,226,148,0.42)');
+    core.addColorStop(1, 'rgba(255,180,80,0)');
+    x.globalCompositeOperation = 'lighter';
+    x.fillStyle = core;
+    x.fill();
+
+    // 横方向にもぼかす（輪郭が板のように立たないように）
+    const side = x.createLinearGradient(0, 0, S, 0);
+    side.addColorStop(0.00, 'rgba(0,0,0,0)');
+    side.addColorStop(0.22, 'rgba(0,0,0,0.55)');
+    side.addColorStop(0.50, 'rgba(0,0,0,1)');
+    side.addColorStop(0.78, 'rgba(0,0,0,0.55)');
+    side.addColorStop(1.00, 'rgba(0,0,0,0)');
+    x.globalCompositeOperation = 'destination-in';
+    x.fillStyle = side;
+    x.fillRect(0, 0, S, S);
+    x.globalCompositeOperation = 'source-over';
     return c;
   };
 

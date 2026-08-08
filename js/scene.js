@@ -26,7 +26,7 @@
     boardX: -0.62, boardZ: -0.34, boardR: 0.245,
     pathX: 0.55,
     bakeZ: -2.02,
-    chefX: -1.02, chefZ: -1.06,
+    chefX: -1.34, chefZ: -0.98,
     pizzaMaxR: 0.15
   });
 
@@ -102,13 +102,19 @@
     /* ---- マテリアル ---- */
     const M = (S.mats = {});
     M.brick = mat(T.bricks({ seed: 3, rows: 7, cols: 4, base: [138, 74, 56] }),
-      { repeat: [3, 2], normalScale: 1.1, envIntensity: 0.30 });
-    M.plaster = mat(T.stucco({ seed: 11, base: [222, 200, 172] }),
-      { repeat: [2, 2], normalScale: 0.8, envIntensity: 0.4 });
-    M.plasterDome = mat(T.stucco({ seed: 12, base: [206, 180, 152] }),
-      { repeat: [3, 2], normalScale: 0.9, envIntensity: 0.35 });
+      { repeat: [2.2, 1.5], normalScale: 1.1, envIntensity: 0.30 });
+    M.brickWall = mat(T.bricks({ seed: 5, rows: 7, cols: 4, base: [108, 66, 54] }),
+      { repeat: [16, 6], normalScale: 0.8, envIntensity: 0.18 });
+    M.plaster = mat(T.stucco({ seed: 11, base: [206, 186, 160] }),
+      { repeat: [2, 2], normalScale: 0.8, envIntensity: 0.22 });
+    M.plasterDome = mat(T.stucco({ seed: 12, base: [186, 162, 136] }),
+      { repeat: [3, 2], normalScale: 1.15, envIntensity: 0.16 });
     M.plasterDome.clippingPlanes = [clipFace];
     M.plasterDome.clipShadows = true;
+    M.plasterDome.side = THREE.DoubleSide;   // 切断面から向こう側が透けないように
+    // 正面の壁はクリップしない（ドームと同じ見た目の漆喰）
+    M.plasterFace = mat(T.stucco({ seed: 12, base: [186, 162, 136] }),
+      { repeat: [2, 1.4], normalScale: 1.15, envIntensity: 0.16 });
     M.oak = mat(T.wood({ seed: 21, light: [178, 128, 78], dark: [104, 66, 34], rings: 22, roughBase: 200 }),
       { repeat: [2, 1], normalScale: 0.9, envIntensity: 0.3 });
     M.oakDark = mat(T.wood({ seed: 23, light: [150, 104, 62], dark: [78, 48, 26], rings: 18, roughBase: 210 }),
@@ -116,20 +122,28 @@
     M.birch = mat(T.wood({ seed: 25, light: [232, 208, 168], dark: [186, 154, 108], rings: 30, roughBase: 150 }),
       { repeat: [1, 1], normalScale: 0.7, envIntensity: 0.5 });
     M.marble = mat(T.marble({ seed: 31 }),
-      { repeat: [2, 1], normalScale: 0.35, color: 0xd6d0c4, envIntensity: 0.55 });
+      { repeat: [2, 1], normalScale: 0.35, color: 0x958d81, envIntensity: 0.40 });
     M.floor = mat(T.floorTiles({ seed: 41, n: 3 }),
-      { repeat: [8, 8], normalScale: 1.0, envIntensity: 0.3 });
+      { repeat: [17, 17], normalScale: 1.0, envIntensity: 0.3 });
     M.hearth = mat(T.hearth(),
       { repeat: [2, 2], normalScale: 1.2, envIntensity: 0.2 });
+    M.hearthArch = mat(T.hearth(),
+      { repeat: [2.6, 1.4], normalScale: 1.3, color: 0x8a7b68, envIntensity: 0.12 });
+    // 炉床と窯内は灰色の耐火レンガ。オレンジは炎の光が作る（塗らない）
     M.hearthIn = mat(T.hearth(),
-      { repeat: [3, 3], normalScale: 1.3, color: 0x4e3b2a, envIntensity: 0.02 });
+      { repeat: [5.0, 5.0], normalScale: 1.3, color: 0x352e26, envIntensity: 0.01 });
+    // 炉床の円盤は窯口より手前へはみ出すので、正面で切り落とす
+    M.hearthIn.clippingPlanes = [clipFace];
+    M.hearthIn.side = THREE.DoubleSide;
     M.hearthWall = mat(T.hearth(),
-      { repeat: [3, 2], normalScale: 1.0, color: 0x241409, envIntensity: 0.02 });
+      { repeat: [3, 2], normalScale: 1.0, color: 0x1c1814, envIntensity: 0.01 });
     M.hearthWall.clippingPlanes = [clipFace];
     M.hearthWall.side = THREE.BackSide;
     M.tileBand = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.25, metalness: 0, envMapIntensity: 0.7 });
     M.metal = new THREE.MeshStandardMaterial({ color: 0xc8ccd2, roughness: 0.3, metalness: 0.85, envMapIntensity: 0.6 });
     M.coat = new THREE.MeshStandardMaterial({ color: 0xf3ede0, roughness: 0.85, envMapIntensity: 0.4 });
+    M.sleeve = new THREE.MeshStandardMaterial({ color: 0xdcd3c2, roughness: 0.88, envMapIntensity: 0.35 });
+    M.cuff = new THREE.MeshStandardMaterial({ color: 0xe4759f, roughness: 0.7, envMapIntensity: 0.4 });
     M.apron = new THREE.MeshStandardMaterial({ color: 0xe4759f, roughness: 0.8, envMapIntensity: 0.4 });
     M.skin = new THREE.MeshStandardMaterial({ color: 0xf0c9a8, roughness: 0.75, envMapIntensity: 0.4 });
     M.hair = new THREE.MeshStandardMaterial({ color: 0x3a241a, roughness: 0.7, envMapIntensity: 0.4 });
@@ -154,18 +168,18 @@
     const floor = add(new THREE.PlaneGeometry(16, 16), M.floor, 0, 0, -1, false, true);
     floor.rotation.x = -Math.PI / 2;
     // 奥の壁
-    const back = add(new THREE.PlaneGeometry(16, 6), M.brick, 0, 3, -4.2, false, true);
+    const back = add(new THREE.PlaneGeometry(16, 6), M.brickWall, 0, 3, -4.2, false, true);
     // 左右の壁
-    const wl = add(new THREE.PlaneGeometry(12, 6), M.brick, -4.6, 3, -1, false, true);
+    const wl = add(new THREE.PlaneGeometry(12, 6), M.brickWall, -4.6, 3, -1, false, true);
     wl.rotation.y = Math.PI / 2;
-    const wr = add(new THREE.PlaneGeometry(12, 6), M.brick, 4.6, 3, -1, false, true);
+    const wr = add(new THREE.PlaneGeometry(12, 6), M.brickWall, 4.6, 3, -1, false, true);
     wr.rotation.y = -Math.PI / 2;
     // 天井
     const ceil = add(new THREE.PlaneGeometry(16, 16), M.plaster, 0, 3.7, -1, false, false);
     ceil.rotation.x = Math.PI / 2;
     // 天井の梁
     for (let i = -2; i <= 2; i++) {
-      const b = add(G.box(0.12, 0.17, 9, 0.02), M.oakDark, i * 1.6, 3.55, -1.8, true, true);
+      add(G.box(0.12, 0.17, 9, 0.02), M.oakDark, i * 1.6, 3.55, -1.8, false, true);
     }
 
     /* ================== 石窯 ================== */
@@ -174,10 +188,13 @@
     root.add(O);
     S.oven = O;
 
-    // 台座（石積み）
+    /* 台座（石積み）。前面 0.30 m ぶんは薪置き場の空洞にするため、
+       本体はそこまでで止め、まわりだけを詰め物でふさぐ。            */
     const baseH = L.hearthY;
-    const base = new THREE.Mesh(G.box(2.05, baseH, 1.72, 0.03), M.brick);
-    base.position.set(0, baseH / 2, -0.20);
+    const nicheZ = 0.66;          // 台座の前面（ローカル）
+    const nicheD = 0.30;          // 薪置き場の奥ゆき
+    const base = new THREE.Mesh(G.box(2.05, baseH, 1.42, 0.03), M.brick);
+    base.position.set(0, baseH / 2, nicheZ - nicheD - 1.42 / 2);
     base.castShadow = base.receiveShadow = true;
     O.add(base);
 
@@ -193,24 +210,41 @@
       O.add(side);
     }
 
-    // 薪置き場（台座前面のアーチ）
-    const nicheZ = 0.66;   // 台座の前面（ローカル）
+    // 薪置き場（台座前面のアーチ）— 奥に本当に空洞がある
+    const nicheW = 1.30, nicheH = 0.86, nicheY = 0.06;
     const niche = new THREE.Mesh(
-      G.holedWall({ w: 1.30, h: 0.86, holeW: 0.94, holeH: 0.70, holeY: 0.06, thick: 0.30 }),
+      G.holedWall({ w: nicheW, h: nicheH, holeW: 0.94, holeH: 0.70, holeY: 0.06, thick: nicheD }),
       M.brick);
-    niche.position.set(0, 0.06, nicheZ - 0.30);
+    niche.position.set(0, nicheY, nicheZ - nicheD);
     niche.castShadow = niche.receiveShadow = true;
     O.add(niche);
-    const nicheBack = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.8), M.charcoal);
-    nicheBack.position.set(0, 0.44, nicheZ - 0.40);
+    // アーチのまわりの詰め物（左右・上・下）
+    const fillZ = nicheZ - nicheD / 2;
+    for (let sgn = -1; sgn <= 1; sgn += 2) {
+      const f = new THREE.Mesh(G.box((2.05 - nicheW) / 2, baseH, nicheD, 0.02), M.brick);
+      f.position.set(sgn * (nicheW + (2.05 - nicheW) / 2) / 2, baseH / 2, fillZ);
+      f.castShadow = f.receiveShadow = true;
+      O.add(f);
+    }
+    const nicheTop = new THREE.Mesh(G.box(nicheW, baseH - nicheY - nicheH, nicheD, 0.02), M.brick);
+    nicheTop.position.set(0, (nicheY + nicheH + baseH) / 2, fillZ);
+    nicheTop.castShadow = nicheTop.receiveShadow = true;
+    O.add(nicheTop);
+    const sillBox = new THREE.Mesh(G.box(nicheW, nicheY, nicheD, 0.01), M.brick);
+    sillBox.position.set(0, nicheY / 2, fillZ);
+    sillBox.receiveShadow = true;
+    O.add(sillBox);
+    // 空洞の奥（台座の前面がそのまま奥の壁）
+    const nicheBack = new THREE.Mesh(new THREE.PlaneGeometry(0.98, 0.74), M.charcoal);
+    nicheBack.position.set(0, 0.44, nicheZ - nicheD + 0.004);
     nicheBack.receiveShadow = true;
     O.add(nicheBack);
     for (let row = 0; row < 4; row++) {
       for (let i = 0; i < 4; i++) {
         const r = 0.048 + (i % 2) * 0.007;
-        const lg = new THREE.Mesh(G.log(r, 0.52, row * 7 + i), M.oakDark);
-        lg.position.set(-0.27 + i * 0.18 + (row % 2) * 0.04, 0.12 + row * 0.108, nicheZ - 0.20);
-        lg.rotation.y = Math.PI / 2;
+        const lg = new THREE.Mesh(G.log(r, 0.26, row * 7 + i), M.oakDark);
+        lg.position.set(-0.27 + i * 0.18 + (row % 2) * 0.04, 0.12 + row * 0.108, nicheZ - nicheD / 2);
+        lg.rotation.y = Math.PI / 2;                 // 木口を手前へ
         lg.castShadow = lg.receiveShadow = true;
         O.add(lg);
       }
@@ -234,51 +268,53 @@
     outer.position.set(0, L.hearthY - 0.01, 0);
     outer.castShadow = outer.receiveShadow = true;
     O.add(outer);
-    // ドームの根元を隠す帯
-    const skirt = new THREE.Mesh(new THREE.CylinderGeometry(0.955, 1.0, 0.10, 44, 1, true), M.plasterDome);
-    skirt.position.set(0, L.hearthY + 0.03, 0);
+    // ドームの根元を包む漆喰の裾（断熱材を塗り込めた「腰」）
+    const skirt = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.86, 0.94, 0.34, 44, 1, true), M.plasterDome);
+    skirt.position.set(0, L.hearthY + 0.15, 0);
     skirt.castShadow = skirt.receiveShadow = true;
     O.add(skirt);
 
-    // 正面：ドームを切った断面（半円）に窯口をあける
-    const cut = (L.faceZ - L.ovenZ);                 // 中心から手前へ
-    const chord = Math.sqrt(Math.max(0.02, L.domeOuter * L.domeOuter - cut * cut));
-    const faceW = chord * 2 * 0.99;
-    const faceH = chord * L.domeSquash * 0.99;
+    /* 正面：ドームと裾を切った断面をまとめて塞ぐ厚い漆喰の壁。
+       ドームと同じ材なので継ぎ目が出ず、窯全体がひとつの塊に見える。
+       材質が変わるのは窯口を囲む耐火レンガのアーチだけ。            */
+    const cut = (L.faceZ - L.ovenZ);                 // ドーム中心から手前へ
+    const domeBaseY = L.hearthY - 0.01;              // 外ドームの底面
+    const sill = (L.hearthY + 0.03) - domeBaseY;     // 炉床の高さ（窯口の下端）
     const face = new THREE.Mesh(
-      G.holedWall({ w: faceW, h: faceH, outerArch: true, holeW: L.mouthW, holeH: L.mouthH, holeY: 0, thick: L.faceThick }),
-      M.brick);
-    face.position.set(0, L.hearthY + 0.03, cut - L.faceThick);
+      G.holedWall({
+        ellipse: [0.722, 0.650],                     // ドーム断面(0.711x0.640)と裾(0.698)をふさぐ最小限
+        holeW: L.mouthW, holeH: L.mouthH, holeY: sill, thick: L.faceThick
+      }),
+      M.plasterFace);
+    face.position.set(0, domeBaseY, cut - L.faceThick - 0.012);
     face.castShadow = face.receiveShadow = true;
     O.add(face);
     S.ovenFace = face;
 
-    // 窯口を囲むレンガのアーチ帯
+    // 窯口を囲む耐火レンガのアーチ（迫石）
     const band = new THREE.Mesh(
-      G.archBand(L.mouthW + 0.02, L.mouthH + 0.01, 0.085, 0.05),
-      M.hearth);
-    band.position.set(0, L.hearthY + 0.03, cut - 0.002);
+      G.archBand(L.mouthW + 0.02, L.mouthH + 0.01, 0.085, 0.055),
+      M.hearthArch);
+    band.position.set(0, L.hearthY + 0.03, cut - 0.004);
     band.castShadow = band.receiveShadow = true;
     O.add(band);
+    // 窯口のトンネルの内側も耐火レンガで張る（漆喰が覗かないように）
+    const throat = new THREE.Mesh(
+      G.archBand(L.mouthW - 0.006, L.mouthH - 0.006, 0.05, L.faceThick + 0.02),
+      M.hearthArch);
+    throat.position.set(0, L.hearthY + 0.03, cut - L.faceThick - 0.016);
+    throat.receiveShadow = true;
+    O.add(throat);
 
-    // 窯口まわりのすす
-    const sootMat = new THREE.MeshBasicMaterial({
-      map: new THREE.CanvasTexture(T.sootAlpha()),
-      transparent: true, depthWrite: false, opacity: 0.7
-    });
-    sootMat.map.encoding = THREE.sRGBEncoding;
-    const soot = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 0.60), sootMat);
-    soot.position.set(0, L.hearthY + 0.52, cut + 0.004);
-    soot.renderOrder = 2;
-    O.add(soot);
 
     // 飾りタイル帯（台座の縁）
-    const rainbow = [0xf07ba0, 0xe8963c, 0xe3c246, 0x6fae5c, 0x5b9ec4, 0x9a82c0];
+    const rainbow = [0xd4547f, 0xd2762a, 0xc9a52c, 0x4f8f45, 0x3f7ba6, 0x7a5fa8];
     for (let i = -6; i <= 6; i++) {
       const t = new THREE.Mesh(G.box(0.135, 0.105, 0.028, 0.010),
         new THREE.MeshStandardMaterial({
-          color: rainbow[((i % 6) + 6) % 6], roughness: 0.14,
-          metalness: 0.0, envMapIntensity: 0.9
+          color: rainbow[((i % 6) + 6) % 6], roughness: 0.30,
+          metalness: 0.0, envMapIntensity: 0.45
         }));
       t.position.set(i * 0.148, L.hearthY - 0.085, nicheZ + 0.016);
       t.castShadow = true;
@@ -286,14 +322,14 @@
     }
 
     // 煙突
-    const chim = new THREE.Mesh(G.box(0.26, 0.62, 0.26, 0.02), M.brick);
-    chim.position.set(0.0, L.hearthY + 0.98, -0.30);
+    const chim = new THREE.Mesh(G.box(0.30, 1.90, 0.30, 0.02), M.plaster);
+    chim.position.set(0.0, L.hearthY + 1.74, -0.34);   // 窯内へ突き出さない高さ
     chim.castShadow = chim.receiveShadow = true;
     O.add(chim);
-    const cap = new THREE.Mesh(G.box(0.36, 0.06, 0.36, 0.012), M.brick);
-    cap.position.set(0.0, L.hearthY + 1.32, -0.30);
-    cap.castShadow = true;
-    O.add(cap);
+    const chimBand = new THREE.Mesh(G.box(0.38, 0.07, 0.38, 0.012), M.brick);
+    chimBand.position.set(0.0, L.hearthY + 0.86, -0.34);
+    chimBand.castShadow = true;
+    O.add(chimBand);
 
     /* ================== 作業台 ================== */
     const C = new THREE.Group();
@@ -368,6 +404,7 @@
     flourDecal.position.set(L.boardX, L.counterY + 0.0295, L.boardZ);
     flourDecal.renderOrder = 1;
     root.add(flourDecal);
+    S.flourDecal = flourDecal;
 
     /* ================== 小道具 ================== */
     // 粉袋
@@ -480,7 +517,7 @@
     for (let i = 0; i <= 10; i++) {
       const t = i / 10;
       const y = t * 0.62;
-      const r = 0.19 + Math.sin(t * Math.PI) * 0.035 - t * 0.02;
+      const r = 0.163 + Math.sin(t * Math.PI) * 0.030 - t * 0.018;
       torsoPts.push(new THREE.Vector2(r, y));
     }
     const torso = new THREE.Mesh(new THREE.LatheGeometry(torsoPts, 28), M.coat);
@@ -490,13 +527,13 @@
     g.add(torso);
 
     // エプロン
-    const apron = new THREE.Mesh(new THREE.CylinderGeometry(0.205, 0.225, 0.52, 24, 1, true), M.apron);
+    const apron = new THREE.Mesh(new THREE.CylinderGeometry(0.176, 0.196, 0.52, 24, 1, true), M.apron);
     apron.position.set(0, 0.86, 0.02);
     apron.scale.z = 0.8;
     apron.material.side = THREE.DoubleSide;
     apron.castShadow = true;
     g.add(apron);
-    const apronStrap = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.012, 6, 24, Math.PI), M.apron);
+    const apronStrap = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.012, 6, 24, Math.PI), M.apron);
     apronStrap.position.set(0, 1.30, 0.0);
     apronStrap.rotation.x = Math.PI / 2;
     apronStrap.rotation.z = Math.PI;
@@ -554,26 +591,47 @@
     puff.add(top);
     g.add(puff);
 
-    // 腕（2 関節）
+    // 腕（2 関節）。肩・肘に球を入れて胴とつなげる
     function arm(side) {
       const grp = new THREE.Group();
-      const upper = new THREE.Mesh(new THREE.CapsuleGeometry(0.05, 0.24, 5, 12), M.coat);
+      const upper = new THREE.Mesh(new THREE.CapsuleGeometry(0.055, 0.20, 5, 12), M.sleeve);
       upper.castShadow = true;
-      const fore = new THREE.Mesh(new THREE.CapsuleGeometry(0.045, 0.22, 5, 12), M.coat);
+      const fore = new THREE.Mesh(new THREE.CapsuleGeometry(0.046, 0.19, 5, 12), M.sleeve);
       fore.castShadow = true;
+      const elbow = new THREE.Mesh(new THREE.SphereGeometry(0.049, 12, 9), M.sleeve);
+      elbow.castShadow = true;
       const hand = new THREE.Mesh(new THREE.SphereGeometry(0.052, 14, 10), M.skin);
       hand.scale.set(1, 0.82, 0.7);
       hand.castShadow = true;
-      grp.add(upper); grp.add(fore); grp.add(hand);
-      return { grp: grp, upper: upper, fore: fore, hand: hand, side: side };
+      const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.050, 0.050, 0.032, 12), M.cuff);
+      cuff.castShadow = true;
+      grp.add(upper); grp.add(fore); grp.add(elbow); grp.add(hand); grp.add(cuff);
+      return { grp: grp, upper: upper, fore: fore, elbow: elbow, hand: hand, cuff: cuff, side: side };
     }
     const armL = arm(-1), armR = arm(1);
     g.add(armL.grp); g.add(armR.grp);
 
+    // 肩（三角筋）— 胴と腕の継ぎ目を埋める
+    const shoulderY = 1.285;
+    for (let s = -1; s <= 1; s += 2) {
+      const d = new THREE.Mesh(new THREE.SphereGeometry(0.072, 16, 12), M.coat);
+      d.position.set(s * 0.168, shoulderY + 0.012, 0.005);
+      d.scale.set(1, 0.94, 0.86);
+      d.castShadow = true;
+      g.add(d);
+    }
+    // 肩をつなぐ横棒（コートの肩線）
+    const yoke = new THREE.Mesh(new THREE.CapsuleGeometry(0.062, 0.20, 6, 14), M.coat);
+    yoke.rotation.z = Math.PI / 2;
+    yoke.position.set(0, shoulderY + 0.012, 0.005);
+    yoke.scale.set(1, 1, 0.86);
+    yoke.castShadow = true;
+    g.add(yoke);
+
     return {
       group: g, armL: armL, armR: armR,
-      shoulderL: new THREE.Vector3(-0.20, 1.30, 0.0),
-      shoulderR: new THREE.Vector3(0.20, 1.30, 0.0),
+      shoulderL: new THREE.Vector3(-0.188, 1.285, 0.005),
+      shoulderR: new THREE.Vector3(0.188, 1.285, 0.005),
       upperLen: 0.29, foreLen: 0.27,
       height: H
     };
@@ -607,6 +665,11 @@
     place(a.upper, shoulderLocal, elbow);
     place(a.fore, elbow, hand);
     a.hand.position.copy(hand);
+    if (a.elbow) a.elbow.position.copy(elbow);
+    if (a.cuff) {
+      a.cuff.position.copy(elbow).lerp(hand, 0.86);
+      a.cuff.quaternion.copy(a.fore.quaternion);
+    }
     return hand;
   };
 
@@ -617,7 +680,9 @@
     dir.normalize();
     _q.setFromUnitVectors(_up, dir);
     mesh.quaternion.copy(_q);
-    mesh.scale.y = Math.max(0.2, len / (mesh.geometry.parameters.length + mesh.geometry.parameters.radius * 2));
+    const pr = mesh.geometry.parameters;
+    const base = (pr.height !== undefined ? pr.height : pr.length) + pr.radius * 2;
+    mesh.scale.y = Math.max(0.2, len / (base || 1));
   }
 
 })();

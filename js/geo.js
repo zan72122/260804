@@ -32,6 +32,19 @@
     return s;
   };
 
+  /* 半楕円（ドームを切った断面にぴったり重ねるための外形） */
+  G.halfEllipseShape = function (rx, ry) {
+    const s = new THREE.Shape();
+    const n = 48;
+    s.moveTo(-rx, 0);
+    for (let i = 1; i <= n; i++) {
+      const a = Math.PI - (i / n) * Math.PI;
+      s.lineTo(Math.cos(a) * rx, Math.sin(a) * ry);
+    }
+    s.lineTo(-rx, 0);
+    return s;
+  };
+
   /* 角の丸い矩形シェイプ */
   G.roundShape = function (w, h, r) {
     const s = new THREE.Shape();
@@ -51,13 +64,15 @@
   /* 穴あきの厚い壁。outer が 'arch' なら外形も半円頭にする。
      形の原点は「床の高さ」＝ y=0 に置く。 */
   G.holedWall = function (opt) {
-    const outer = opt.outerArch
+    const outer = opt.ellipse
+      ? G.halfEllipseShape(opt.ellipse[0], opt.ellipse[1])
+      : opt.outerArch
       ? G.archShape(opt.w, opt.h)
       : (function () {
         const s = G.roundShape(opt.w, opt.h, 0.03);
         s.getPoints(); return s;
       })();
-    if (!opt.outerArch) {
+    if (!opt.outerArch && !opt.ellipse) {
       // roundShape は中心原点なので、床基準に移す
       const pts = outer.getPoints(48);
       const s2 = new THREE.Shape();
@@ -219,10 +234,23 @@
   G.topping = function (type) {
     let g;
     switch (type) {
-      case 'cheese':
-        g = new THREE.SphereGeometry(0.5, 12, 8);
-        g.scale(1, 0.55, 1);
+      case 'cheese': {
+        // ちぎったモッツァレラ：真円にせず、ふちを崩す
+        g = new THREE.SphereGeometry(0.5, 14, 9);
+        const cp = g.attributes.position;
+        const cr = U.mulberry32(77);
+        const w = [];
+        for (let i = 0; i < 8; i++) w.push(cr() - 0.5);
+        for (let i = 0; i < cp.count; i++) {
+          const x = cp.getX(i), z = cp.getZ(i);
+          const a = Math.atan2(z, x);
+          const k = 1 + Math.sin(a * 3 + w[0] * 6) * 0.13 + Math.sin(a * 5 - w[1] * 6) * 0.08;
+          cp.setX(i, x * k); cp.setZ(i, z * k);
+          cp.setY(i, cp.getY(i) * (0.52 + Math.sin(a * 2 + w[2] * 5) * 0.06));
+        }
+        g.computeVertexNormals();
         break;
+      }
       case 'tomato':
         g = new THREE.CylinderGeometry(0.5, 0.48, 0.24, 20, 1);
         break;

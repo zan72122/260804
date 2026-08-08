@@ -225,6 +225,7 @@
       type: type, x: mx, y: my,
       r: (TOP_R[type] || 20) * U.rand(0.85, 1.14),
       rot: U.rand(0, TAU), tilt: U.rand(-0.25, 0.25),
+      ax: U.rand(0.76, 1.28), az: U.rand(0.76, 1.28),
       melt: 0, drop: 1, seed: Math.random()
     };
     this.toppings.push(t);
@@ -641,7 +642,7 @@
         } else {
           sy *= 0.9 - t.melt * 0.25;
         }
-        sx *= (1 + t.drop * 0.35); sz *= (1 + t.drop * 0.35);
+        sx *= (1 + t.drop * 0.35) * (t.ax || 1); sz *= (1 + t.drop * 0.35) * (t.az || 1);
         _pos.set(t.x * MS, (surf + drop) * MS + sy * 0.42, t.y * MS);
         _eul.set(t.tilt * (1 - t.melt), t.rot, t.tilt * 0.6 * (1 - t.melt));
         _qt.setFromEuler(_eul);
