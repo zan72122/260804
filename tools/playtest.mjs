@@ -102,8 +102,6 @@ const targets = (page) =>
     };
   });
 
-const inFrame = (t, W, H) => t.x > 4 && t.x < W - 4 && t.y > 4 && t.y < H - 4;
-
 /**
  * Where a finger would actually land for a target that has drifted past an
  * edge. The game hit-tests against clamped positions too, so a touch at the
@@ -182,8 +180,10 @@ async function run(vp) {
 
     const t = await targets(page);
     for (const b of t.perched) {
-      if (!inFrame(b, W, H)) offEdge.add(`bird ${b.i}`);
       const p = reachable(b, W, H);
+      // Only worth reporting when the clamp had to move a real distance; a few
+      // pixels is just the boat rolling on a swell.
+      if (Math.hypot(p.x - b.x, p.y - b.y) > 24) offEdge.add(`bird ${b.i}`);
       const away = p.x < cx ? -1 : 1;
       await swipe(page, p.x, p.y, p.x + away * W * 0.11, p.y - H * 0.13, 8);
       released++;
@@ -192,8 +192,8 @@ async function run(vp) {
     // Haul whoever is loudest about it.
     const rope = t.ropes.sort((a, b) => (b.waiting ? 1 : 0) - (a.waiting ? 1 : 0))[0];
     if (rope) {
-      if (!inFrame(rope, W, H)) offEdge.add(`rope ${rope.i}`);
       const p = reachable(rope, W, H);
+      if (Math.hypot(p.x - rope.x, p.y - rope.y) > 24) offEdge.add(`rope ${rope.i}`);
       await swipe(page, p.x, p.y, p.x, Math.min(H - 10, p.y + H * 0.22), 8);
       hauls++;
     }

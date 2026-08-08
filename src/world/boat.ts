@@ -142,8 +142,13 @@ export class Boat {
       const z = perchZ[i];
       const t = 0.5 - z / HULL.length;
       const sec = hullSection(t, HULL);
-      const side = i % 2 === 0 ? -1 : 1;
-      this.perchSlots.push(new Vector3(side * sec.halfW * 0.94, sec.sheer + 0.06, z));
+      // Starboard is the camera side in both layouts, so the perches nearest
+      // the stern — the ones most likely to slide off the edge of a tall
+      // portrait frame — go there.
+      const side = i % 2 === 0 ? 1 : -1;
+      // Slightly inboard of the rail, which both looks like a bird gripping
+      // the gunwale and keeps the port-side perches clear of the frame edge.
+      this.perchSlots.push(new Vector3(side * sec.halfW * 0.84, sec.sheer + 0.05, z));
     }
 
     // ---- the catch basket -------------------------------------------------
