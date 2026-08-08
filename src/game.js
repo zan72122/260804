@@ -535,6 +535,13 @@ export class Game {
   onUp() {
     this.lastPaint = null;
     if (this.state === 'wipe') this.audio.squeegee(0, false);
+    // A plain tap still pays out a little rope, so a player who only taps
+    // never gets stuck.
+    if (this.state === 'descend' && this.ptr.moved < 14) {
+      this.vel = Math.max(this.vel, 0.85);
+      this.stillTime = 0;
+      this.audio.rope(0.85);
+    }
   }
 
   _tapBuckle(x, y) {

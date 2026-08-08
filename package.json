@@ -1,4 +1,13 @@
 {
+  "name": "kirakira-mado-souji",
+  "version": "1.0.0",
+  "private": true,
+  "description": "High-rise rope-access window cleaning game for four-year-olds",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node tools/logic.mjs",
+    "shots": "node tools/shoot.mjs"
+  },
   "devDependencies": {
     "esbuild": "^0.28.1",
     "playwright": "^1.62.1"
