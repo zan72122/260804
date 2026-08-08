@@ -84,6 +84,61 @@
     return t;
   }
 
+  /* 見本のピザ。描いた絵ではなく、小さな本物として作る。
+     平らな絵を 3D の皿に貼ると、そこだけ別の世界の記号になり、
+     「これは選択 UI だ」と最初の画面で宣言してしまう。            */
+  const MINI_COL = {
+    cheese: 0xf7edd8, tomato: 0xcf3a2b, basil: 0x4f9a44, corn: 0xf2c33c,
+    pepperR: 0xd8483a, pepperY: 0xefb73a, pepperG: 0x5aa653,
+    olive: 0x3f3d32, broccoli: 0x5c9a52, mushroom: 0xd9c3a0
+  };
+  const miniMats = {};
+  function miniMat(type) {
+    if (!miniMats[type]) {
+      miniMats[type] = new THREE.MeshStandardMaterial({
+        color: MINI_COL[type] || 0xdddddd,
+        roughness: type === 'cheese' ? 0.42 : 0.62,
+        envMapIntensity: 0.4
+      });
+    }
+    return miniMats[type];
+  }
+  function miniPizza(recipe, R) {
+    const grp = new THREE.Group();
+    const M = PZ.scene3.mats;
+    // 焼けた生地：中央は平ら、ふちはふくらんでいる
+    const doughMat = new THREE.MeshStandardMaterial({ color: 0xd9a961, roughness: 0.78, envMapIntensity: 0.3 });
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(R * 0.94, R * 0.88, R * 0.13, 40), doughMat);
+    base.position.y = R * 0.065;
+    base.castShadow = base.receiveShadow = true;
+    grp.add(base);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(R * 0.90, R * 0.115, 8, 40), doughMat);
+    rim.rotation.x = Math.PI / 2;
+    rim.position.y = R * 0.13;
+    rim.castShadow = true;
+    grp.add(rim);
+    const sauce = new THREE.Mesh(new THREE.CylinderGeometry(R * 0.80, R * 0.80, R * 0.03, 36),
+      new THREE.MeshStandardMaterial({ color: 0xa8281c, roughness: 0.45, envMapIntensity: 0.4 }));
+    sauce.position.y = R * 0.14;
+    grp.add(sauce);
+    // 具材は本物と同じ形を小さくして散らす
+    const items = recipe.items;
+    const n = recipe.rainbow ? 16 : 11;
+    for (let i = 0; i < n; i++) {
+      const a = i * 2.399 + (recipe.rainbow ? 0 : 0.6);
+      const rr = Math.sqrt((i + 0.6) / n) * R * 0.66;
+      const type = items[i % items.length];
+      const s = R * (type === 'cheese' ? 0.30 : 0.26);
+      const m = new THREE.Mesh(G.topping(type), miniMat(type));
+      m.scale.set(s, s * (type === 'cheese' ? 0.7 : 0.9), s);
+      m.position.set(Math.cos(a) * rr, R * 0.16, Math.sin(a) * rr);
+      m.rotation.y = a * 1.7;
+      m.castShadow = true;
+      grp.add(m);
+    }
+    return grp;
+  }
+
   St.CHOOSE = {
     cam: 'choose',
     enter(g) {
@@ -100,12 +155,8 @@
           const plate = new THREE.Mesh(G.plate(0.115, 0.016), M.porcelain);
           plate.castShadow = plate.receiveShadow = true;
           grp.add(plate);
-          const pz = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.088, 0.082, 0.016, 40),
-            new THREE.MeshStandardMaterial({ map: miniPizzaTex(RECIPES[i]), roughness: 0.7 })
-          );
-          pz.position.y = 0.020;
-          pz.castShadow = true;
+          const pz = miniPizza(RECIPES[i], 0.092);
+          pz.position.y = 0.016;
           grp.add(pz);
           grp.userData.recipe = RECIPES[i];
           grp.userData.pick = plate;
@@ -1235,16 +1286,13 @@
         const grp = this.cards[i];
         while (grp.children.length > 1) grp.remove(grp.children[1]);
         const rec = i === 0 ? g.recipe : (i === 1 ? RECIPES[1] : RECIPES[3]);
-        const pz = new THREE.Mesh(new THREE.CylinderGeometry(0.062, 0.058, 0.013, 32),
-          new THREE.MeshStandardMaterial({ map: miniPizzaTex(rec), roughness: 0.7 }));
-        pz.position.y = 0.017;
-        pz.castShadow = true;
+        const pz = miniPizza(rec, 0.066);
+        pz.position.y = 0.014;
         grp.add(pz);
         if (i === 1) {
           for (let k = 0; k < 2; k++) {
-            const p2 = new THREE.Mesh(new THREE.CylinderGeometry(0.040, 0.037, 0.012, 24),
-              new THREE.MeshStandardMaterial({ map: miniPizzaTex(RECIPES[k === 0 ? 0 : 2]), roughness: 0.7 }));
-            p2.position.set((k ? 1 : -1) * 0.055, 0.017, 0.045);
+            const p2 = miniPizza(RECIPES[k === 0 ? 0 : 2], 0.044);
+            p2.position.set((k ? 1 : -1) * 0.055, 0.014, 0.045);
             grp.add(p2);
           }
         }
