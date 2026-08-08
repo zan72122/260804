@@ -77,6 +77,12 @@ export class LatheGrid {
     // bell is roughly twice as far around as it is tall, so mapping 0..1 both
     // ways smeared the grain into vertical streaks that read as cloth folds
     // rather than as clay.
+    //
+    // The count has to come out whole, though, or the texture does not meet
+    // itself where it wraps and leaves a seam straight down the bell.  Snapping
+    // to an even number costs a few percent of distortion and buys a body with
+    // no join in it.
+    aspect = Math.max(2, Math.round(aspect / 2) * 2);
     this.aspect = aspect;
     for (let r = 0; r < nr; r++) {
       for (let c = 0; c < nc; c++) {
