@@ -913,25 +913,27 @@ const furnace = {
       W.crucible.getWorldPosition(this._crucible ??= new THREE.Vector3());
       const drop = this._crucible.clone(); drop.y += 0.55;
 
-      if (T < 1.05) {                         // walking over, bending down
-        founderReach(W, smoothstep(0.55, 1.05, T) * 0.75);
-      } else if (T < 1.5) {                   // lifting it
-        founderReach(W, 0.75);
-        const k = smoothstep(0, 1, (T - 1.05) / 0.45);
+      if (T < 0.95) {                         // walking over, bending down
+        founderReach(W, smoothstep(0.5, 0.95, T) * 0.8);
+      } else if (T < 1.32) {                  // lifting it
+        founderReach(W, 0.8);
+        const k = smoothstep(0, 1, (T - 0.95) / 0.37);
         W.rig.arms[1].hand.getWorldPosition(_v);
         this.chosen.position.lerpVectors(from, _v, k);
-      } else if (T < 2.9) {                   // carrying it to the hearth
+      } else if (T < 2.55) {                  // carrying it to the hearth
         if (!this._walking2) {
           this._walking2 = true;
-          founderWalkTo(W, -4.75, 0.35, W.furnace.position.x, W.furnace.position.z, 0.95);
+          // right up at the mouth: he has to be able to actually reach the
+          // crucible, or the ingot leaves his hand and flies the last metre
+          founderWalkTo(W, -3.42, -0.74, W.furnace.position.x, W.furnace.position.z, 1.05);
           founderLook(W, this._crucible.x, this._crucible.y + 0.4, this._crucible.z);
         }
         founderReach(W, 0.62);
         W.rig.arms[1].hand.getWorldPosition(this.chosen.position);
         this.chosen.position.y += 0.05;
-      } else if (T < 3.5) {                   // reaching in and letting go
-        founderReach(W, 0.95);
-        const k = smoothstep(0, 1, (T - 2.9) / 0.6);
+      } else if (T < 3.15) {                  // reaching in and letting go
+        founderReach(W, 1.0);
+        const k = smoothstep(0, 1, (T - 2.55) / 0.6);
         W.rig.arms[1].hand.getWorldPosition(_v);
         this.chosen.position.lerpVectors(_v, drop, k);
         if (k >= 1 && this.chosen.visible) {
@@ -945,7 +947,7 @@ const furnace = {
           this._backAtPost = true;
           founderWalkTo(W, -4.95, 1.05, -3.85, -1.0);
         }
-        if (T > 4.4) {
+        if (T > 3.9) {
           g.scene.remove(this.chosen);
           this.ingots = this.ingots.filter((i) => i !== this.chosen);
           this.step = 'door';
@@ -1182,9 +1184,15 @@ const pour = {
     // ---- what the player can actually see of the fill ----
     const fillY = this.fill * this.H;
     rm.setMoldFill(fillY, clamp01(this.fill * 0.9 + this.flow * 0.2) * 0.85);
-    rm.sprueMelt.visible = this.fill > 0.965;
+    // The metal standing in the pouring cup used to blink into existence at
+    // 96 % full.  Nothing in a foundry appears; it arrives.  So the level
+    // climbs the inside of the cup over the last fifth of the pour, which is
+    // also the clearest signal the player gets that the flask below is full.
+    rm.sprueMelt.visible = this.fill > 0.78;
     if (rm.sprueMelt.visible) {
-      rm.sprueMelt.position.y = this.H + 0.02 + (this.fill - 0.965) * 6.0;
+      const k = clamp01((this.fill - 0.78) / 0.22);
+      rm.sprueMelt.position.y = this.H - 0.16 + k * 0.30;
+      rm.sprueMelt.scale.setScalar(lerp(0.62, 1.0, k));
     }
     g.hud.setProgress(this.fill, STEP_ICONS.pour);
     if (this.fill > 0.12) g.hud.suppress();
