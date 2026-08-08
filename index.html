@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>ろうと いろの ぬの — バティック・トゥリス</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#20160f">
+<meta name="description" content="A batik tulis game for very young children: draw with hot wax, dye the cloth, and discover the pattern the wax was hiding all along.">
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🪔</text></svg>">
+</head>
+<body>
+<canvas id="stage"></canvas>
+
+<div id="ui">
+
+  <!-- process chain: where we are in the batik sequence -->
+  <div id="chain" class="chain" aria-hidden="true">
+    <div class="step" data-step="wax1"><span class="ic">🖊️</span></div>
+    <div class="link"></div>
+    <div class="step" data-step="dip1"><span class="ic">🫙</span></div>
+    <div class="link"></div>
+    <div class="step" data-step="wax2"><span class="ic">🖊️</span></div>
+    <div class="link"></div>
+    <div class="step" data-step="dip2"><span class="ic">🫙</span></div>
+    <div class="link"></div>
+    <div class="step" data-step="lorod"><span class="ic">✨</span></div>
+  </div>
+
+  <!-- what the wax is holding on to right now -->
+  <div id="protect" class="protect hidden">
+    <div class="protect-label">ろうが まもって いる いろ</div>
+    <div class="protect-row">
+      <span class="chip" id="protect-chip"></span>
+      <span class="protect-wax">🕯️</span>
+    </div>
+  </div>
+
+  <div id="prompt" class="prompt hidden"><span id="prompt-text"></span></div>
+
+  <div id="waxmeter" class="waxmeter hidden">
+    <div class="waxmeter-bar"><i id="waxmeter-fill"></i></div>
+  </div>
+
+  <div id="actions" class="actions"></div>
+
+  <div id="topright" class="topright">
+    <button id="btn-sound" class="mini" aria-label="おと">🔊</button>
+    <button id="btn-info" class="mini" aria-label="このゲームについて">ⓘ</button>
+  </div>
+
+  <!-- motif chooser -->
+  <div id="picker" class="sheet hidden">
+    <h1>きょうは どの もようを つくる？</h1>
+    <div id="picker-grid" class="grid"></div>
+  </div>
+
+  <!-- the reveal legend: which wax saved which colour -->
+  <div id="legend" class="legend hidden">
+    <div class="legend-row"><span class="chip" id="lg1"></span><span class="lg-ic">🖊️1</span></div>
+    <div class="legend-row"><span class="chip" id="lg2"></span><span class="lg-ic">🖊️2</span></div>
+    <div class="legend-row"><span class="chip" id="lg3"></span><span class="lg-ic">—</span></div>
+  </div>
+
+  <!-- end of run -->
+  <div id="endbar" class="endbar hidden">
+    <button class="big" data-mode="same"><span>🔁</span>おなじ もよう</button>
+    <button class="big" data-mode="other"><span>🎨</span>べつの もよう</button>
+    <button class="big" data-mode="free"><span>✋</span>じゆうに</button>
+  </div>
+
+  <!-- grown-ups' note -->
+  <div id="info" class="sheet hidden">
+    <h1>Batik tulis — about this game</h1>
+    <div class="info-body">
+      <p><b>The mechanic is the craft.</b> Wax drawn with a <i>canting</i> seals the
+      cloth. Whatever colour the fibre is holding at that moment is saved. Each
+      dye bath darkens only the open cloth. When the wax is finally boiled away
+      (<i>nglorod</i>), it disappears — and the colours it protected are what you
+      see.</p>
+      <p><b>The real sequence this follows:</b> nglowong (first wax outline) →
+      medel (indigo bath) → mbironi (wax over the blue you want to keep) →
+      nyoga (soga brown bath) → nglorod (the wax is removed).</p>
+      <p><b>Motifs.</b> The shapes here are large, simple flowers, clouds, water,
+      birds and stars drawn in the spirit of Javanese and Cirebon batik families.
+      They are deliberately <i>not</i> reproductions of specific ceremonial
+      patterns such as parang or kawung, which carry court and family meaning.
+      Indonesian batik is on UNESCO's Representative List of the Intangible
+      Cultural Heritage of Humanity (2009).</p>
+      <p><b>Safety.</b> Real canting work uses wax at around 60–70°C. In this game
+      the robot handles every hot tool; the child's finger only guides its hand.
+      Nothing here can burn, spill or fail.</p>
+      <p class="small">No timers, no score, no way to ruin the cloth.</p>
+    </div>
+    <button id="info-close" class="big">とじる</button>
+  </div>
+
+  <div id="boot" class="boot">
+    <div class="boot-inner">
+      <div class="boot-title">ろうと いろの ぬの</div>
+      <div class="boot-sub">batik tulis</div>
+      <button id="boot-start" class="big start">はじめる</button>
+    </div>
+  </div>
+
+  <div id="fatal" class="fatal hidden"></div>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
