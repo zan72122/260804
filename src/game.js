@@ -407,6 +407,7 @@ export class Game {
   setState(s) {
     this.state = s;
     this.stateT = 0;
+    this._hold = 0;
     this.hud.setHint(
       s === 'harness' ? 'tap' :
       s === 'connect' ? 'drag' :
@@ -447,6 +448,9 @@ export class Game {
 
   _startFinale() {
     this.finaleT = 0;
+    this.grimeMesh.visible = false;
+    this.wetMesh.visible = false;
+    this.shine.visible = false;
     this.rainbow.visible = true;
     this.world.cleanY.value = 0;
     this.audio.fanfare();
@@ -592,6 +596,20 @@ export class Game {
     }
   }
 
+  /**
+   * Mean of a grid, optionally ignoring the outermost ring. The border of the
+   * pane sits under the gasket, so missing it must never block completion.
+   */
+  _coverage(arr, skipBorder) {
+    const G = this.gridN;
+    const a = skipBorder ? 1 : 0;
+    let s = 0, n = 0;
+    for (let j = a; j < G - a; j++) {
+      for (let i = a; i < G - a; i++) { s += arr[j * G + i]; n++; }
+    }
+    return n ? s / n : 0;
+  }
+
   _gridSample(arr, cx, cy) {
     const G = this.gridN, cell = GRIME_RES / G;
     const i = clamp(Math.floor(cx / cell), 0, G - 1);
@@ -625,9 +643,7 @@ export class Game {
     // Softening the grime while wet reads as the dirt loosening.
     this._gridAdd(this.dirt, cx, cy, R, -0.02, 0);
 
-    let s = 0;
-    for (let i = 0; i < this.wet.length; i++) s += this.wet[i];
-    this.wetFrac = s / this.wet.length;
+    this.wetFrac = this._coverage(this.wet, false);
 
     // Mist particles from the nozzle toward the glass.
     const nz = this.rig.sprayNozzleWorld;
@@ -641,10 +657,26 @@ export class Game {
       );
     }
 
-    if (this.wetFrac > 0.62) {
+    // Hold in the spray step for a few seconds even if the pane wets fast —
+    // spraying is half the fun.
+    if (this.wetFrac > 0.55 && this.stateT > 3.5) {
       this.audio.click(1.4, 0.6);
+      this._floodWet();
       this.setState('wipe');
     }
+  }
+
+  /**
+   * The water she has thrown at the pane runs together into one film. Without
+   * this, a patch the player never sprayed could never be squeegeed clean.
+   */
+  _floodWet() {
+    const ctx = this.wetCtx;
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = 'rgba(206,234,250,0.22)';
+    ctx.fillRect(0, 0, GRIME_RES, GRIME_RES);
+    this.wetTex.needsUpdate = true;
+    for (let i = 0; i < this.wet.length; i++) this.wet[i] = Math.max(this.wet[i], 0.5);
   }
 
   _wipe(cx, cy, world, isDown) {
@@ -690,12 +722,10 @@ export class Game {
     wctx.restore();
     this.wetTex.needsUpdate = true;
 
-    this._gridAdd(this.dirt, cx, cy, BLADE * 0.55, -0.85, 0);
-    this._gridAdd(this.wet, cx, cy, BLADE * 0.55, -0.9, 0);
+    this._gridAdd(this.dirt, cx, cy, BLADE * 0.68, -0.85, 0);
+    this._gridAdd(this.wet, cx, cy, BLADE * 0.68, -0.9, 0);
 
-    let s = 0;
-    for (let i = 0; i < this.dirt.length; i++) s += this.dirt[i];
-    const frac = 1 - s / this.dirt.length;
+    const frac = 1 - this._coverage(this.dirt, true);
     if (frac > this.cleanFrac + 0.05) {
       this.audio.chime(Math.min(9, Math.floor(frac * 9)), 0.16, 0.6);
     }
@@ -713,7 +743,7 @@ export class Game {
       }
     }
 
-    if (this.cleanFrac > 0.88) this._finishPane();
+    if (this.cleanFrac > 0.84) this._finishPane();
   }
 
   _finishPane() {
@@ -802,6 +832,7 @@ export class Game {
     }
     if (this.rig.descenderAttached >= 1 && !this._connected) {
       this._connected = true;
+      this._hold = 0.75;
       this.audio.click(0.7, 1.0);
       this.audio.sparkleRun(4, 4);
       const w = ringW.clone();
@@ -809,15 +840,19 @@ export class Game {
         this.stars.emit(w, V((Math.random() - 0.5) * 0.6, Math.random() * 0.5, (Math.random() - 0.5) * 0.6),
           0.6, 0.04, [1, 0.9, 0.65], 0.5);
       }
-      setTimeout(() => this.setState('edge'), 700);
+    }
+    if (this._connected && this._hold > 0) {
+      this._hold -= dt;
+      if (this._hold <= 0) this.setState('edge');
     }
   }
 
   _updEdge(dt) {
     this.marker.visible = false;
+    // Chevrons hanging just past the coping: this is where you are going.
     this.chev.visible = true;
-    this.chev.position.set(ANCHOR_X + 0.9, ROOF_Y + 0.7, 0.9);
-    this.chev.scale.set(1.1, 1.7, 1);
+    this.chev.position.set(ANCHOR_X, ROOF_Y + 0.45, 0.62);
+    this.chev.scale.set(0.72, 1.05, 1);
     this.chev.quaternion.copy(this.camera.quaternion);
 
     if (this.ptr.down && this.ptr.dy > 0) {
@@ -893,12 +928,16 @@ export class Game {
       if (!this.locked) {
         this.locked = true;
         this.vel = 0;
+        this._hold = 0.45;
         this.audio.rope(0);
         this.audio.lock();
         this.springY = -0.075; this.springV = 0.6;
         this.chev.visible = false;
-        setTimeout(() => { if (this.state === 'descend') this.setState('spray'); }, 420);
       }
+    }
+    if (this.locked && this._hold > 0) {
+      this._hold -= dt;
+      if (this._hold <= 0) this.setState('spray');
     }
   }
 

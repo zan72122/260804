@@ -85,7 +85,8 @@ await wait(600);
 await shot('06-atpane');
 
 // Play the spray + squeegee loop for every stop.
-for (let stop = 0; stop < 5; stop++) {
+const MAX_STOPS = parseInt(process.env.STOPS || '5', 10);
+for (let stop = 0; stop < MAX_STOPS; stop++) {
   // spray: scrub the pane in a lawnmower pattern
   for (let pass = 0; pass < 26; pass++) {
     const st = await page.evaluate(() => window.__game.state);
