@@ -127,7 +127,7 @@ export class World {
     const bounce = new THREE.HemisphereLight(0x9fc4ee, 0x6d6357, 0.55);
     this.scene.add(bounce);
 
-    this.scene.fog = new THREE.FogExp2(0xc9ccc7, 0.00160);
+    this.scene.fog = new THREE.FogExp2(0xb9c2c4, 0.00160);
   }
 
   // --- materials -----------------------------------------------------------

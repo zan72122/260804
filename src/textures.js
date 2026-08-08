@@ -140,13 +140,16 @@ export function sunDirection() {
 }
 
 export function makeSkyTexture(w = 1024, h = 512) {
-  const data = new Float32Array(w * h * 4);
+  // Half float rather than float: linear filtering of half-float textures is
+  // core in WebGL2, so this works on iOS without relying on an extension.
+  const data = new Uint16Array(w * h * 4);
+  const half = THREE.DataUtils.toHalfFloat;
   const sun = sunDirection();
 
   // Late-afternoon palette, linear-light values.
-  const zenith = [0.055, 0.165, 0.50];
-  const mid = [0.20, 0.44, 0.82];
-  const horizon = [0.98, 0.76, 0.58];
+  const zenith = [0.050, 0.150, 0.46];
+  const mid = [0.185, 0.400, 0.74];
+  const horizon = [0.76, 0.63, 0.55];
   const belowHz = [0.34, 0.34, 0.36];
 
   for (let y = 0; y < h; y++) {
@@ -159,8 +162,8 @@ export function makeSkyTexture(w = 1024, h = 512) {
       const up = clamp01(dy);
       let r, g, b;
       if (dy >= 0) {
-        const t = Math.pow(up, 0.30);
-        const t2 = Math.pow(up, 1.25);
+        const t = Math.pow(up, 0.22);
+        const t2 = Math.pow(up, 1.10);
         r = mix(mix(horizon[0], mid[0], t), zenith[0], t2);
         g = mix(mix(horizon[1], mid[1], t), zenith[1], t2);
         b = mix(mix(horizon[2], mid[2], t), zenith[2], t2);
@@ -194,7 +197,7 @@ export function makeSkyTexture(w = 1024, h = 512) {
           // Sunlit tops, cool shadowed undersides: the cue that sells depth.
           const shade = clamp01(0.30 + d * 0.9);
           const lit = clamp01(0.30 + Math.max(0, cosA) * 0.85) * shade;
-          const cr = mix(0.40, 2.05, lit), cg = mix(0.42, 1.78, lit), cb = mix(0.52, 1.48, lit);
+          const cr = mix(0.30, 1.32, lit), cg = mix(0.32, 1.18, lit), cb = mix(0.42, 1.02, lit);
           r = mix(r, cr, cov); g = mix(g, cg, cov); b = mix(b, cb, cov);
         }
       }
@@ -213,11 +216,14 @@ export function makeSkyTexture(w = 1024, h = 512) {
       }
 
       const i = (y * w + x) * 4;
-      data[i] = r; data[i + 1] = g; data[i + 2] = b; data[i + 3] = 1;
+      data[i] = half(Math.min(65000, r));
+      data[i + 1] = half(Math.min(65000, g));
+      data[i + 2] = half(Math.min(65000, b));
+      data[i + 3] = half(1);
     }
   }
 
-  const tex = new THREE.DataTexture(data, w, h, THREE.RGBAFormat, THREE.FloatType);
+  const tex = new THREE.DataTexture(data, w, h, THREE.RGBAFormat, THREE.HalfFloatType);
   tex.mapping = THREE.EquirectangularReflectionMapping;
   tex.colorSpace = THREE.NoColorSpace;
   tex.magFilter = THREE.LinearFilter;
