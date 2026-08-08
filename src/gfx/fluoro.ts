@@ -99,7 +99,7 @@ export class FluoroField {
           // restrained bloom — one very blurry tap, never a screen-wide wash
           vec3 halo = sampleField(base, 7.0);
           // out of focus, most of what you see IS the halo — that is the point
-          col += halo * (0.34 + (1.0 - f0) * 0.55 + uFlash * 0.7);
+          col += halo * (0.34 + (1.0 - f0) * 1.15 + uFlash * 0.7);
 
           // out of focus light is grey and formless; in focus it is saturated
           float f = f0;
@@ -115,7 +115,9 @@ export class FluoroField {
                          * (1.0 - smoothstep(uMaskR * 0.985, uMaskR * 1.02, rr));
           col *= inside;
           col += vec3(0.10, 0.16, 0.22) * edgeGlow * 0.8;
-          col += vec3(0.012, 0.018, 0.03) * inside;            // faint background glow
+          // out of focus the field must still obviously be *lit*: a blank black
+          // screen reads as "broken", not as "turn the knob"
+          col += vec3(0.014, 0.022, 0.036) * inside * (1.0 + (1.0 - f0) * 3.0);
 
           // sensor grain, only where there is signal
           float g = fract(sin(dot(vUv * 733.0 + uTime * 0.6, vec2(12.9898, 78.233))) * 43758.5453);

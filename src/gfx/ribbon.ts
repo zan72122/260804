@@ -27,11 +27,11 @@ export interface RibbonShape {
 
 /** Portrait: the ribbon climbs, so the finger on the wheel stays clear of it. */
 export const PORTRAIT_SHAPE: RibbonShape = {
-  theta0: 1.60, curve: 0.042, curve2: 0.0055, sectionLen: 0.2, width: 0.2,
+  theta0: 1.60, curve: 0.050, curve2: 0.0160, sectionLen: 0.18, width: 0.19,
 };
 /** Landscape: the same drape, leaned over so it reads across a wide screen. */
 export const LANDSCAPE_SHAPE: RibbonShape = {
-  theta0: 1.90, curve: 0.130, curve2: 0.0020, sectionLen: 0.21, width: 0.2,
+  theta0: 1.85, curve: 0.115, curve2: 0.0100, sectionLen: 0.19, width: 0.19,
 };
 
 const SEGS_PER_SECTION = 9;
@@ -136,7 +136,7 @@ export class Ribbon {
             ? vec4(0.0) : texture2D(uTissue, tuv);
 
           // ---- edges and joins ----------------------------------------------
-          float acrossEdge = smoothstep(0.60, 1.0, abs(vSide));
+          float acrossEdge = smoothstep(0.80, 1.0, abs(vSide));
           float jd = min(fract(su), 1.0 - fract(su));
           float joint = smoothstep(0.030, 0.0, jd);
 
@@ -161,25 +161,25 @@ export class Ribbon {
             (1.0 - smoothstep(0.0, 0.85, abs(su - uHighlight - 0.5)));
 
           // opacity stays tiny: this is a film, not a sheet of paper
-          float a = 0.055
-                  + fres * 0.20
-                  + acrossEdge * 0.16
-                  + tis.a * 0.17
-                  + joint * 0.05
-                  + hl * 0.12;
-          a = clamp(a, 0.0, 0.62) * uOpacity;
+          float a = 0.038
+                  + fres * 0.14
+                  + acrossEdge * 0.09
+                  + tis.a * 0.13
+                  + joint * 0.035
+                  + hl * 0.09;
+          a = clamp(a, 0.0, 0.42) * uOpacity;
 
           // Light the film adds without hiding anything behind it: the rim
           // catching the key light, the specular flash as it twists, the
           // brighter line where two sections join.
-          vec3 glow = vec3(1.0, 0.975, 0.94) * acrossEdge * (0.16 + 0.26 * sheen)
-                    + KEY_COL * spec * 0.55
-                    + vec3(0.86, 0.93, 1.0) * joint * 0.10
-                    + vec3(0.40, 1.0, 0.85) * hl * 0.30;
+          vec3 glow = vec3(1.0, 0.975, 0.94) * acrossEdge * (0.10 + 0.16 * sheen)
+                    + KEY_COL * spec * 0.34
+                    + vec3(0.86, 0.93, 1.0) * joint * 0.07
+                    + vec3(0.40, 1.0, 0.85) * hl * 0.26;
 
           // scattered light is boosted well past a plain alpha blend: a
           // backlit film glows, it does not merely tint
-          gl_FragColor = vec4((col * a * 1.9 + glow * 1.05) * uLight * uOpacity, a);
+          gl_FragColor = vec4((col * a * 1.55 + glow * 0.85) * uLight * uOpacity, a);
         }`,
     }));
 

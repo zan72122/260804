@@ -120,6 +120,8 @@ export interface Bath {
 
 export interface StainArea {
   group: THREE.Group;
+  /** where the slide sits when the player is not holding it */
+  slideRest: THREE.Group;
   dewax: THREE.Group;
   dewaxLiquid: THREE.Mesh;
   wells: THREE.Group[];
@@ -136,6 +138,8 @@ export interface Scope {
   knob: THREE.Group;
   knobHub: THREE.Object3D;
   lamp: THREE.PointLight;
+  /** small warm light on the knob so it is findable once the lights go out */
+  knobGlow: THREE.PointLight;
   body: THREE.Group;
 }
 
@@ -308,23 +312,21 @@ export function buildLab(specimen: Specimen, quality: 'low' | 'high'): Lab {
 
   // tissue island suspended in the wax: a soft solid so it reads from any
   // angle, plus the actual specimen image facing the player
-  const core = sph(1, new THREE.MeshStandardMaterial({
-    color: 0xc98da4, roughness: 0.75, metalness: 0,
-    transparent: true, opacity: 0.55, depthWrite: false,
-  }), 14);
-  core.scale.set(0.075, 0.062, 0.05);
-  core.renderOrder = 3;
-  block.add(core);
-  const blockTissue = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.19, 0.19),
-    new THREE.MeshBasicMaterial({
-      map: specimen.tissue, transparent: true, opacity: 0.75,
-      depthWrite: false, side: THREE.DoubleSide,
-    }),
-  );
-  blockTissue.position.set(0, 0, 0.02);
+  // Two crossed copies of the specimen image rather than an abstract blob:
+  // the shape the child sees suspended in the wax is literally the shape that
+  // will come off on the ribbon and light up down the microscope.
+  const tissueMat = new THREE.MeshBasicMaterial({
+    map: specimen.tissue, transparent: true, opacity: 0.8,
+    depthWrite: false, side: THREE.DoubleSide,
+  });
+  const blockTissue = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.2), tissueMat);
+  blockTissue.position.set(0, 0, 0.015);
   blockTissue.renderOrder = 5;
   block.add(blockTissue);
+  const blockTissueSide = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.2), tissueMat);
+  blockTissueSide.rotation.y = Math.PI / 2;
+  blockTissueSide.renderOrder = 5;
+  block.add(blockTissueSide);
 
   // "drop the block here" ghost target. depthTest off: the one thing the
   // player must find can never be hidden behind the machine.
@@ -346,22 +348,38 @@ export function buildLab(specimen: Specimen, quality: 'low' | 'high'): Lab {
   blockHolder.add(blockGhost);
 
   // --- blade: a wedge, not a plank, so the cutting edge reads at a glance
-  const bladeHolder = box(0.98, 0.22, 0.24, darkMat);
-  bladeHolder.position.set(0.0, 0.60, -0.30);
+  // The knife is staged for contrast: a near-black holder behind, a bright
+  // steel wedge in front of it, and one hard specular line along the working
+  // edge. Without that contrast the cutting edge simply disappears into the
+  // rest of the pale machine, and the middle link of the whole causal chain
+  // goes missing.
+  const knifeDark = metal(0x16212c, 0.35, 0.55);
+  const bladeHolder = box(1.02, 0.26, 0.26, knifeDark);
+  bladeHolder.position.set(0.0, 0.585, -0.30);
   mt.add(bladeHolder);
-  const steel = metal(0xeef6ff, 0.1, 1.0);
-  const bladeBack = box(0.9, 0.10, 0.2, steel);
-  bladeBack.position.set(0.0, 0.655, -0.14);
+  const holderLip = box(1.02, 0.05, 0.06, accentMat);
+  holderLip.position.set(0.0, 0.725, -0.18);
+  mt.add(holderLip);
+  const steel = metal(0xf2f9ff, 0.06, 1.0);
+  const bladeBack = box(0.92, 0.085, 0.2, steel);
+  bladeBack.position.set(0.0, 0.648, -0.14);
   mt.add(bladeBack);
-  const blade = box(0.9, 0.02, 0.12, steel);
-  blade.position.set(0.0, 0.655, 0.02);
+  const blade = box(0.92, 0.016, 0.13, steel);
+  blade.position.set(0.0, 0.655, 0.015);
   mt.add(blade);
-  const bladeGlow = box(0.9, 0.009, 0.02, new THREE.MeshBasicMaterial({ color: 0xf4fdff }));
-  bladeGlow.position.set(0.0, 0.6605, 0.078);
-  const cutZone = box(0.34, 0.004, 0.03, new THREE.MeshBasicMaterial({ color: 0x4de2c8, transparent: true, opacity: 0.7 }));
-  cutZone.position.set(-0.04, 0.6665, 0.082);
-  mt.add(cutZone);
+  // a dark sliver directly under the edge, so the bright line has something
+  // to read against however the light falls
+  const bladeShade = box(0.92, 0.022, 0.1, knifeDark);
+  bladeShade.position.set(0.0, 0.638, 0.03);
+  mt.add(bladeShade);
+  const bladeGlow = box(0.92, 0.012, 0.024, new THREE.MeshBasicMaterial({ color: 0xffffff }));
+  bladeGlow.position.set(0.0, 0.6635, 0.079);
   mt.add(bladeGlow);
+  const cutZone = box(0.30, 0.005, 0.034, new THREE.MeshBasicMaterial({
+    color: 0x5affe0, transparent: true, opacity: 0.85,
+  }));
+  cutZone.position.set(-0.04, 0.6695, 0.083);
+  mt.add(cutZone);
   // guard: the blade is covered except at the working edge — an adult's machine
   const guard = box(0.98, 0.075, 0.10, darkMat);
   guard.position.set(0.0, 0.775, -0.20);
@@ -446,8 +464,14 @@ export function buildLab(specimen: Specimen, quality: 'low' | 'high'): Lab {
   root.add(robot);
   const shellMat = plastic(0xf2f7fa, 0.45);
   const suitMat = plastic(0x2fb9a6, 0.5);
-  const torso = cyl(0.24, 0.30, 0.62, suitMat, seg);
-  torso.position.y = 0.72;
+  const footPlate = cyl(0.26, 0.32, 0.14, plastic(0x2c3d4f, 0.6), seg);
+  footPlate.position.y = 0.07;
+  robot.add(footPlate);
+  const stem = cyl(0.13, 0.16, 0.34, plastic(0x51687e, 0.5), seg);
+  stem.position.y = 0.26;
+  robot.add(stem);
+  const torso = cyl(0.24, 0.30, 0.5, suitMat, seg);
+  torso.position.y = 0.68;
   robot.add(torso);
   const shoulders = cyl(0.27, 0.27, 0.12, shellMat, seg);
   shoulders.position.y = 1.03;
@@ -543,7 +567,7 @@ export function buildLab(specimen: Specimen, quality: 'low' | 'high'): Lab {
   st.add(contactShadow(2.0, 0.45));
 
   const rack = box(0.98, 0.05, 0.98, metal(0xb7c4ce, 0.35, 0.8));
-  rack.position.set(0, 0.025, -0.02);
+  rack.position.set(0, 0.025, 0.10);
   st.add(rack);
 
   // Upright staining jars in a 2x2 block — how slides are really dipped, and
@@ -570,9 +594,9 @@ export function buildLab(specimen: Specimen, quality: 'low' | 'high'): Lab {
     const liq = new THREE.Mesh(
       new THREE.BoxGeometry(JAR_W - 0.04, 0.44, JAR_D - 0.04),
       new THREE.MeshStandardMaterial({
-        color, transparent: true, opacity: clear ? 0.22 : 0.55,
+        color, transparent: true, opacity: clear ? 0.26 : 0.74,
         roughness: 0.08, metalness: 0,
-        emissive: new THREE.Color(color).multiplyScalar(clear ? 0.08 : 0.34),
+        emissive: new THREE.Color(color).multiplyScalar(clear ? 0.12 : 0.45),
       }),
     );
     liq.position.y = 0.29;
@@ -601,14 +625,31 @@ export function buildLab(specimen: Specimen, quality: 'low' | 'high'): Lab {
     return { group: g, liquid: liq };
   };
 
-  const dewaxW = makeWell(-0.21, -0.21, 0xe4f6ff, true);
-  const w1 = makeWell(0.21, -0.21, 0x3d7bff, false);
-  const w2 = makeWell(-0.21, 0.21, 0x2fe08a, false);
-  const w3 = makeWell(0.21, 0.21, 0xff4fb5, false);
+  const dewaxW = makeWell(-0.21, -0.10, 0xe4f6ff, true);
+  const w1 = makeWell(0.21, -0.10, 0x3d7bff, false);
+  const w2 = makeWell(-0.21, 0.30, 0x2fe08a, false);
+  const w3 = makeWell(0.21, 0.30, 0xff4fb5, false);
+
+  // A rest for the slide between dips. Without it the slide has to hover in
+  // mid-air over the jars, which both looks unsupported and hides the back row.
+  const slideRest = new THREE.Group();
+  slideRest.position.set(0, 0, 0.72);
+  st.add(slideRest);
+  const restBar = box(0.86, 0.03, 0.06, metal(0xb7c4ce, 0.35, 0.8));
+  restBar.position.y = 0.30;
+  slideRest.add(restBar);
+  for (const sx of [-0.30, 0.30]) {
+    const post = box(0.06, 0.32, 0.14, metal(0xa8b7c4, 0.4, 0.7));
+    post.position.set(sx, 0.16, 0);
+    slideRest.add(post);
+    const cradle = box(0.08, 0.05, 0.20, accentMat);
+    cradle.position.set(sx, 0.335, 0);
+    slideRest.add(cradle);
+  }
 
   // mounting pad
   const mountPad = new THREE.Group();
-  mountPad.position.set(0, 0, 0.82);
+  mountPad.position.set(0, 0, 0.94);
   st.add(mountPad);
   const pad = box(0.62, 0.05, 0.40, plastic(0x223140, 0.55));
   pad.position.y = 0.025;
@@ -620,7 +661,7 @@ export function buildLab(specimen: Specimen, quality: 'low' | 'high'): Lab {
   mountPad.add(padGlow);
 
   const dropper = new THREE.Group();
-  dropper.position.set(-0.26, 0.0, 0.86);
+  dropper.position.set(-0.26, 0.0, 0.98);
   st.add(dropper);
   const dBody = cyl(0.05, 0.06, 0.22, plastic(0x3f5566, 0.4), 14);
   dBody.position.y = 0.17;
@@ -635,12 +676,9 @@ export function buildLab(specimen: Specimen, quality: 'low' | 'high'): Lab {
   const dTip = cyl(0.009, 0.026, 0.12, plastic(0xdfe9f0, 0.3), 10);
   dTip.position.y = 0.04;
   dropper.add(dTip);
-  const dDrop = sph(0.022, makeGlassMaterial({ tint: 0xbfe8ff, edge: 0.3 }), 10);
-  dDrop.position.y = -0.005;
-  dropper.add(dDrop);
 
   const stain: StainArea = {
-    group: st,
+    group: st, slideRest,
     dewax: dewaxW.group, dewaxLiquid: dewaxW.liquid,
     wells: [w1.group, w2.group, w3.group],
     wellLiquids: [w1.liquid, w2.liquid, w3.liquid],
@@ -739,28 +777,33 @@ export function buildLab(specimen: Specimen, quality: 'low' | 'high'): Lab {
   scopeBody.add(knob);
   const knobHub = new THREE.Object3D();
   knob.add(knobHub);
-  const knobDisc = cyl(0.26, 0.26, 0.09, metal(0x2a3846, 0.4, 0.8), seg);
+  const knobDisc = cyl(0.26, 0.26, 0.09, metal(0x546a7c, 0.38, 0.65), seg);
   knobDisc.rotation.x = Math.PI / 2;
   knob.add(knobDisc);
-  const knobRing = new THREE.Mesh(new THREE.TorusGeometry(0.255, 0.035, 8, seg * 2), plastic(0xffce5c, 0.35));
+  const knobRing = new THREE.Mesh(new THREE.TorusGeometry(0.262, 0.038, 10, seg * 2),
+    new THREE.MeshStandardMaterial({ color: 0xffce5c, roughness: 0.35, metalness: 0.05,
+      emissive: 0x5a3f0a, emissiveIntensity: 1 }));
   knob.add(knobRing);
   const knurl = new THREE.Group();
   knob.add(knurl);
   for (let i = 0; i < 16; i++) {
     const a = (i / 16) * TAU;
-    const k = box(0.03, 0.07, 0.075, metal(0x8fa3b3, 0.4, 0.7));
+    const k = box(0.03, 0.07, 0.075, metal(0xc2d3e0, 0.35, 0.55));
     k.position.set(Math.cos(a) * 0.25, Math.sin(a) * 0.25, 0.0);
     k.rotation.z = a;
     knurl.add(k);
   }
-  const knobFace = cyl(0.1, 0.1, 0.1, metal(0xc8d6e0, 0.3, 0.85), seg);
+  const knobGlow = new THREE.PointLight(0xffd98a, 0, 1.1, 2);
+  knobGlow.position.set(0, 0, 0.2);
+  knob.add(knobGlow);
+  const knobFace = cyl(0.1, 0.1, 0.1, metal(0xb9c9d6, 0.3, 0.6), seg);
   knobFace.rotation.x = Math.PI / 2;
   knob.add(knobFace);
   const knobMark = box(0.02, 0.16, 0.1, new THREE.MeshBasicMaterial({ color: 0xffe9a8 }));
   knobMark.position.set(0, 0.16, 0.03);
   knurl.add(knobMark);
 
-  const scope: Scope = { group: sc, stage, slideSlot, knob, knobHub, lamp, body: scopeBody };
+  const scope: Scope = { group: sc, stage, slideSlot, knob, knobHub, lamp, knobGlow, body: scopeBody };
 
   // small props so the bench is not empty, kept dim and low-contrast
   const propMat = plastic(0x50697e, 0.7);

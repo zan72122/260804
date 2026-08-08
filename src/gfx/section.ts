@@ -32,8 +32,8 @@ export class Section {
         uMorph: { value: 0 },
         uSeed: { value: seed % 100 },
         uTissue: { value: tissue },
-        uWax: { value: new THREE.Color(0xf4eee2) },
-        uTissueCol: { value: new THREE.Color(0xe3a3ba) },
+        uWax: { value: new THREE.Color(0xf6e9ee) },
+        uTissueCol: { value: new THREE.Color(0xd98fae) },
         uParaffin: { value: 1 },   // 1 = still waxy, 0 = de-waxed
         uStain: { value: new THREE.Vector3(0, 0, 0) },
         uWet: { value: 0 },
@@ -117,7 +117,7 @@ export class Section {
                     + vec3(1.0, 0.97, 0.93) * edge * 0.14
                     + vec3(0.85, 0.9, 1.0) * vCrease * 0.09;
 
-          gl_FragColor = vec4((col * a * 1.25 + glow * 0.8) * uLight * uOpacity, a);
+          gl_FragColor = vec4((col * a * 1.1 + glow * 0.62) * uLight * uOpacity, a);
         }`,
     }));
     this.mesh = new THREE.Mesh(geo, this.mat);

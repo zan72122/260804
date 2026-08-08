@@ -41,7 +41,10 @@ const CARRIAGE_MID = 0.62;
 const CARRIAGE_THROW = 0.22;
 const ADVANCE_PER_SECTION = 0.009;
 /** height the slide is carried at around the staining bench */
-const SLIDE_HOVER = 0.98;
+const SLIDE_HOVER = 0.86;
+/** where the slide sits on its rest between dips */
+const SLIDE_REST_Y = 0.365;
+const SLIDE_REST_Z = 0.72;
 
 const SHOT_OF: Record<Stage, ShotName> = {
   [Stage.Intro]: 'posture',
@@ -158,6 +161,7 @@ export class Game {
   private movers: Mover[] = [new Mover(), new Mover(), new Mover()];
   private blockGhostPulse = 0;
   private restartRequested = false;
+  private finishedNotified = false;
   private onFinish?: () => void;
 
   private tmp = new THREE.Vector3();
@@ -237,6 +241,7 @@ export class Game {
     this.dipT = -1; this.dipIndex = -1; this.stained = [false, false, false];
     this.dropped = false; this.coverT = 0; this.coverPlaced = false;
     this.focalPos = -1; this.focusHold = 0; this.revealT = -1; this.zoomT = 0; this.flash = 0;
+    this.finishedNotified = false;
     for (const m of this.movers) m.cancel();
     this.droplets.clear(); this.wisps.clear(); this.binding.alpha = 0;
     this.carryShadow.hide();
@@ -248,12 +253,13 @@ export class Game {
     this.slide.group.userData = {};
     this.cover.group.visible = false;
     this.cover.group.rotation.set(0, 0, 0);
-    this.lab.stain.dropper.position.set(-0.26, 0, 0.86);
+    this.lab.stain.dropper.position.set(-0.26, 0, 0.98);
     this.lab.scope.knob.rotation.z = 0;
     this.lab.microtome.wheel.rotation.z = 0;
     this.fluoro.reveal = 0;
     this.fluoro.zoom = 1; this.fluoro.nearMix = 0; this.fluoro.cover = 0;
     this.lab.lights.scopePool.intensity = 0;
+    this.lab.scope.knobGlow.intensity = 0;
     this.lab.scope.lamp.intensity = 0;
     audio.stopRibbon();
 
@@ -873,7 +879,7 @@ export class Game {
     const st = STATION.stain;
     this.movers[2].go(
       this.slide.group,
-      new THREE.Vector3(st.x - 0.21, SLIDE_HOVER, 0.10),
+      new THREE.Vector3(st.x, SLIDE_REST_Y, SLIDE_REST_Z),
       new THREE.Euler(0, 0, 0), 1.6,
     );
   }
@@ -902,7 +908,7 @@ export class Game {
         sec.paraffin = 0;
         g.rotation.set(0, 0, 0);
         this.enter(Stage.Stain);
-        this.movers[2].go(g, new THREE.Vector3(STATION.stain.x, SLIDE_HOVER, 0.62), null, 1.0);
+        this.movers[2].go(g, new THREE.Vector3(STATION.stain.x, SLIDE_REST_Y, SLIDE_REST_Z), null, 1.0);
       }
       return;
     }
@@ -922,12 +928,12 @@ export class Game {
         // slide walks itself over rather than refusing
         const d = Math.hypot(g.position.x - tank.x, g.position.z - tank.z);
         this.movers[2].go(g, new THREE.Vector3(tank.x, SLIDE_HOVER, tank.z), new THREE.Euler(0, 0, 0),
-          d < 0.4 ? 0.28 : 0.6, () => { this.dipT = 0; });
+          d < 0.45 ? 0.3 : 0.6, () => { this.dipT = 0; });
       }
     }
 
     if (this.grabbing === 'none' && this.idleHint) {
-      this.hints.showRing(_v2.set(tank.x, 0.68, tank.z), 0.26);
+      this.hints.showRing(_v2.set(tank.x, 0.68, tank.z), 0.20);
       if (this.input.idle > 3.3 && this.input.idle < 3.4) audio.hint();
     } else this.hints.hide();
   }
@@ -939,13 +945,13 @@ export class Game {
   private wellPos(i: number, out: THREE.Vector3) {
     const st = STATION.stain;
     const pos = [
-      [st.x + 0.21, -0.21], [st.x - 0.21, 0.21], [st.x + 0.21, 0.21],
+      [st.x + 0.21, -0.10], [st.x - 0.21, 0.30], [st.x + 0.21, 0.30],
     ][i];
     return out.set(pos[0], 0.62, pos[1]);
   }
 
   private dewaxPos(out: THREE.Vector3) {
-    return out.set(STATION.stain.x - 0.21, 0.62, -0.21);
+    return out.set(STATION.stain.x - 0.21, 0.62, -0.10);
   }
 
   /**
@@ -992,9 +998,9 @@ export class Game {
         g.rotation.set(0, 0, 0);
         if (this.stained.every(Boolean)) {
           this.enter(Stage.Mount);
-          this.movers[2].go(g, new THREE.Vector3(STATION.stain.x, 0.09, 0.82), new THREE.Euler(0, 0, 0), 1.4);
+          this.movers[2].go(g, new THREE.Vector3(STATION.stain.x, 0.09, 0.94), new THREE.Euler(0, 0, 0), 1.4);
         } else {
-          this.movers[2].go(g, new THREE.Vector3(STATION.stain.x, SLIDE_HOVER, 0.62), null, 0.6);
+          this.movers[2].go(g, new THREE.Vector3(STATION.stain.x, SLIDE_REST_Y, SLIDE_REST_Z), null, 0.6);
         }
       }
       return;
@@ -1028,7 +1034,7 @@ export class Game {
 
     if (this.grabbing === 'none' && this.idleHint) {
       const next = this.stained.findIndex((s) => !s);
-      if (next >= 0) this.hints.showRing(this.wellPos(next, _v1).clone().setY(0.68), 0.26);
+      if (next >= 0) this.hints.showRing(this.wellPos(next, _v1).clone().setY(0.68), 0.20);
       if (this.input.idle > 3.3 && this.input.idle < 3.4) audio.hint();
     } else this.hints.hide();
   }
@@ -1079,7 +1085,7 @@ export class Game {
             this.cover.group.position.copy(slideWorld).add(new THREE.Vector3(0.06, 0.30, 0.26));
             this.cover.group.rotation.set(-0.55, 0, 0);
           }
-          this.movers[0].go(dropper, new THREE.Vector3(-0.26, 0, 0.86), null, 0.6);
+          this.movers[0].go(dropper, new THREE.Vector3(-0.26, 0, 0.98), null, 0.6);
         }
       }
       if (this.grabbing === 'none' && this.idleHint) {
@@ -1145,6 +1151,7 @@ export class Game {
     const k = clamp(this.stageT / 2.6);
     this.setLights(1 - easeInOutCubic(k) * 0.92);
     this.lab.lights.scopePool.intensity = easeInOutCubic(k) * 2.0;
+    this.lab.scope.knobGlow.intensity = easeInOutCubic(k) * 0.9;
     this.lab.scope.lamp.intensity = easeInOutCubic(k) * 1.1;
     // the slide travels to the scope with the camera
     if (this.stageT > 0.5 && !this.movers[2].running && !this.slide.group.userData.movedToScope) {
@@ -1287,7 +1294,10 @@ export class Game {
     }
 
     this.hints.hide();
-    if (this.revealT > 3.4) this.onFinish?.();
+    if (this.revealT > 3.4 && !this.finishedNotified) {
+      this.finishedNotified = true;
+      this.onFinish?.();
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -1306,6 +1316,13 @@ export class Game {
     } else if (this.grabbing === 'cover' || this.grabbing === 'dropper') {
       obj = this.grabbing === 'cover' ? this.cover.group : this.lab.stain.dropper;
       surface = 0.06; size = 0.34;
+    }
+    // and while the slide is being ferried between stations, so it never looks
+    // like it is hovering with nothing under it
+    if (!obj && this.slide.group.visible && this.stage >= Stage.Dewax && this.stage <= Stage.ScopeMount) {
+      obj = this.slide.group;
+      surface = this.stage === Stage.ScopeMount ? 0.03 : 0.05;
+      size = 0.7;
     }
     if (!obj) { this.carryShadow.hide(); return; }
     const w = this.worldOf(obj).clone();
@@ -1442,10 +1459,10 @@ export class Game {
       this.slide.group.visible = true;
       if (s > Stage.Pickup) this.attachSectionToSlide();
     }
-    if (s === Stage.Dewax) this.slide.group.position.set(st.stain.x - 0.21, SLIDE_HOVER, 0.10);
-    if (s === Stage.Stain) { this.slide.group.position.set(st.stain.x, SLIDE_HOVER, 0.62); sec.paraffin = 0; }
+    if (s === Stage.Dewax) this.slide.group.position.set(st.stain.x, SLIDE_REST_Y, SLIDE_REST_Z);
+    if (s === Stage.Stain) { this.slide.group.position.set(st.stain.x, SLIDE_REST_Y, SLIDE_REST_Z); sec.paraffin = 0; }
     if (s === Stage.Mount) {
-      this.slide.group.position.set(st.stain.x, 0.09, 0.82);
+      this.slide.group.position.set(st.stain.x, 0.09, 0.94);
       this.stained = [true, true, true];
       sec.setStain(0.12, 0.16, 0.2);
     }
@@ -1463,6 +1480,7 @@ export class Game {
     if (s >= Stage.ScopeMount) {
       this.setLights(0.08);
       this.lab.lights.scopePool.intensity = 2.0;
+      this.lab.scope.knobGlow.intensity = 0.9;
       this.lab.scope.lamp.intensity = 1.1;
     }
     if (s >= Stage.Focus) {

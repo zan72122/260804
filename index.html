@@ -76,6 +76,17 @@
         background: rgba(38, 28, 16, .55);
         box-shadow: 0 0 34px rgba(255, 190, 90, .3);
       }
+      /* Held sideways the eyepiece circle fills the middle of the screen, so
+         the replay button moves out of it rather than sitting on the payoff. */
+      @media (orientation: landscape) {
+        #btnAgain {
+          left: auto; margin-left: 0;
+          right: calc(var(--safe-r) + 18px);
+          bottom: calc(var(--safe-b) + 18px);
+          width: 88px; height: 88px;
+        }
+        #btnAgain svg { width: 52px; height: 52px; }
+      }
       #btnAgain svg { width: 62px; height: 62px; }
       #btnSound svg { width: 32px; height: 32px; }
       #fallback {
