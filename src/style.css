@@ -1,0 +1,28 @@
+/* Barista game — full-bleed canvas, no scroll, no zoom, iOS safe. */
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html, body {
+  width:100%; height:100%; overflow:hidden; position:fixed; overscroll-behavior:none;
+  background:#241713;
+  touch-action:none; -webkit-user-select:none; user-select:none;
+  -webkit-touch-callout:none;
+  font-family:-apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif;
+}
+#stage {
+  position:fixed; inset:0; width:100%; height:100%; display:block;
+  touch-action:none;
+}
+#gate {
+  position:fixed; inset:0; z-index:10;
+  display:flex; align-items:center; justify-content:center;
+  background:radial-gradient(circle at 50% 42%, #55372c 0%, #34211b 45%, #1d120e 100%);
+  touch-action:none;
+}
+#gate.hidden { opacity:0; pointer-events:none; transition:opacity .45s ease; }
+#gateArt {
+  width:min(64vw, 46vh); height:auto;
+  animation:breathe 1.9s ease-in-out infinite;
+}
+@keyframes breathe {
+  0%,100% { transform:scale(1)   translateY(0); }
+  50%     { transform:scale(1.06) translateY(-1.2%); }
+}
