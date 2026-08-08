@@ -365,26 +365,92 @@
     return c;
   };
 
-  /* ---- 金属パネル（車両・ブリッジ外皮） ---- */
-  T.panel = function (base, seed) {
+  /* ---- 塗装面のディテール（色は材質側で与える。ここは汚れ・継ぎ目・リベットのみ） ---- */
+  T.wear = function (seed, dirt) {
     const W = 256, H = 256, c = cv(W, H), g = c.getContext('2d');
-    g.fillStyle = base || '#c8ccd0'; g.fillRect(0, 0, W, H);
-    const n = fbmField(W, H, seed || 13, 4, 32);
-    const img = g.getImageData(0, 0, W, H);
-    for (let i = 0; i < W * H; i++) {
-      const k = (n[i] - 0.5) * 34;
-      img.data[i * 4] += k; img.data[i * 4 + 1] += k; img.data[i * 4 + 2] += k;
+    dirt = dirt === undefined ? 1 : dirt;
+    const n = fbmField(W, H, seed || 13, 5, 48);
+    const streak = fbmField(W, H, (seed || 13) + 401, 3, 96);
+    const img = g.createImageData(W, H);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const i = y * W + x;
+      /* 上から下へ伸びる雨だれ状の汚れ */
+      const col = streak[(y % 8) * W + x];
+      const run = Math.max(0, col - 0.55) * (y / H) * 1.8 * dirt;
+      let v = 0.97 - (n[i] - 0.5) * 0.10 - run * 0.34;
+      const k = Math.round(Math.max(0, Math.min(1, v)) * 255);
+      img.data[i * 4] = k; img.data[i * 4 + 1] = k; img.data[i * 4 + 2] = k; img.data[i * 4 + 3] = 255;
     }
     g.putImageData(img, 0, 0);
-    g.strokeStyle = 'rgba(0,0,0,0.16)'; g.lineWidth = 2;
+    /* パネル継ぎ目 */
+    g.strokeStyle = 'rgba(0,0,0,0.20)'; g.lineWidth = 2;
     for (let i = 1; i < 4; i++) {
       g.beginPath(); g.moveTo(0, i * H / 4); g.lineTo(W, i * H / 4); g.stroke();
     }
-    /* リベット */
-    g.fillStyle = 'rgba(255,255,255,0.20)';
-    for (let i = 0; i < 4; i++) for (let j = 0; j < 26; j++) {
-      g.beginPath(); g.arc(j * 10 + 5, i * H / 4 + 3, 1.3, 0, 7); g.fill();
+    g.strokeStyle = 'rgba(255,255,255,0.13)'; g.lineWidth = 1;
+    for (let i = 1; i < 4; i++) {
+      g.beginPath(); g.moveTo(0, i * H / 4 + 2); g.lineTo(W, i * H / 4 + 2); g.stroke();
     }
+    /* リベット */
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 26; j++) {
+      const x = j * 10 + 5, y = i * H / 4 + 4;
+      g.fillStyle = 'rgba(0,0,0,0.16)';
+      g.beginPath(); g.arc(x, y + 0.8, 1.5, 0, 7); g.fill();
+      g.fillStyle = 'rgba(255,255,255,0.22)';
+      g.beginPath(); g.arc(x, y - 0.4, 1.2, 0, 7); g.fill();
+    }
+    /* 下端の泥はね */
+    const grd = g.createLinearGradient(0, H * 0.72, 0, H);
+    grd.addColorStop(0, 'rgba(70,62,52,0)');
+    grd.addColorStop(1, 'rgba(70,62,52,' + (0.34 * dirt) + ')');
+    g.fillStyle = grd; g.fillRect(0, H * 0.72, W, H * 0.28);
+    return c;
+  };
+
+  /* ---- 縞鋼板（荷台・踏板） ---- */
+  T.tread = function () {
+    const S = 128, c = cv(S, S), g = c.getContext('2d');
+    g.fillStyle = '#8f959b'; g.fillRect(0, 0, S, S);
+    const n = fbmField(S, S, 611, 3, 22);
+    const img = g.getImageData(0, 0, S, S);
+    for (let i = 0; i < S * S; i++) {
+      const k = (n[i] - 0.5) * 26;
+      img.data[i * 4] += k; img.data[i * 4 + 1] += k; img.data[i * 4 + 2] += k;
+    }
+    g.putImageData(img, 0, 0);
+    for (let r = 0; r < 8; r++) for (let cc = 0; cc < 4; cc++) {
+      const x = cc * 32 + (r % 2) * 16, y = r * 16;
+      g.save();
+      g.translate(x + 8, y + 8);
+      g.rotate((r % 2 ? 1 : -1) * 0.5);
+      g.fillStyle = 'rgba(255,255,255,0.30)';
+      g.fillRect(-9, -2.4, 18, 3.2);
+      g.fillStyle = 'rgba(0,0,0,0.30)';
+      g.fillRect(-9, 0.8, 18, 2.2);
+      g.restore();
+    }
+    return c;
+  };
+
+  /* ---- 黒黄の警戒ストライプ ---- */
+  T.hazard = function (colA, colB) {
+    const W = 128, H = 64, c = cv(W, H), g = c.getContext('2d');
+    g.fillStyle = colA || '#e8b81c'; g.fillRect(0, 0, W, H);
+    g.fillStyle = colB || '#16181b';
+    g.save(); g.beginPath(); g.rect(0, 0, W, H); g.clip();
+    for (let i = -2; i < 8; i++) {
+      g.beginPath();
+      g.moveTo(i * 32, H); g.lineTo(i * 32 + 16, H); g.lineTo(i * 32 + 16 + H, 0); g.lineTo(i * 32 + H, 0);
+      g.closePath(); g.fill();
+    }
+    g.restore();
+    const n = fbmField(W, H, 77, 3, 20);
+    const img = g.getImageData(0, 0, W, H);
+    for (let i = 0; i < W * H; i++) {
+      const k = (n[i] - 0.5) * 30;
+      img.data[i * 4] += k; img.data[i * 4 + 1] += k; img.data[i * 4 + 2] += k;
+    }
+    g.putImageData(img, 0, 0);
     return c;
   };
 
@@ -407,9 +473,16 @@
   /* ---- タイヤトレッド ---- */
   T.tire = function () {
     const W = 128, H = 128, c = cv(W, H), g = c.getContext('2d');
-    g.fillStyle = '#26262a'; g.fillRect(0, 0, W, H);
-    g.fillStyle = '#17171a';
-    for (let i = 0; i < 4; i++) g.fillRect(0, 22 + i * 24, W, 9);
+    g.fillStyle = '#33343a'; g.fillRect(0, 0, W, H);
+    /* 中央のトレッド帯と両側のサイドウォール */
+    g.fillStyle = '#3c3d43'; g.fillRect(0, 16, W, 96);
+    g.fillStyle = '#232429';
+    for (let i = 0; i < 4; i++) g.fillRect(0, 26 + i * 22, W, 8);
+    /* サイドウォールの刻印 */
+    g.strokeStyle = 'rgba(190,190,196,0.20)'; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(0, 8); g.lineTo(W, 8); g.moveTo(0, 120); g.lineTo(W, 120); g.stroke();
+    g.fillStyle = 'rgba(200,200,206,0.16)';
+    for (let i = 0; i < 8; i++) g.fillRect(i * 16 + 3, 4, 9, 2.4);
     const n = fbmField(W, H, 88, 3, 10);
     const img = g.getImageData(0, 0, W, H);
     for (let i = 0; i < W * H; i++) {
@@ -430,6 +503,26 @@
       const v = 0.55 + n[i] * 0.45 + (f[i] - 0.5) * 0.35;
       img.data[i * 4] = 74 * v; img.data[i * 4 + 1] = 96 * v; img.data[i * 4 + 2] = 52 * v;
       img.data[i * 4 + 3] = 255;
+    }
+    g.putImageData(img, 0, 0);
+    return c;
+  };
+
+  /* ---- 接触・環境遮蔽デカール（乗算用: 1=素通し, 0=最暗） ---- */
+  T.aoBlob = function (core, sharp) {
+    const S = 128, c = cv(S, S), g = c.getContext('2d');
+    core = core === undefined ? 0.28 : core;
+    sharp = sharp === undefined ? 1.0 : sharp;
+    const img = g.createImageData(S, S);
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+      const dx = (x + 0.5) / S * 2 - 1, dy = (y + 0.5) / S * 2 - 1;
+      let r = Math.min(1, Math.hypot(dx, dy));
+      /* 中心を平らに保ち、外周へ滑らかに 1 へ戻す */
+      const t = Math.pow(r, sharp);
+      const v = core + (1 - core) * (t * t * (3 - 2 * t));
+      const i = (y * S + x) * 4;
+      const b = Math.round(Math.min(255, v * 255));
+      img.data[i] = b; img.data[i + 1] = b; img.data[i + 2] = b; img.data[i + 3] = 255;
     }
     g.putImageData(img, 0, 0);
     return c;

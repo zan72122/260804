@@ -5,44 +5,58 @@
 
   const VS_MAIN = `
 attribute vec3 aPos; attribute vec3 aNorm; attribute vec2 aUv;
-uniform mat4 uProj, uView, uModel; uniform mat3 uNMat; uniform mat4 uLightVP;
-varying vec3 vN; varying vec3 vW; varying vec2 vUv; varying vec4 vLS;
+uniform mat4 uProj, uView, uModel; uniform mat3 uNMat; uniform mat4 uLightVP, uLightVPN;
+varying vec3 vN; varying vec3 vW; varying vec2 vUv; varying vec4 vLS; varying vec4 vLSN;
 void main(){
   vec4 wp = uModel * vec4(aPos,1.0);
   vW = wp.xyz;
   vN = uNMat * aNorm;
   vUv = aUv;
   vLS = uLightVP * wp;
+  vLSN = uLightVPN * wp;
   gl_Position = uProj * uView * wp;
 }`;
 
   const FS_MAIN = `
 precision highp float;
-varying vec3 vN; varying vec3 vW; varying vec2 vUv; varying vec4 vLS;
+varying vec3 vN; varying vec3 vW; varying vec2 vUv; varying vec4 vLS; varying vec4 vLSN;
 uniform vec3 uColor, uEmissive, uCamPos;
-uniform float uGloss, uShine, uAlpha, uMetal, uUseMap, uCutout;
+uniform float uGloss, uShine, uAlpha, uMetal, uUseMap, uCutout, uCoat;
 uniform vec2 uUvOff, uUvRep;
 uniform sampler2D uMap;
 uniform vec3 uSunDir, uSunCol, uSkyCol, uGndCol, uFogCol, uFogCol2;
-uniform float uFogDens, uShadowOn, uShadowTexel;
-uniform sampler2D uShadow;
+uniform float uFogDens, uShadowOn, uShadowTexel, uShadowTexelN;
+uniform sampler2D uShadow, uShadowN;
 
 float unpackD(vec4 c){ return dot(c, vec4(1.0, 1.0/255.0, 1.0/65025.0, 1.0/16581375.0)); }
 
-float shadowFactor(vec3 N){
-  if(uShadowOn < 0.5) return 1.0;
-  vec3 s = vLS.xyz / vLS.w * 0.5 + 0.5;
-  if(s.x<0.002||s.x>0.998||s.y<0.002||s.y>0.998||s.z>0.9995) return 1.0;
-  float ndl = max(dot(N,uSunDir),0.0);
-  float bias = 0.0016 + 0.0045*(1.0-ndl);
+float pcf(sampler2D map, vec3 s, float texel, float bias){
   float sum = 0.0;
   for(int j=-1;j<=1;j++){
     for(int i=-1;i<=1;i++){
-      float d = unpackD(texture2D(uShadow, s.xy + vec2(float(i),float(j))*uShadowTexel));
+      float d = unpackD(texture2D(map, s.xy + vec2(float(i),float(j))*texel));
       sum += step(s.z - bias, d);
     }
   }
   return sum/9.0;
+}
+
+/* 遠景用と、注視点まわりを高密度に覆う近景用の2段カスケード。
+   近景側はテクセルが細かいので接地の影がはっきり出る。 */
+float shadowFactor(vec3 N){
+  if(uShadowOn < 0.5) return 1.0;
+  float ndl = max(dot(N,uSunDir),0.0);
+  vec3 f = vLS.xyz / vLS.w * 0.5 + 0.5;
+  float far = 1.0;
+  if(!(f.x<0.002||f.x>0.998||f.y<0.002||f.y>0.998||f.z>0.9995))
+    far = pcf(uShadow, f, uShadowTexel, 0.0016 + 0.0045*(1.0-ndl));
+  vec3 n = vLSN.xyz / vLSN.w * 0.5 + 0.5;
+  if(n.x<0.01||n.x>0.99||n.y<0.01||n.y>0.99||n.z>0.999||n.z<0.001) return far;
+  float near = pcf(uShadowN, n, uShadowTexelN, 0.0009 + 0.0028*(1.0-ndl));
+  /* 近景マップの縁で滑らかに遠景へ戻す */
+  vec2 e = min(n.xy, 1.0-n.xy);
+  float w = smoothstep(0.01, 0.09, min(e.x, e.y));
+  return mix(far, near, w);
 }
 
 vec3 tonemap(vec3 x){
@@ -68,14 +82,18 @@ void main(){
   float ndl = max(dot(N, uSunDir), 0.0);
   float hemi = 0.5 + 0.5*N.y;
   vec3 amb = mix(uGndCol, uSkyCol, hemi);
-  /* 弱い擬似AO: 地面付近を僅かに落とす */
-  float ao = clamp(0.55 + vW.y*0.35, 0.0, 1.0);
-  ao = mix(ao, 1.0, 0.45);
-  vec3 col = base * (amb*ao + uSunCol * ndl * sh);
+  vec3 col = base * (amb + uSunCol * ndl * sh);
 
   vec3 H = normalize(uSunDir + V);
-  float spec = pow(max(dot(N,H),0.0), uShine) * uGloss * sh * step(0.001, ndl);
+  float nh = max(dot(N,H), 0.0);
+  float spec = pow(nh, uShine) * uGloss * sh * step(0.001, ndl);
   col += uSunCol * spec * mix(vec3(1.0), base, uMetal);
+  /* 塗装のクリアコート: 下地色に染まらない鋭いハイライトを重ねる */
+  if(uCoat > 0.001){
+    float c = pow(nh, 220.0) * uCoat * sh * step(0.001, ndl);
+    float cf = 0.04 + 0.96 * pow(1.0 - max(dot(N,V),0.0), 5.0);
+    col += uSunCol * (c + cf * uCoat * 0.18) ;
+  }
   float fres = pow(1.0 - max(dot(N,V),0.0), 4.0) * uGloss * 0.5;
   col += uSkyCol * fres * (1.0 - uMetal*0.4);
   col += uEmissive;
@@ -167,6 +185,24 @@ void main(){
   gl_FragColor = vec4(vCol.rgb * a2, a2);
 }`;
 
+  const VS_DECAL = `
+attribute vec3 aPos; attribute vec3 aNorm; attribute vec2 aUv;
+uniform mat4 uProj, uView, uModel; varying vec2 vUv; varying vec3 vW;
+void main(){ vec4 wp = uModel*vec4(aPos,1.0); vW = wp.xyz; vUv = aUv; gl_Position = uProj*uView*wp; }`;
+  const FS_DECAL = `
+precision mediump float;
+varying vec2 vUv; varying vec3 vW;
+uniform sampler2D uMap; uniform float uStrength, uFogDens;
+uniform vec3 uCamPos;
+void main(){
+  float a = texture2D(uMap, vUv).r;              /* 1=素通し 0=最も暗い */
+  float k = mix(1.0, a, uStrength);
+  /* 遠くでは霞に溶けるので効きを落とす */
+  float d = length(vW - uCamPos);
+  k = mix(k, 1.0, clamp(1.0 - exp(-uFogDens*d*1.6), 0.0, 0.85));
+  gl_FragColor = vec4(k, k, k, 1.0);
+}`;
+
   function compile(gl, type, src) {
     const s = gl.createShader(type);
     gl.shaderSource(s, src); gl.compileShader(s);
@@ -249,6 +285,7 @@ void main(){
       this.shadow = program(gl, VS_SHADOW, FS_SHADOW, ['aPos', 'aNorm', 'aUv']);
       this.sky = program(gl, VS_SKY, FS_SKY, ['aPos']);
       this.spr = program(gl, VS_SPR, FS_SPR, ['aCenter', 'aOff', 'aUv', 'aCol']);
+      this.decal = program(gl, VS_DECAL, FS_DECAL, ['aPos', 'aNorm', 'aUv']);
 
       this.skyBuf = gl.createBuffer();
       gl.bindBuffer(gl.ARRAY_BUFFER, this.skyBuf);
@@ -269,12 +306,16 @@ void main(){
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.sprIdx);
       gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, si, gl.STATIC_DRAW);
 
-      /* シャドウマップ */
+      /* シャドウマップ（遠景用）と、注視点まわりの近景用 */
       this.shadowSize = 2048;
+      this.shadowSizeN = 1024;
       this.initShadow();
 
       this.proj = M.m4(); this.view = M.m4(); this.viewProj = M.m4(); this.invVP = M.m4();
       this.lightVP = M.m4();
+      this.lightVPN = M.m4();
+      this.shadowCenterN = [0, 0, -20];
+      this.shadowRadiusN = 12;
       this.camPos = [0, 2, 6];
       this.camTarget = [0, 1, 0];
       this.fov = 52 * Math.PI / 180;
@@ -294,27 +335,32 @@ void main(){
       this.time = 0;
 
       this._tmp = M.m4(); this._tmp2 = M.m4();
-      this.opaque = []; this.trans = []; this.casters = [];
+      this.opaque = []; this.trans = []; this.casters = []; this.decals = [];
       this.stats = { draws: 0, tris: 0 };
     }
 
     initShadow() {
       const gl = this.gl;
-      this.shTex = gl.createTexture();
-      gl.bindTexture(gl.TEXTURE_2D, this.shTex);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, this.shadowSize, this.shadowSize, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      this.shFbo = gl.createFramebuffer();
-      gl.bindFramebuffer(gl.FRAMEBUFFER, this.shFbo);
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.shTex, 0);
-      this.shDepth = gl.createRenderbuffer();
-      gl.bindRenderbuffer(gl.RENDERBUFFER, this.shDepth);
-      gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, this.shadowSize, this.shadowSize);
-      gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, this.shDepth);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      const mk = (size) => {
+        const tex = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, tex);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, size, size, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        const fbo = gl.createFramebuffer();
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+        const rb = gl.createRenderbuffer();
+        gl.bindRenderbuffer(gl.RENDERBUFFER, rb);
+        gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, size, size);
+        gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, rb);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        return { tex, fbo };
+      };
+      const a = mk(this.shadowSize); this.shTex = a.tex; this.shFbo = a.fbo;
+      const b = mk(this.shadowSizeN); this.shTexN = b.tex; this.shFboN = b.fbo;
     }
 
     /* ジオメトリ -> GPUメッシュ */
@@ -469,14 +515,15 @@ void main(){
     }
 
     collect(root) {
-      this.opaque.length = 0; this.trans.length = 0; this.casters.length = 0;
+      this.opaque.length = 0; this.trans.length = 0; this.casters.length = 0; this.decals.length = 0;
       const walk = (o) => {
         if (!o.visible) return;
         if (o.mesh && o.mat) {
           const m = o.mat;
-          if (m.alpha !== undefined && m.alpha < 0.999 || m.blend) this.trans.push(o);
+          if (m.decal) this.decals.push(o);
+          else if (m.alpha !== undefined && m.alpha < 0.999 || m.blend) this.trans.push(o);
           else this.opaque.push(o);
-          if (o.cast && m.noShadow !== true) this.casters.push(o);
+          if (o.cast && m.noShadow !== true && !m.decal) this.casters.push(o);
         }
         for (let i = 0; i < o.children.length; i++) walk(o.children[i]);
       };
@@ -502,34 +549,41 @@ void main(){
 
     renderShadow() {
       const gl = this.gl;
-      const c = this.shadowCenter, r = this.shadowRadius;
-      const eye = [c[0] + this.sunDir[0] * r * 2.2, c[1] + this.sunDir[1] * r * 2.2, c[2] + this.sunDir[2] * r * 2.2];
-      const lv = M.lookAt(this._tmp, eye, c, [0, 1, 0]);
-      const lp = M.ortho(this._tmp2, -r, r, -r, r, 0.5, r * 5);
-      M.mul(this.lightVP, lp, lv);
-
-      gl.bindFramebuffer(gl.FRAMEBUFFER, this.shFbo);
-      gl.viewport(0, 0, this.shadowSize, this.shadowSize);
-      gl.clearColor(1, 1, 1, 1);
-      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      const P = this.shadow;
       gl.enable(gl.DEPTH_TEST);
       gl.depthMask(true);
       gl.disable(gl.BLEND);
       gl.enable(gl.CULL_FACE);
       gl.cullFace(gl.BACK);
-      const P = this.shadow;
       gl.useProgram(P.p);
-      gl.uniformMatrix4fv(P.u.uLightVP, false, this.lightVP);
-      /* 影のボリュームから外れたものは描かない */
-      const lim = r * 1.5;
-      for (const o of this.casters) {
-        const dx = o.world[12] - c[0], dz = o.world[14] - c[2];
-        const sc = Math.max(Math.abs(o.s[0]), Math.abs(o.s[1]), Math.abs(o.s[2]));
-        if (Math.hypot(dx, dz) - (o.mesh.radius || 0) * sc > lim) continue;
-        gl.uniformMatrix4fv(P.u.uModel, false, o.world);
-        this.bindAttribs(P, o.mesh, false);
-        gl.drawElements(gl.TRIANGLES, o.mesh.count, o.mesh.type, 0);
-      }
+
+      const pass = (fbo, size, center, radius, outVP) => {
+        const eye = [
+          center[0] + this.sunDir[0] * radius * 2.2,
+          center[1] + this.sunDir[1] * radius * 2.2,
+          center[2] + this.sunDir[2] * radius * 2.2,
+        ];
+        const lv = M.lookAt(this._tmp, eye, center, [0, 1, 0]);
+        const lp = M.ortho(this._tmp2, -radius, radius, -radius, radius, 0.5, radius * 5);
+        M.mul(outVP, lp, lv);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+        gl.viewport(0, 0, size, size);
+        gl.clearColor(1, 1, 1, 1);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+        gl.uniformMatrix4fv(P.u.uLightVP, false, outVP);
+        const lim = radius * 1.5;
+        for (const o of this.casters) {
+          const dx = o.world[12] - center[0], dz = o.world[14] - center[2];
+          const sc = Math.max(Math.abs(o.s[0]), Math.abs(o.s[1]), Math.abs(o.s[2]));
+          if (Math.hypot(dx, dz) - (o.mesh.radius || 0) * sc > lim) continue;
+          gl.uniformMatrix4fv(P.u.uModel, false, o.world);
+          this.bindAttribs(P, o.mesh, false);
+          gl.drawElements(gl.TRIANGLES, o.mesh.count, o.mesh.type, 0);
+        }
+      };
+
+      pass(this.shFbo, this.shadowSize, this.shadowCenter, this.shadowRadius, this.lightVP);
+      pass(this.shFboN, this.shadowSizeN, this.shadowCenterN, this.shadowRadiusN, this.lightVPN);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     }
 
@@ -564,6 +618,7 @@ void main(){
       gl.uniform1f(P.u.uAlpha, m.alpha === undefined ? 1 : m.alpha);
       gl.uniform1f(P.u.uMetal, m.metal === undefined ? 0 : m.metal);
       gl.uniform1f(P.u.uCutout, m.cutout ? 1 : 0);
+      gl.uniform1f(P.u.uCoat, m.coat === undefined ? 0 : m.coat);
       gl.uniform2f(P.u.uUvOff, m.uvOff ? m.uvOff[0] : 0, m.uvOff ? m.uvOff[1] : 0);
       gl.uniform2f(P.u.uUvRep, m.uvRep ? m.uvRep[0] : 1, m.uvRep ? m.uvRep[1] : 1);
       if (m.map) {
@@ -588,6 +643,37 @@ void main(){
         this.stats.draws++;
         this.stats.tris += o.mesh.count / 3;
       }
+    }
+
+    /* 接触・環境遮蔽デカール（乗算合成で地面を暗くする） */
+    drawDecals() {
+      if (!this.decals.length) return;
+      const gl = this.gl;
+      const P = this.decal;
+      gl.useProgram(P.p);
+      gl.uniformMatrix4fv(P.u.uProj, false, this.proj);
+      gl.uniformMatrix4fv(P.u.uView, false, this.view);
+      gl.uniform3fv(P.u.uCamPos, this.camPos);
+      gl.uniform1f(P.u.uFogDens, this.fogDens);
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.DST_COLOR, gl.ZERO);
+      gl.depthMask(false);
+      gl.disable(gl.CULL_FACE);
+      gl.activeTexture(gl.TEXTURE0);
+      for (const o of this.decals) {
+        const m = o.mat;
+        gl.uniform1f(P.u.uStrength, m.strength === undefined ? 1 : m.strength);
+        gl.bindTexture(gl.TEXTURE_2D, m.map);
+        gl.uniform1i(P.u.uMap, 0);
+        gl.uniformMatrix4fv(P.u.uModel, false, o.world);
+        this.bindAttribs(P, o.mesh, true);
+        gl.drawElements(gl.TRIANGLES, o.mesh.count, o.mesh.type, 0);
+        this.stats.draws++;
+      }
+      gl.depthMask(true);
+      gl.disable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.enable(gl.CULL_FACE);
     }
 
     drawSprites() {
@@ -639,6 +725,7 @@ void main(){
       gl.uniformMatrix4fv(P.u.uProj, false, this.proj);
       gl.uniformMatrix4fv(P.u.uView, false, this.view);
       gl.uniformMatrix4fv(P.u.uLightVP, false, this.lightVP);
+      gl.uniformMatrix4fv(P.u.uLightVPN, false, this.lightVPN);
       gl.uniform3fv(P.u.uCamPos, this.camPos);
       gl.uniform3fv(P.u.uSunDir, this.sunDir);
       gl.uniform3fv(P.u.uSunCol, this.sunCol);
@@ -649,9 +736,13 @@ void main(){
       gl.uniform1f(P.u.uFogDens, this.fogDens);
       gl.uniform1f(P.u.uShadowOn, 1);
       gl.uniform1f(P.u.uShadowTexel, 1 / this.shadowSize);
+      gl.uniform1f(P.u.uShadowTexelN, 1 / this.shadowSizeN);
       gl.activeTexture(gl.TEXTURE1);
       gl.bindTexture(gl.TEXTURE_2D, this.shTex);
       gl.uniform1i(P.u.uShadow, 1);
+      gl.activeTexture(gl.TEXTURE2);
+      gl.bindTexture(gl.TEXTURE_2D, this.shTexN);
+      gl.uniform1i(P.u.uShadowN, 2);
 
       gl.enable(gl.CULL_FACE);
       gl.cullFace(gl.BACK);
@@ -672,6 +763,7 @@ void main(){
       gl.depthMask(true);
       gl.disable(gl.BLEND);
 
+      this.drawDecals();
       this.drawSprites();
       this.sprCount = 0;
     }

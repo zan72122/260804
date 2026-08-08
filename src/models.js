@@ -20,43 +20,64 @@
       fuse: R.texture(T.fuselage()),
       fin: R.texture(T.fin()),
       term: R.texture(T.terminal(), { repeat: true }),
-      panel: R.texture(T.panel('#c9cdd2', 21), { repeat: true }),
-      panelY: R.texture(T.panel('#e6c422', 55), { repeat: true }),
-      panelW: R.texture(T.panel('#e4e7ea', 77), { repeat: true }),
+      wear: R.texture(T.wear(21, 1.0), { repeat: true }),
+      wearLight: R.texture(T.wear(77, 0.45), { repeat: true }),
+      tread: R.texture(T.tread(), { repeat: true }),
+      hazard: R.texture(T.hazard('#e8b81c', '#16181b'), { repeat: true }),
+      hazardR: R.texture(T.hazard('#e8e6e2', '#b8352a'), { repeat: true }),
       belt: R.texture(T.belt(), { repeat: true }),
       tire: R.texture(T.tire(), { repeat: true }),
       grass: R.texture(T.grass(), { repeat: true }),
       bagA: R.texture(T.bag('#b8412f')),
       bagB: R.texture(T.bag('#2f5d8c')),
       bagC: R.texture(T.bag('#4c7a44')),
+      aoSoft: R.texture(T.aoBlob(0.30, 1.25)),
+      aoTight: R.texture(T.aoBlob(0.14, 2.1)),
     };
     const m = {
       apron: { color: C('#ffffff'), map: tex.apron, uvRep: [240, 240], gloss: 0.10, shine: 12 },
       gate: { color: C('#ffffff'), map: tex.gate, alpha: 0.97, gloss: 0.06, noShadow: true },
       grass: { color: C('#ffffff'), map: tex.grass, uvRep: [90, 90], gloss: 0.04 },
 
-      fuse: { color: C('#ffffff'), map: tex.fuse, gloss: 0.62, shine: 90, metal: 0.15 },
-      finM: { color: C('#ffffff'), map: tex.fin, gloss: 0.55, shine: 70 },
-      white: { color: C('#e6e9ec'), gloss: 0.5, shine: 70 },
+      fuse: { color: C('#ffffff'), map: tex.fuse, gloss: 0.40, shine: 130, metal: 0.10, coat: 0.42 },
+      finM: { color: C('#ffffff'), map: tex.fin, gloss: 0.36, shine: 120, coat: 0.40 },
+      white: { color: C('#e8ebee'), gloss: 0.36, shine: 120, coat: 0.38 },
       alum: { color: C('#b4b9bf'), gloss: 0.62, shine: 96, metal: 0.55 },
-      engine: { color: C('#dfe3e7'), gloss: 0.6, shine: 90, metal: 0.25 },
+      engine: { color: C('#dfe3e7'), gloss: 0.38, shine: 130, metal: 0.18, coat: 0.45 },
       engDark: { color: C('#1b1e22'), gloss: 0.45, shine: 60, metal: 0.6 },
       navy: { color: C('#123a72'), gloss: 0.55, shine: 80 },
       red: { color: C('#c0392b'), gloss: 0.5, shine: 60 },
-      chrome: { color: C('#cfd5da'), gloss: 0.95, shine: 180, metal: 0.9 },
-      gearMetal: { color: C('#8d9298'), gloss: 0.7, shine: 110, metal: 0.7 },
-      tire: { color: C('#ffffff'), map: tex.tire, uvRep: [6, 1], gloss: 0.14, shine: 20 },
-      glass: { color: C('#12181f'), gloss: 0.9, shine: 190, metal: 0.4 },
-      glassBlue: { color: C('#5d7f9c'), gloss: 0.9, shine: 200, alpha: 0.55 },
+      chrome: { color: C('#d4dae0'), gloss: 0.98, shine: 260, metal: 0.95 },
+      gearMetal: { color: C('#868d95'), gloss: 0.34, shine: 46, metal: 0.80 },
+      tire: { color: C('#d8d8dc'), map: tex.tire, uvRep: [6, 1], gloss: 0.07, shine: 12 },
+      glass: { color: C('#0d1218'), gloss: 0.95, shine: 240, metal: 0.5, coat: 0.8 },
+      glassBlue: { color: C('#46647f'), gloss: 0.95, shine: 240, alpha: 0.5, coat: 0.9 },
 
       term: { color: C('#ffffff'), map: tex.term, uvRep: [8, 1], gloss: 0.45, shine: 70 },
-      concrete: { color: C('#b6b3ad'), gloss: 0.12, shine: 18 },
+      concrete: { color: C('#aeaaa3'), gloss: 0.03, shine: 8 },
       hill: { color: C('#40575f'), gloss: 0.04, shine: 10 },
-      darkMetal: { color: C('#4a4f55'), gloss: 0.4, shine: 50, metal: 0.5 },
-      panel: { color: C('#ffffff'), map: tex.panel, uvRep: [2, 2], gloss: 0.5, shine: 70, metal: 0.35 },
-      panelY: { color: C('#ffffff'), map: tex.panelY, uvRep: [2, 2], gloss: 0.45, shine: 60 },
-      panelW: { color: C('#ffffff'), map: tex.panelW, uvRep: [2, 2], gloss: 0.5, shine: 70 },
-      belt: { color: C('#ffffff'), map: tex.belt, uvRep: [1, 6], gloss: 0.2, shine: 24 },
+
+      /* --- 材質の類別 --------------------------------------------------
+         塗装鋼板(coat付き) / 亜鉛メッキ / アルミ / 塗装シャシー / ゴム   */
+      paintW: { color: C('#eef1f4'), map: tex.wear, uvRep: [2, 2], gloss: 0.42, shine: 120, metal: 0.05, coat: 0.55 },
+      paintY: { color: C('#e9b81a'), map: tex.wear, uvRep: [2, 2], gloss: 0.40, shine: 110, metal: 0.05, coat: 0.50 },
+      paintOr: { color: C('#e0701c'), map: tex.wear, uvRep: [2, 2], gloss: 0.40, shine: 110, metal: 0.05, coat: 0.50 },
+      paintBl: { color: C('#1d4d84'), map: tex.wear, uvRep: [2, 2], gloss: 0.40, shine: 110, metal: 0.05, coat: 0.50 },
+      paintRd: { color: C('#b23428'), map: tex.wear, uvRep: [2, 2], gloss: 0.40, shine: 110, metal: 0.05, coat: 0.50 },
+      paintGn: { color: C('#2c6b4a'), map: tex.wear, uvRep: [2, 2], gloss: 0.38, shine: 100, metal: 0.05, coat: 0.45 },
+      galv: { color: C('#9199a1'), map: tex.wear, uvRep: [3, 3], gloss: 0.26, shine: 30, metal: 0.80 },
+      alu: { color: C('#bcc3ca'), map: tex.wearLight, uvRep: [2, 2], gloss: 0.42, shine: 58, metal: 0.85 },
+      chassis: { color: C('#31363c'), map: tex.wear, uvRep: [3, 3], gloss: 0.18, shine: 24, metal: 0.35 },
+      rubber: { color: C('#1a1b1f'), gloss: 0.05, shine: 10 },
+      tread: { color: C('#ffffff'), map: tex.tread, uvRep: [1, 1], gloss: 0.22, shine: 34, metal: 0.6 },
+      hazard: { color: C('#ffffff'), map: tex.hazard, uvRep: [1, 1], gloss: 0.32, shine: 60, coat: 0.30 },
+      hazardR: { color: C('#ffffff'), map: tex.hazardR, uvRep: [1, 1], gloss: 0.32, shine: 60, coat: 0.30 },
+      /* 旧名の互換（順次置き換え） */
+      darkMetal: { color: C('#31363c'), map: tex.wear, uvRep: [3, 3], gloss: 0.18, shine: 24, metal: 0.35 },
+      panel: { color: C('#9199a1'), map: tex.wear, uvRep: [3, 3], gloss: 0.26, shine: 30, metal: 0.80 },
+      panelY: { color: C('#e9b81a'), map: tex.wear, uvRep: [2, 2], gloss: 0.40, shine: 110, metal: 0.05, coat: 0.50 },
+      panelW: { color: C('#eef1f4'), map: tex.wear, uvRep: [2, 2], gloss: 0.42, shine: 120, metal: 0.05, coat: 0.55 },
+      belt: { color: C('#ffffff'), map: tex.belt, uvRep: [1, 6], gloss: 0.14, shine: 18 },
 
       hiVis: { color: C('#d8e83a'), gloss: 0.3, shine: 30, emissive: C('#3a4008', 0.10) },
       reflect: { color: C('#dfe4e8'), gloss: 0.85, shine: 150, emissive: C('#5a6068', 0.18) },
@@ -73,7 +94,7 @@
       wandGlow: { color: C('#ff8c2a'), emissive: C('#ff7a10', 2.4), gloss: 0.5, shine: 60, alpha: 0.92 },
       wandBody: { color: C('#2a2c30'), gloss: 0.4, shine: 50 },
 
-      hoseBlack: { color: C('#26282c'), gloss: 0.35, shine: 44 },
+      hoseBlack: { color: C('#1d1f23'), gloss: 0.10, shine: 16 },
       cableRed: { color: C('#8d2b20'), gloss: 0.35, shine: 44 },
       plugYellow: { color: C('#e8b21c'), gloss: 0.55, shine: 80 },
       bagA: { color: C('#ffffff'), map: tex.bagA, gloss: 0.35, shine: 40 },
@@ -90,6 +111,9 @@
       guideDir: { color: C('#ffd23a'), emissive: C('#ffb800', 1.4), alpha: 0.7, noShadow: true, doubleSided: true },
       ghost: { color: C('#ffffff'), emissive: C('#ffffff', 0.9), alpha: 0.30, noShadow: true, doubleSided: true },
       shadowBlob: { color: C('#000000'), alpha: 0.28, noShadow: true, doubleSided: true },
+      /* 接触・環境遮蔽デカール（乗算合成） */
+      aoSoft: { map: tex.aoSoft, decal: true, strength: 0.85, noShadow: true },
+      aoTight: { map: tex.aoTight, decal: true, strength: 1.0, noShadow: true },
     };
     return { tex, mat: m };
   };
@@ -111,21 +135,55 @@
   };
   Mo.Builder = Builder;
 
+  /* 地面へ落とす接触/環境遮蔽デカール */
+  let aoMeshCache = null;
+  Mo.ao = function (R, MAT, w, d, opt) {
+    opt = opt || {};
+    if (!aoMeshCache) aoMeshCache = R.mesh(G.plane(1, 1, 1, 1));
+    const o = new Obj(aoMeshCache, opt.tight ? MAT.aoTight : MAT.aoSoft);
+    o.cast = false;
+    o.setScale(w, 1, d);
+    o.setPos(opt.x || 0, opt.y === undefined ? 0.028 : opt.y, opt.z || 0);
+    if (opt.strength !== undefined) {
+      o.mat = Object.assign({}, o.mat);
+      o.mat.strength = opt.strength;
+    }
+    return o;
+  };
+
   /* ============ 車輪 ============ */
   function wheelGeo(r, halfW, hubR) {
+    /* リムシート → サイドウォールの膨らみ → ショルダー → トレッド */
     const prof = [
-      [hubR, -halfW], [r * 0.86, -halfW], [r, -halfW * 0.66],
-      [r, halfW * 0.66], [r * 0.86, halfW], [hubR, halfW],
+      [hubR, -halfW * 0.94],
+      [r * 0.66, -halfW * 1.00],
+      [r * 0.90, -halfW * 0.96],
+      [r * 0.985, -halfW * 0.74],
+      [r, -halfW * 0.58],
+      [r, halfW * 0.58],
+      [r * 0.985, halfW * 0.74],
+      [r * 0.90, halfW * 0.96],
+      [r * 0.66, halfW * 1.00],
+      [hubR, halfW * 0.94],
     ];
-    const tire = G.rot(G.lathe(prof, 22), 0, 0, PI / 2);
-    return tire;
+    return G.rot(G.lathe(prof, 24), 0, 0, PI / 2);
   }
   function hubGeo(hubR, halfW) {
-    const parts = [G.rot(G.cyl(hubR, hubR, halfW * 2, 18), 0, 0, PI / 2)];
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * PI * 2;
-      parts.push(G.place(G.cyl(hubR * 0.16, hubR * 0.16, halfW * 2.1, 8),
-        [0, Math.cos(a) * hubR * 0.55, Math.sin(a) * hubR * 0.55], [0, 0, PI / 2]));
+    const parts = [
+      /* リム本体 */
+      G.rot(G.lathe([
+        [hubR * 0.35, -halfW * 0.9], [hubR * 0.9, -halfW * 0.95], [hubR, -halfW * 0.86],
+        [hubR * 0.86, -halfW * 0.3], [hubR * 0.86, halfW * 0.3],
+        [hubR, halfW * 0.86], [hubR * 0.9, halfW * 0.95], [hubR * 0.35, halfW * 0.9],
+      ], 20), 0, 0, PI / 2),
+      /* ハブキャップ */
+      G.place(G.cyl(hubR * 0.34, hubR * 0.30, halfW * 0.5, 12), [halfW * 0.92, 0, 0], [0, 0, PI / 2]),
+    ];
+    /* ホイールボルト */
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * PI * 2;
+      parts.push(G.place(G.cyl(hubR * 0.10, hubR * 0.10, halfW * 0.36, 6),
+        [halfW * 0.90, Math.cos(a) * hubR * 0.52, Math.sin(a) * hubR * 0.52], [0, 0, PI / 2]));
     }
     return G.merge(parts);
   }
@@ -135,8 +193,21 @@
     const o = new Obj(R.mesh(wheelGeo(r, halfW, hubR)), MAT.tire);
     const hub = new Obj(R.mesh(hubGeo(hubR, halfW)), MAT.gearMetal);
     o.add(hub);
+    o.userData = { r, halfW };
     return o;
   }
+
+  /* 車輪の接地デカールを親ノードへ追加する（車輪自体は回転するため） */
+  function wheelContact(R, MAT, parent, wheels) {
+    for (const w of wheels) {
+      const r = w.userData.r, hw = w.userData.halfW;
+      const axisZ = Math.abs(w.r[1]) > 0.5;      /* r[1]=PI/2 なら車軸がZ方向 */
+      const a = Mo.ao(R, MAT, axisZ ? r * 2.9 : hw * 5.2, axisZ ? hw * 5.2 : r * 2.9,
+        { x: w.p[0], z: w.p[2], y: 0.022, tight: true, strength: 0.95 });
+      parent.add(a);
+    }
+  }
+  Mo.wheelContact = wheelContact;
 
   /* ============ 旅客機 ============ */
   Mo.aircraft = function (R, MAT) {
@@ -266,10 +337,24 @@
       b.add(MAT.gearMetal, G.place(G.cyl(0.12, 0.12, 1.55, 10), [mx, 0.62, MG_Z], [0, 0, PI / 2]));
       b.add(MAT.darkMetal, G.place(G.box(0.86, 0.72, 1.9), [mx * 0.46, 2.42, MG_Z]));
       b.add(MAT.gearMetal, G.place(G.cyl(0.10, 0.10, 2.5, 8), [mx * 0.86, 2.0, MG_Z], [0, 0, PI / 2 + s * 0.35]));
+      /* 油圧・ブレーキ配管 */
+      for (const t of [1, -1]) {
+        b.add(MAT.chrome, G.place(G.cyl(0.028, 0.028, 1.5, 6), [mx + t * 0.10, 1.32, MG_Z + 0.20]));
+        b.add(MAT.hoseBlack, G.place(G.cyl(0.022, 0.022, 0.62, 6), [mx + t * 0.34, 0.78, MG_Z + 0.16], [0, 0, -t * 0.42]));
+      }
+      /* ドラッグブレース */
+      b.add(MAT.gearMetal, G.place(G.cyl(0.075, 0.075, 1.9, 8), [mx, 1.55, MG_Z - 0.62], [0.42, 0, 0]));
       for (const t of [1, -1]) {
         const w = makeWheel(R, MAT, 0.62, 0.21);
         w.setPos(mx + t * 0.50, 0.62, MG_Z);
         root.add(w); wheels.push(w);
+        /* ブレーキディスクスタック（内側の面に見える） */
+        const bx = mx + t * 0.50 - t * 0.20;
+        b.add(MAT.engDark, G.place(G.cyl(0.30, 0.30, 0.16, 16), [bx, 0.62, MG_Z], [0, 0, PI / 2]));
+        for (let k = 0; k < 4; k++) {
+          b.add(MAT.gearMetal, G.place(G.cyl(0.315, 0.315, 0.018, 16),
+            [bx - t * 0.06 + t * k * 0.04, 0.62, MG_Z], [0, 0, PI / 2]));
+        }
       }
     }
 
@@ -292,6 +377,10 @@
     lights.logo = lamp(MAT.lightWhite, 0, AXIS + 1.7, -29.6, 0.10);
 
     b.build(R, root);
+    /* 接地・環境遮蔽 */
+    wheelContact(R, MAT, root, wheels);
+    root.add(Mo.ao(R, MAT, 30, 34, { z: -16, y: 0.020, strength: 0.34 }));
+    root.add(Mo.ao(R, MAT, 7.5, 30, { z: -17, y: 0.021, strength: 0.30 }));
     root.userData = {
       wheels, engines: engRefs, lights,
       FR, AXIS, LEN, NG_Z, MG_Z,
@@ -381,6 +470,7 @@
       return w;
     }
     const wands = opt.wands === false ? null : { l: wand(arms.l.hand), r: wand(arms.r.hand) };
+    root.add(Mo.ao(R, MAT, 0.80, 0.66, { y: 0.020, tight: true, strength: 0.85 }));
 
     root.userData = { arms, wands };
     return root;
@@ -428,6 +518,7 @@
     }
     b.add(MAT.rope, G.tube(pts, 0.014, 0, 6));
     b.build(R, root);
+    root.add(Mo.ao(R, MAT, 0.72, 0.78, { y: 0.018, tight: true, strength: 0.95 }));
     return root;
   };
 
@@ -438,8 +529,8 @@
     const BY = 3.7;             /* 通路の中心高さ */
     /* ロタンダ（ターミナル側の回転部） */
     b.add(MAT.concrete, G.place(G.cyl(2.9, 3.1, BY + 1.6, 20), [0, (BY + 1.6) / 2, 0]));
-    b.add(MAT.panelW, G.place(G.cyl(3.15, 3.15, 0.4, 20), [0, BY + 1.5, 0]));
-    b.add(MAT.darkMetal, G.place(G.cyl(3.2, 3.2, 0.25, 20), [0, BY - 1.6, 0]));
+    b.add(MAT.alu, G.place(G.cyl(3.15, 3.15, 0.4, 20), [0, BY + 1.5, 0]));
+    b.add(MAT.chassis, G.place(G.cyl(3.2, 3.2, 0.25, 20), [0, BY - 1.6, 0]));
     b.build(R, root);
 
     /* 外筒（固定） */
@@ -463,18 +554,25 @@
       const yc = BY;
       /* 側壁（窓帯付き） */
       for (const s of [1, -1]) {
-        bb.add(MAT.panelW, G.place(G.box(len, h, 0.10), [x0 + len / 2, yc, s * w / 2]));
+        bb.add(MAT.alu, G.place(G.box(len, h, 0.10), [x0 + len / 2, yc, s * w / 2]));
         bb.add(MAT.glass, G.place(G.box(len - 0.5, h * 0.30, 0.13), [x0 + len / 2, yc + h * 0.16, s * w / 2]));
+        /* 側面の手すり */
+        bb.add(MAT.galv, G.place(G.box(len - 0.3, 0.06, 0.06), [x0 + len / 2, yc - h / 2 + 0.62, s * (w / 2 + 0.16)]));
+        for (let i = 0; i < Math.max(2, Math.round(len / 3)); i++) {
+          const x = x0 + 0.6 + i * 3;
+          if (x > x0 + len - 0.4) break;
+          bb.add(MAT.galv, G.place(G.box(0.06, 0.66, 0.06), [x, yc - h / 2 + 0.30, s * (w / 2 + 0.16)]));
+        }
       }
       /* 屋根（かまぼこ） */
-      bb.add(MAT.panelW, G.place(G.rot(G.cyl(w * 0.52, w * 0.52, len, 14, false, false), 0, 0, PI / 2), [x0 + len / 2, yc + h / 2 - 0.10, 0]));
+      bb.add(MAT.alu, G.place(G.rot(G.cyl(w * 0.52, w * 0.52, len, 14, false, false), 0, 0, PI / 2), [x0 + len / 2, yc + h / 2 - 0.10, 0]));
       /* 床 */
-      bb.add(MAT.darkMetal, G.place(G.box(len, 0.18, w), [x0 + len / 2, yc - h / 2, 0]));
+      bb.add(MAT.chassis, G.place(G.box(len, 0.18, w), [x0 + len / 2, yc - h / 2, 0]));
       /* 補強リブ */
       const n = Math.max(3, Math.round(len / 2.2));
       for (let i = 0; i <= n; i++) {
         const x = x0 + (i / n) * len;
-        bb.add(MAT.darkMetal, G.place(G.box(0.13, h + 0.1, w + 0.06), [x, yc, 0]));
+        bb.add(MAT.galv, G.place(G.box(0.13, h + 0.1, w + 0.06), [x, yc, 0]));
       }
     }
 
@@ -483,12 +581,13 @@
     root.add(cab);
     const cb = new Builder();
     const CW = 3.5, CH = 3.1, CL = 3.2, cy = BY;
-    cb.add(MAT.panelW, G.place(G.box(CL, CH, CW), [CL / 2, cy, 0]));
+    cb.add(MAT.alu, G.place(G.box(CL, CH, CW), [CL / 2, cy, 0]));
     cb.add(MAT.glass, G.place(G.box(CL - 0.4, 0.95, CW + 0.06), [CL / 2, cy + 0.55, 0]));
-    cb.add(MAT.darkMetal, G.place(G.box(CL + 0.1, 0.22, CW + 0.1), [CL / 2, cy - CH / 2, 0]));
-    cb.add(MAT.panelY, G.place(G.box(0.3, 0.5, CW + 0.14), [CL * 0.5, cy + CH / 2 + 0.2, 0]));
+    cb.add(MAT.chassis, G.place(G.box(CL + 0.1, 0.22, CW + 0.1), [CL / 2, cy - CH / 2, 0]));
+    cb.add(MAT.paintY, G.place(G.box(0.3, 0.5, CW + 0.14), [CL * 0.5, cy + CH / 2 + 0.2, 0]));
     /* 操作盤 */
-    cb.add(MAT.darkMetal, G.place(G.box(0.5, 0.6, 0.4), [CL - 0.2, cy - 0.4, CW / 2 - 0.4]));
+    cb.add(MAT.chassis, G.place(G.box(0.5, 0.6, 0.4), [CL - 0.2, cy - 0.4, CW / 2 - 0.4]));
+    cb.add(MAT.lampGlass, G.place(G.box(0.12, 0.14, 0.14), [CL - 0.45, cy - 0.2, CW / 2 - 0.4]));
     cb.build(R, cab);
 
     /* 蛇腹（伸縮するフレーム群） */
@@ -505,7 +604,7 @@
         G.place(G.box(0.11, 0.16, wq), [0, hq / 2, 0]),
         G.place(G.box(0.11, 0.16, wq), [0, -hq / 2, 0]),
       ]);
-      const o = new Obj(R.mesh(fg), i % 2 ? MAT.darkMetal : MAT.panelW);
+      const o = new Obj(R.mesh(fg), i % 2 ? MAT.rubber : MAT.galv);
       o.setPos(0, cy + 0.1, 0);
       bellows.add(o);
       bellowFrames.push(o);
@@ -525,9 +624,9 @@
     root.add(column);
     const colB = new Builder();
     const colH = cy - CH / 2 - 0.15;
-    colB.add(MAT.panel, G.place(G.box(0.5, colH, 0.5), [0, 0.55 + colH / 2, 0]));
-    colB.add(MAT.darkMetal, G.place(G.box(0.9, 0.42, 3.0), [0, 0.72, 0]));
-    colB.add(MAT.panelY, G.place(G.box(0.66, 0.36, 0.66), [0, 0.55 + colH, 0]));
+    colB.add(MAT.galv, G.place(G.box(0.5, colH, 0.5), [0, 0.55 + colH / 2, 0]));
+    colB.add(MAT.chassis, G.place(G.box(0.9, 0.42, 3.0), [0, 0.72, 0]));
+    colB.add(MAT.paintY, G.place(G.box(0.66, 0.36, 0.66), [0, 0.55 + colH, 0]));
     colB.build(R, column);
     const bogieWheels = [];
     for (const s of [1, -1]) {
@@ -538,6 +637,8 @@
       bogieWheels.push(w);
     }
 
+    wheelContact(R, MAT, column, bogieWheels);
+    column.add(Mo.ao(R, MAT, 2.6, 3.8, { y: 0.020, strength: 0.5 }));
     root.userData = { outer, inner, cab, bellows, bellowFrames, bumper, column, bogieWheels, cy };
     return root;
   };
@@ -547,26 +648,38 @@
     const root = new Obj();
     const b = new Builder();
     /* 低い車体 */
-    b.add(MAT.panelY, G.place(G.box(5.0, 0.78, 2.55), [0, 0.72, 0]));
-    b.add(MAT.darkMetal, G.place(G.box(5.1, 0.22, 2.62), [0, 0.34, 0]));
+    b.add(MAT.paintY, G.place(G.box(5.0, 0.78, 2.55), [0, 0.72, 0]));
+    b.add(MAT.chassis, G.place(G.box(5.1, 0.22, 2.62), [0, 0.34, 0]));
     /* 前後のバンパー（黒黄の警戒色） */
-    for (const s of [1, -1]) b.add(MAT.hoseBlack, G.place(G.box(0.28, 0.44, 2.7), [s * 2.55, 0.62, 0]));
+    for (const s of [1, -1]) b.add(MAT.hazard, G.uvScale(G.place(G.box(0.28, 0.44, 2.7), [s * 2.55, 0.62, 0]), 4.5, 1));
+    /* 泥よけ */
+    for (const sx of [1.6, -1.6]) for (const sz of [1, -1]) {
+      b.add(MAT.chassis, G.place(G.rot(G.arcBand(0.72, 0.07, 0.54, 0.12, PI - 0.12, 9), 0, PI / 2, 0), [sx, 0.56, sz * 1.28]));
+    }
     /* キャブ */
-    b.add(MAT.panelY, G.place(G.box(1.9, 0.35, 2.4), [-1.0, 1.28, 0]));
-    for (const s of [1, -1]) b.add(MAT.darkMetal, G.place(G.box(0.09, 1.25, 0.09), [-0.15, 2.05, s * 1.05]));
-    for (const s of [1, -1]) b.add(MAT.darkMetal, G.place(G.box(0.09, 1.25, 0.09), [-1.85, 2.05, s * 1.05]));
+    b.add(MAT.paintY, G.place(G.box(1.9, 0.35, 2.4), [-1.0, 1.28, 0]));
+    for (const s of [1, -1]) b.add(MAT.chassis, G.place(G.box(0.09, 1.25, 0.09), [-0.15, 2.05, s * 1.05]));
+    for (const s of [1, -1]) b.add(MAT.chassis, G.place(G.box(0.09, 1.25, 0.09), [-1.85, 2.05, s * 1.05]));
+    /* ミラー */
+    for (const s of [1, -1]) {
+      b.add(MAT.chassis, G.place(G.cyl(0.02, 0.02, 0.34, 6), [-0.15, 2.30, s * 1.28], [0, 0, PI / 2.6]));
+      b.add(MAT.chassis, G.place(G.box(0.05, 0.24, 0.16), [-0.15, 2.42, s * 1.44]));
+    }
     b.add(MAT.glassBlue, G.place(G.box(1.75, 1.15, 0.06), [-1.0, 2.05, 1.10]));
     b.add(MAT.glassBlue, G.place(G.box(1.75, 1.15, 0.06), [-1.0, 2.05, -1.10]));
     b.add(MAT.glassBlue, G.place(G.box(0.06, 1.15, 2.15), [-0.15, 2.05, 0]));
-    b.add(MAT.panelY, G.place(G.box(2.1, 0.14, 2.5), [-1.0, 2.70, 0]));
+    b.add(MAT.paintY, G.place(G.box(2.1, 0.14, 2.5), [-1.0, 2.70, 0]));
     /* 座席・ハンドル */
     b.add(MAT.cloth, G.place(G.box(0.5, 0.6, 0.55), [-1.55, 1.72, 0]));
     b.add(MAT.cloth, G.place(G.box(0.55, 0.12, 0.55), [-1.25, 1.50, 0]));
-    b.add(MAT.darkMetal, G.place(G.cyl(0.22, 0.22, 0.05, 14), [-0.62, 1.72, 0], [0, 0, PI / 2.4]));
+    b.add(MAT.chassis, G.place(G.cyl(0.22, 0.22, 0.05, 14), [-0.62, 1.72, 0], [0, 0, PI / 2.4]));
     /* 排気管 */
     b.add(MAT.chrome, G.place(G.cyl(0.07, 0.07, 1.1, 10), [0.9, 1.55, 1.05]));
+    b.add(MAT.chassis, G.place(G.cyl(0.09, 0.09, 0.12, 10), [0.9, 2.14, 1.05]));
+    /* 踏板 */
+    for (const sz of [1, -1]) b.add(MAT.tread, G.place(G.box(0.5, 0.05, 0.26), [-1.2, 0.72, sz * 1.34]));
     /* 回転灯の台座 */
-    b.add(MAT.darkMetal, G.place(G.cyl(0.10, 0.10, 0.18, 10), [-1.0, 2.86, 0]));
+    b.add(MAT.chassis, G.place(G.cyl(0.10, 0.10, 0.18, 10), [-1.0, 2.86, 0]));
     b.build(R, root);
 
     const beacon = new Obj(R.mesh(G.cyl(0.16, 0.16, 0.22, 14)), MAT.lightAmber);
@@ -585,18 +698,20 @@
     const bar = new Obj();
     root.add(bar);
     const bb2 = new Builder();
-    bb2.add(MAT.panelY, G.place(G.box(5.2, 0.24, 0.30), [2.6 + 2.6, 0.55, 0]));
-    bb2.add(MAT.darkMetal, G.place(G.box(0.5, 0.36, 0.36), [2.75, 0.55, 0]));
+    bb2.add(MAT.paintY, G.place(G.box(5.2, 0.24, 0.30), [2.6 + 2.6, 0.55, 0]));
+    bb2.add(MAT.chassis, G.place(G.box(0.5, 0.36, 0.36), [2.75, 0.55, 0]));
     /* 機体側のヘッド */
-    bb2.add(MAT.darkMetal, G.place(G.box(0.7, 0.42, 1.05), [7.55, 0.45, 0]));
+    bb2.add(MAT.chassis, G.place(G.box(0.7, 0.42, 1.05), [7.55, 0.45, 0]));
     for (const s of [1, -1]) bb2.add(MAT.chrome, G.place(G.cyl(0.075, 0.075, 0.30, 10), [7.75, 0.30, s * 0.42], [0, 0, PI / 2]));
     /* 中間の支持輪 */
-    bb2.add(MAT.darkMetal, G.place(G.box(0.16, 0.34, 0.16), [5.0, 0.40, 0]));
+    bb2.add(MAT.chassis, G.place(G.box(0.16, 0.34, 0.16), [5.0, 0.40, 0]));
     bb2.build(R, bar);
     const barWheel = makeWheel(R, MAT, 0.20, 0.07);
     barWheel.setPos(5.0, 0.20, 0); barWheel.r[1] = PI / 2;
     bar.add(barWheel);
 
+    wheelContact(R, MAT, root, wheels);
+    root.add(Mo.ao(R, MAT, 5.6, 3.2, { y: 0.020, strength: 0.45 }));
     root.userData = { wheels, beacon, bar, barWheel };
     return root;
   };
@@ -605,18 +720,37 @@
   Mo.beltLoader = function (R, MAT) {
     const root = new Obj();
     const b = new Builder();
-    b.add(MAT.panelW, G.place(G.box(4.6, 0.85, 2.15), [0, 1.05, 0]));
-    b.add(MAT.darkMetal, G.place(G.box(4.7, 0.20, 2.2), [0, 0.60, 0]));
+    b.add(MAT.paintW, G.place(G.box(4.6, 0.60, 2.15), [0, 1.18, 0]));
+    b.add(MAT.paintBl, G.place(G.box(4.62, 0.30, 2.17), [0, 0.76, 0]));
+    b.add(MAT.chassis, G.place(G.box(4.7, 0.18, 2.2), [0, 0.58, 0]));
+    /* 前後の警戒帯 */
+    for (const s2 of [1, -1]) b.add(MAT.hazard, G.uvScale(G.place(G.box(0.10, 0.30, 2.16), [s2 * 2.32, 0.98, 0]), 3.5, 1));
+    /* 泥よけ */
+    for (const sx of [1.55, -1.55]) for (const sz of [1, -1]) {
+      b.add(MAT.chassis, G.place(G.rot(G.arcBand(0.60, 0.06, 0.44, 0.15, PI - 0.15, 9), 0, PI / 2, 0), [sx, 0.46, sz * 1.05]));
+    }
     /* 運転席（後方） */
-    b.add(MAT.panelW, G.place(G.box(1.4, 1.1, 2.0), [-1.55, 2.0, 0]));
+    b.add(MAT.paintW, G.place(G.box(1.4, 1.1, 2.0), [-1.55, 2.0, 0]));
     b.add(MAT.glassBlue, G.place(G.box(0.06, 0.85, 1.8), [-0.85, 2.15, 0]));
     b.add(MAT.cloth, G.place(G.box(0.45, 0.55, 0.5), [-1.9, 2.1, 0]));
-    b.add(MAT.darkMetal, G.place(G.cyl(0.19, 0.19, 0.05, 12), [-1.15, 2.05, 0], [0, 0, PI / 2.4]));
+    b.add(MAT.chassis, G.place(G.cyl(0.19, 0.19, 0.05, 12), [-1.15, 2.05, 0], [0, 0, PI / 2.4]));
+    /* 作業灯・排気管・踏板・番号板 */
+    for (const sz of [1, -1]) {
+      b.add(MAT.chassis, G.place(G.box(0.14, 0.16, 0.16), [-1.05, 2.62, sz * 0.62]));
+      b.add(MAT.lampGlass, G.place(G.box(0.05, 0.13, 0.13), [-0.96, 2.62, sz * 0.62]));
+    }
+    b.add(MAT.chrome, G.place(G.cyl(0.055, 0.055, 0.9, 10), [-2.05, 1.9, 0.82]));
+    b.add(MAT.chassis, G.place(G.cyl(0.075, 0.075, 0.14, 10), [-2.05, 2.4, 0.82]));
+    for (const sz of [1, -1]) {
+      b.add(MAT.tread, G.place(G.box(0.42, 0.05, 0.30), [-1.9, 1.02, sz * 1.14]));
+      b.add(MAT.galv, G.place(G.box(0.05, 0.42, 0.05), [-1.72, 0.82, sz * 1.14]));
+    }
+    b.add(MAT.tread, G.uvScale(G.place(G.box(0.30, 0.03, 1.9), [1.6, 1.49, 0]), 1, 5));
     /* 手すり */
     for (const s of [1, -1]) {
-      b.add(MAT.panelY, G.place(G.box(2.2, 0.07, 0.07), [0.9, 2.05, s * 1.05]));
-      b.add(MAT.panelY, G.place(G.box(0.07, 0.9, 0.07), [-0.1, 1.65, s * 1.05]));
-      b.add(MAT.panelY, G.place(G.box(0.07, 0.9, 0.07), [1.95, 1.65, s * 1.05]));
+      b.add(MAT.paintY, G.place(G.box(2.2, 0.07, 0.07), [0.9, 2.05, s * 1.05]));
+      b.add(MAT.paintY, G.place(G.box(0.07, 0.9, 0.07), [-0.1, 1.65, s * 1.05]));
+      b.add(MAT.paintY, G.place(G.box(0.07, 0.9, 0.07), [1.95, 1.65, s * 1.05]));
     }
     b.build(R, root);
 
@@ -635,11 +769,11 @@
     const bo = new Builder();
     const L = 6.6, W2 = 1.15;
     for (const s of [1, -1]) {
-      bo.add(MAT.panelW, G.place(G.box(L, 0.34, 0.09), [L / 2, 0.16, s * (W2 / 2 + 0.05)]));
-      bo.add(MAT.panelY, G.place(G.box(L, 0.07, 0.07), [L / 2, 0.62, s * (W2 / 2 + 0.05)]));
-      for (let i = 1; i < 6; i++) bo.add(MAT.panelY, G.place(G.box(0.06, 0.44, 0.06), [i * L / 6, 0.40, s * (W2 / 2 + 0.05)]));
+      bo.add(MAT.galv, G.place(G.box(L, 0.34, 0.09), [L / 2, 0.16, s * (W2 / 2 + 0.05)]));
+      bo.add(MAT.paintY, G.place(G.box(L, 0.07, 0.07), [L / 2, 0.62, s * (W2 / 2 + 0.05)]));
+      for (let i = 1; i < 6; i++) bo.add(MAT.paintY, G.place(G.box(0.06, 0.44, 0.06), [i * L / 6, 0.40, s * (W2 / 2 + 0.05)]));
     }
-    bo.add(MAT.darkMetal, G.place(G.box(L, 0.10, W2), [L / 2, -0.06, 0]));
+    bo.add(MAT.chassis, G.place(G.box(L, 0.10, W2), [L / 2, -0.06, 0]));
     /* ローラー */
     bo.add(MAT.chrome, G.place(G.cyl(0.14, 0.14, W2 + 0.1, 12), [0.05, 0.03, 0], [0, 0, PI / 2]));
     bo.add(MAT.chrome, G.place(G.cyl(0.14, 0.14, W2 + 0.1, 12), [L - 0.05, 0.03, 0], [0, 0, PI / 2]));
@@ -655,6 +789,8 @@
     tipLight.setPos(L - 0.2, 0.75, 0.55); tipLight.cast = false;
     boom.add(tipLight);
 
+    wheelContact(R, MAT, root, wheels);
+    root.add(Mo.ao(R, MAT, 5.2, 2.8, { y: 0.020, strength: 0.45 }));
     root.userData = { wheels, boom, belt, beltMat, boomLen: L };
     return root;
   };
@@ -663,19 +799,29 @@
   Mo.gpu = function (R, MAT) {
     const root = new Obj();
     const b = new Builder();
-    b.add(MAT.panelW, G.place(G.box(3.1, 1.7, 1.75), [0, 1.35, 0]));
-    b.add(MAT.darkMetal, G.place(G.box(3.15, 0.22, 1.8), [0, 0.55, 0]));
-    /* ルーバー */
-    for (let i = 0; i < 6; i++) b.add(MAT.darkMetal, G.place(G.box(0.06, 0.14, 1.5), [1.56, 0.95 + i * 0.22, 0]));
-    b.add(MAT.panelY, G.place(G.box(3.2, 0.16, 1.85), [0, 2.22, 0]));
+    b.add(MAT.paintW, G.place(G.box(3.1, 1.7, 1.75), [0, 1.35, 0]));
+    b.add(MAT.paintOr, G.place(G.box(3.12, 0.26, 1.77), [0, 1.86, 0]));
+    b.add(MAT.chassis, G.place(G.box(3.15, 0.22, 1.8), [0, 0.55, 0]));
+    /* 冷却グリル */
+    b.add(MAT.chassis, G.place(G.box(0.06, 1.30, 1.42), [1.55, 1.45, 0]));
+    for (let i = 0; i < 8; i++) b.add(MAT.galv, G.place(G.box(0.05, 0.09, 1.36), [1.59, 0.92 + i * 0.16, 0]));
+    /* 操作盤と表示灯 */
+    b.add(MAT.chassis, G.place(G.box(0.10, 0.52, 0.62), [-1.58, 1.55, 0.42]));
+    b.add(MAT.glass, G.place(G.box(0.04, 0.30, 0.44), [-1.64, 1.62, 0.42]));
+    b.add(MAT.lightGreen, G.place(G.sphere(0.045, 8, 6), [-1.64, 1.34, 0.26]));
+    b.add(MAT.lightRed, G.place(G.sphere(0.045, 8, 6), [-1.64, 1.34, 0.40]));
+    /* 消火器 */
+    b.add(MAT.paintRd, G.place(G.cyl(0.09, 0.09, 0.42, 10), [-1.52, 1.05, -0.62]));
+    b.add(MAT.chassis, G.place(G.cyl(0.03, 0.03, 0.10, 6), [-1.52, 1.30, -0.62]));
+    b.add(MAT.paintY, G.place(G.box(3.2, 0.16, 1.85), [0, 2.22, 0]));
     /* 牽引アーム */
-    b.add(MAT.darkMetal, G.place(G.box(1.4, 0.12, 0.12), [-2.1, 0.6, 0]));
-    b.add(MAT.darkMetal, G.place(G.cyl(0.12, 0.12, 0.4, 10), [-2.75, 0.45, 0], [0, 0, PI / 2]));
+    b.add(MAT.chassis, G.place(G.box(1.4, 0.12, 0.12), [-2.1, 0.6, 0]));
+    b.add(MAT.galv, G.place(G.cyl(0.12, 0.12, 0.4, 10), [-2.75, 0.45, 0], [0, 0, PI / 2]));
     /* ケーブルリール（横向きのドラム） */
-    b.add(MAT.darkMetal, G.place(G.cyl(0.14, 0.14, 1.30, 10), [0.45, 1.62, 0.55], [0, 0, PI / 2]));
-    for (const s2 of [-1, 1]) b.add(MAT.darkMetal, G.place(G.cyl(0.54, 0.54, 0.07, 18), [0.45 + s2 * 0.30, 1.62, 0.55], [0, 0, PI / 2]));
+    b.add(MAT.galv, G.place(G.cyl(0.14, 0.14, 1.30, 10), [0.45, 1.62, 0.55], [0, 0, PI / 2]));
+    for (const s2 of [-1, 1]) b.add(MAT.galv, G.place(G.cyl(0.54, 0.54, 0.07, 18), [0.45 + s2 * 0.30, 1.62, 0.55], [0, 0, PI / 2]));
     b.add(MAT.cableRed, G.place(G.cyl(0.44, 0.44, 0.52, 18), [0.45, 1.62, 0.55], [0, 0, PI / 2]));
-    b.add(MAT.darkMetal, G.place(G.box(0.10, 0.34, 0.10), [0.45, 1.90, 0.55]));
+    b.add(MAT.galv, G.place(G.box(0.10, 0.34, 0.10), [0.45, 1.90, 0.55]));
     b.build(R, root);
     const wheels = [];
     for (const sx of [1.1, -1.1]) for (const sz of [1, -1]) {
@@ -683,6 +829,8 @@
       w.setPos(sx, 0.40, sz * 0.85); w.r[1] = PI / 2;
       root.add(w); wheels.push(w);
     }
+    wheelContact(R, MAT, root, wheels);
+    root.add(Mo.ao(R, MAT, 3.6, 2.4, { y: 0.020, strength: 0.45 }));
     root.userData = { wheels, reelPos: [0.4, 1.55, 1.25] };
     return root;
   };
@@ -691,25 +839,27 @@
   Mo.fueler = function (R, MAT) {
     const root = new Obj();
     const b = new Builder();
-    b.add(MAT.darkMetal, G.place(G.box(6.4, 0.32, 2.5), [0, 0.72, 0]));
+    b.add(MAT.chassis, G.place(G.box(6.4, 0.32, 2.5), [0, 0.72, 0]));
     /* キャブ */
-    b.add(MAT.panelW, G.place(G.box(2.0, 1.75, 2.4), [-2.1, 1.78, 0]));
+    b.add(MAT.paintW, G.place(G.box(2.0, 1.75, 2.4), [-2.1, 1.78, 0]));
+    b.add(MAT.paintRd, G.place(G.box(2.02, 0.22, 2.42), [-2.1, 1.20, 0]));
+    for (const s2 of [1, -1]) b.add(MAT.chassis, G.place(G.rot(G.arcBand(0.70, 0.06, 0.46, 0.15, PI - 0.15, 9), 0, PI / 2, 0), [-2.2, 0.58, s2 * 1.16]));
     b.add(MAT.glassBlue, G.place(G.box(0.07, 0.85, 2.15), [-3.05, 2.25, 0]));
     b.add(MAT.glassBlue, G.place(G.box(1.7, 0.8, 0.06), [-2.1, 2.25, 1.20]));
     /* 作業デッキ + 手すり */
-    b.add(MAT.panelW, G.place(G.box(4.2, 0.16, 2.4), [1.2, 0.95, 0]));
+    b.add(MAT.tread, G.uvScale(G.place(G.box(4.2, 0.16, 2.4), [1.2, 0.95, 0]), 9, 5));
     for (const s of [1, -1]) {
-      b.add(MAT.panelY, G.place(G.box(4.2, 0.07, 0.07), [1.2, 2.0, s * 1.18]));
-      b.add(MAT.panelY, G.place(G.box(0.07, 1.0, 0.07), [-0.8, 1.5, s * 1.18]));
-      b.add(MAT.panelY, G.place(G.box(0.07, 1.0, 0.07), [3.2, 1.5, s * 1.18]));
+      b.add(MAT.paintY, G.place(G.box(4.2, 0.07, 0.07), [1.2, 2.0, s * 1.18]));
+      b.add(MAT.paintY, G.place(G.box(0.07, 1.0, 0.07), [-0.8, 1.5, s * 1.18]));
+      b.add(MAT.paintY, G.place(G.box(0.07, 1.0, 0.07), [3.2, 1.5, s * 1.18]));
     }
-    b.add(MAT.panelY, G.place(G.box(4.2, 0.07, 0.07), [1.2, 2.0, 0]));
+    b.add(MAT.paintY, G.place(G.box(4.2, 0.07, 0.07), [1.2, 2.0, 0]));
     /* ホースリール */
-    b.add(MAT.darkMetal, G.place(G.cyl(0.75, 0.75, 0.14, 18), [1.0, 1.85, -0.85], [PI / 2, 0, 0]));
+    b.add(MAT.galv, G.place(G.cyl(0.75, 0.75, 0.14, 18), [1.0, 1.85, -0.85], [PI / 2, 0, 0]));
     b.add(MAT.hoseBlack, G.place(G.cyl(0.62, 0.62, 0.40, 18), [1.0, 1.85, -0.72], [PI / 2, 0, 0]));
-    b.add(MAT.darkMetal, G.place(G.cyl(0.75, 0.75, 0.14, 18), [1.0, 1.85, -0.55], [PI / 2, 0, 0]));
+    b.add(MAT.galv, G.place(G.cyl(0.75, 0.75, 0.14, 18), [1.0, 1.85, -0.55], [PI / 2, 0, 0]));
     /* 計器盤 */
-    b.add(MAT.panelY, G.place(G.box(1.0, 0.9, 0.18), [3.0, 1.7, 1.1]));
+    b.add(MAT.paintY, G.place(G.box(1.0, 0.9, 0.18), [3.0, 1.7, 1.1]));
     b.add(MAT.glass, G.place(G.cyl(0.26, 0.26, 0.06, 16), [3.0, 1.85, 1.22], [PI / 2, 0, 0]));
     b.build(R, root);
     const wheels = [];
@@ -718,6 +868,8 @@
       w.setPos(sx, 0.55, sz * 1.15); w.r[1] = PI / 2;
       root.add(w); wheels.push(w);
     }
+    wheelContact(R, MAT, root, wheels);
+    root.add(Mo.ao(R, MAT, 7.0, 3.2, { y: 0.020, strength: 0.45 }));
     root.userData = { wheels, reelPos: [1.0, 1.85, -0.72] };
     return root;
   };
@@ -726,22 +878,29 @@
   Mo.dolly = function (R, MAT) {
     const root = new Obj();
     const b = new Builder();
-    b.add(MAT.panelW, G.place(G.box(3.2, 0.14, 1.9), [0, 0.72, 0]));
-    b.add(MAT.darkMetal, G.place(G.box(3.3, 0.18, 0.16), [0, 0.60, 0.90]));
-    b.add(MAT.darkMetal, G.place(G.box(3.3, 0.18, 0.16), [0, 0.60, -0.90]));
+    b.add(MAT.tread, G.uvScale(G.place(G.box(3.2, 0.14, 1.9), [0, 0.72, 0]), 7, 4));
+    b.add(MAT.paintGn, G.place(G.box(3.3, 0.20, 0.16), [0, 0.60, 0.90]));
+    b.add(MAT.paintGn, G.place(G.box(3.3, 0.20, 0.16), [0, 0.60, -0.90]));
+    b.add(MAT.chassis, G.place(G.box(3.0, 0.12, 1.5), [0, 0.50, 0]));
     for (const s2 of [1, -1]) {
-      b.add(MAT.panelY, G.place(G.box(0.09, 0.85, 0.09), [s2 * 1.5, 1.14, 0.85]));
-      b.add(MAT.panelY, G.place(G.box(0.09, 0.85, 0.09), [s2 * 1.5, 1.14, -0.85]));
-      b.add(MAT.panelY, G.place(G.box(0.09, 0.09, 1.8), [s2 * 1.5, 1.54, 0]));
+      b.add(MAT.paintGn, G.place(G.box(0.09, 0.85, 0.09), [s2 * 1.5, 1.14, 0.85]));
+      b.add(MAT.paintGn, G.place(G.box(0.09, 0.85, 0.09), [s2 * 1.5, 1.14, -0.85]));
+      b.add(MAT.paintGn, G.place(G.box(0.09, 0.09, 1.8), [s2 * 1.5, 1.54, 0]));
+      /* 荷崩れ防止のフック */
+      for (const sz of [1, -1]) b.add(MAT.galv, G.place(G.cyl(0.025, 0.025, 0.12, 6), [s2 * 1.05, 0.66, sz * 0.94]));
     }
-    b.add(MAT.darkMetal, G.place(G.box(1.3, 0.10, 0.10), [-2.2, 0.42, 0]));
-    b.add(MAT.darkMetal, G.place(G.cyl(0.12, 0.12, 0.34, 10), [-2.85, 0.36, 0], [0, 0, PI / 2]));
+    b.add(MAT.chassis, G.place(G.box(1.3, 0.10, 0.10), [-2.2, 0.42, 0]));
+    b.add(MAT.galv, G.place(G.cyl(0.12, 0.12, 0.34, 10), [-2.85, 0.36, 0], [0, 0, PI / 2]));
+    b.add(MAT.galv, G.place(G.cyl(0.09, 0.09, 0.26, 8), [2.15, 0.42, 0], [0, 0, PI / 2]));
     b.build(R, root);
+    const dw = [];
     for (const sx of [1.15, -1.15]) for (const sz of [1, -1]) {
       const w = makeWheel(R, MAT, 0.30, 0.11);
       w.setPos(sx, 0.30, sz * 0.78); w.r[1] = PI / 2;
-      root.add(w);
+      root.add(w); dw.push(w);
     }
+    wheelContact(R, MAT, root, dw);
+    root.add(Mo.ao(R, MAT, 3.6, 2.2, { y: 0.020, strength: 0.42 }));
     return root;
   };
 

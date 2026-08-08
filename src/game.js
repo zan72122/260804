@@ -240,6 +240,11 @@
     R.shadowCenter[0] = damp(R.shadowCenter[0], cx, 6, dt);
     R.shadowCenter[2] = damp(R.shadowCenter[2], cz, 6, dt);
     R.shadowRadius = damp(R.shadowRadius, clamp(spread + 30, 34, 90), 6, dt);
+    /* 近景シャドウは注視点まわりを密に覆う（接地の影がはっきり出る） */
+    const cd = Math.hypot(ex - camTgt[0], ey - camTgt[1], ez - camTgt[2]);
+    R.shadowCenterN[0] = damp(R.shadowCenterN[0], camTgt[0], 8, dt);
+    R.shadowCenterN[2] = damp(R.shadowCenterN[2], camTgt[2], 8, dt);
+    R.shadowRadiusN = damp(R.shadowRadiusN, clamp(cd * 0.62, 5.5, 26), 8, dt);
   }
 
   /* 画面上での「ワールド方向」を求める（操作方向の自動整合に使う） */

@@ -326,6 +326,39 @@
     return G.fixWinding(g);
   };
 
+  /* 円弧状の帯（フェンダー等）。XY平面で角度 a0..a1、Z方向に width */
+  G.arcBand = function (R, thick, width, a0, a1, seg) {
+    seg = seg || 10;
+    const g = mk(), ro = R + thick / 2, ri = R - thick / 2, hw = width / 2;
+    const idx = [];
+    for (let i = 0; i <= seg; i++) {
+      const a = a0 + (a1 - a0) * (i / seg), ca = Math.cos(a), sa = Math.sin(a);
+      const t = i / seg;
+      idx.push([
+        vert(g, ca * ro, sa * ro, -hw, ca, sa, 0, t, 0),
+        vert(g, ca * ro, sa * ro, hw, ca, sa, 0, t, 1),
+        vert(g, ca * ri, sa * ri, -hw, -ca, -sa, 0, t, 0),
+        vert(g, ca * ri, sa * ri, hw, -ca, -sa, 0, t, 1),
+        vert(g, ca * ro, sa * ro, -hw, 0, 0, -1, t, 0),
+        vert(g, ca * ri, sa * ri, -hw, 0, 0, -1, t, 1),
+        vert(g, ca * ro, sa * ro, hw, 0, 0, 1, t, 0),
+        vert(g, ca * ri, sa * ri, hw, 0, 0, 1, t, 1),
+      ]);
+    }
+    for (let i = 0; i < seg; i++) {
+      const A = idx[i], B = idx[i + 1];
+      quad(g, A[0], A[1], B[1], B[0]);   /* 外面 */
+      quad(g, A[2], A[3], B[3], B[2]);   /* 内面 */
+      quad(g, A[4], A[5], B[5], B[4]);   /* 側面 */
+      quad(g, A[6], A[7], B[7], B[6]);   /* 側面 */
+    }
+    /* 端面 */
+    const F = idx[0], L = idx[seg];
+    quad(g, F[0], F[2], F[3], F[1]);
+    quad(g, L[0], L[2], L[3], L[1]);
+    return G.fixWinding(g);
+  };
+
   /* 面の巻き順を頂点法線に合わせて正す（表裏の取り違えを防ぐ） */
   G.fixWinding = function (g) {
     const p = g.p, n = g.n, idx = g.i;
