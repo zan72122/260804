@@ -1,0 +1,7 @@
+node_modules/
+dist/
+qa/shots/
+qa/look/
+qa/*.log
+qa/_dbg.mjs
+.DS_Store
