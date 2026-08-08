@@ -47,8 +47,9 @@ export function buildMaterials() {
     brass: std(T.brushedMetal([0.72, 0.55, 0.24], 107), { metalness: 0.95, roughness: 0.30, normalScale: nx(0.4) }),
 
     rubber: std(T.rubber(), { roughness: 0.78, normalScale: nx(0.7) }),
+    skin: std(T.plushFur([0.78, 0.58, 0.46], 167), { roughness: 0.72, normalScale: nx(0.18) }),
     // Nomex hood: knitted, completely matte, soaks up the torch beam.
-    hood: std(T.wovenWool([0.085, 0.082, 0.086], 149, 110), { roughness: 1.0, normalScale: nx(0.5), envMapIntensity: 0.15 }),
+    hood: std(T.wovenWool([0.085, 0.082, 0.086], 149, 110), { roughness: 1.0, normalScale: nx(0.5), envMapIntensity: 0.15, side: THREE.DoubleSide }),
     webbing: std(T.wovenWool([0.075, 0.073, 0.078], 151, 140), { roughness: 0.94, normalScale: nx(0.6), envMapIntensity: 0.2 }),
     rubberGrey: std(T.rubber([0.13, 0.13, 0.14], 193), { roughness: 0.72, normalScale: nx(0.7) }),
 

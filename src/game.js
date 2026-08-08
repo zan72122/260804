@@ -2,13 +2,13 @@
 
 import * as THREE from '../vendor/three.module.js';
 import { buildMaterials, materials } from './materials.js';
-import { buildApartment, CEIL } from './apartment.js';
+import { buildApartment } from './apartment.js';
 import * as F from './furniture.js';
 import * as P from './props.js';
 import { buildRoute, FINDS } from './route.js';
 import { buildFirefighter, poseFirefighter } from './firefighter.js';
-import { smokeUniforms, applySmoke, visibilityAt } from './smoke.js';
-import { chamferBox, lathe, mesh, group, applyBoxUV, tube } from './build.js';
+import { smokeUniforms, applySmoke } from './smoke.js';
+import { chamferBox, lathe, mesh, group, applyBoxUV } from './build.js';
 import { softSprite } from './textures.js';
 import { Sound } from './audio.js';
 import { Input } from './input.js';
@@ -128,7 +128,7 @@ function buildStreet(scene) {
   // Entry lamp still burning
   const lamp = mesh(lathe([[0.001, 0], [0.09, 0.02], [0.10, 0.10], [0.06, 0.16], [0, 0.17]], 18), M.exitWhite, { pos: [0, 2.42, 3.35] });
   g.add(lamp);
-  const lampLight = new THREE.PointLight(0xffd9a0, 34, 11, 2);
+  const lampLight = new THREE.PointLight(0xffd9a0, 62, 12, 2);
   lampLight.position.set(0, 2.42, 3.9);
   g.add(lampLight);
 
@@ -256,6 +256,15 @@ class Game {
     this.yaw = Math.PI;
     this.holding = false;
     this.autoStrokeT = 0;
+
+    // Small objects — books, bricks, tread bars, whiskers — contribute nothing
+    // legible to the shadow map but cost a draw call each in the shadow pass.
+    scene.traverse((o) => {
+      if (!o.isMesh || !o.castShadow) return;
+      if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
+      const r = o.geometry.boundingSphere.radius * Math.max(o.scale.x, o.scale.y, o.scale.z);
+      if (r < 0.075) o.castShadow = false;
+    });
 
     this.bindInput();
     this.resize();
@@ -396,13 +405,15 @@ class Game {
       map: softSprite(2.6), color: 0xffcf6a, transparent: true, opacity: 0.0,
       blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false,
     });
-    const mkRing = () => { const s = new THREE.Sprite(ringMat.clone()); s.scale.set(0.9, 0.9, 1); return s; };
+    const mkRing = () => { const s = new THREE.Sprite(ringMat.clone()); s.scale.set(1.1, 1.1, 1); return s; };
 
     // Loose facepiece hovering at chest height
     this.propMask = group('propMask');
     const fp = rig.facepiece.clone(true);
     fp.visible = true;
     fp.traverse((o) => { o.visible = true; });
+    fp.scale.setScalar(0.95);
+    fp.rotation.x = -0.25;
     this.propMask.add(fp);
     this.propMask.userData.ring = mkRing();
     this.propMask.add(this.propMask.userData.ring);
@@ -500,12 +511,12 @@ class Game {
     this.rig.root.rotation.y = this.yaw;
     this.stance = 0; this.stanceTarget = 0;
     this.propMask.visible = true;
-    this.propMask.position.set(0.95, 1.16, 4.75);
+    this.propMask.position.set(0.80, 1.30, 4.98);
     this.propCyl.visible = false;
-    this.propCyl.position.set(-0.55, 0.36, 4.85);
+    this.propCyl.position.set(-0.62, 0.42, 4.82);
     this.propCyl.rotation.set(0, 0.4, 0);
-    this.camera.position.set(1.62, 1.42, 4.05);
-    this.camLook.set(0.35, 1.15, 5.4);
+    this.camera.position.set(1.30, 1.46, 4.45);
+    this.camLook.set(0.35, 1.30, 5.5);
     this.coachWorld = this.propMask.position;
     this.coach('tap');
     document.getElementById('finds').classList.remove('hidden');
@@ -705,6 +716,7 @@ class Game {
     this.rig.root.position.set(0.35, 0, 5.55);
     this.rig.root.rotation.y = Math.PI - 0.32;
     this.rig.facepiece.visible = false;
+    this.rig.face.visible = true;
     this.rig.cylMount.visible = false;
     this.rig.harness.visible = false;
     poseFirefighter(this.rig, 0, 0, 0, 0);
@@ -717,8 +729,8 @@ class Game {
     if (this.gearStep === 0) {
       this.propMask.visible = true;
       this.propMask.position.y = 1.16 + bob;
-      this.propMask.rotation.y = Math.sin(this.t * 0.7) * 0.35;
-      this.propMask.userData.ring.material.opacity = 0.35 + Math.sin(this.t * 3.2) * 0.2;
+      this.propMask.rotation.y = Math.PI + Math.sin(this.t * 0.7) * 0.35;
+      this.propMask.userData.ring.material.opacity = 0.55 + Math.sin(this.t * 3.2) * 0.3;
       this.coachWorld = this.propMask.position;
       this.coach('tap');
     }
@@ -734,11 +746,12 @@ class Game {
         // arc it up to the face
         this.propMask.position.lerpVectors(a.from, target, e);
         this.propMask.position.y += Math.sin(e * Math.PI) * 0.22;
-        this.propMask.rotation.y = (1 - e) * 0.8 + this.yaw * e;
+        this.propMask.rotation.y = THREE.MathUtils.lerp(Math.PI, this.yaw, e);
         this.propMask.userData.ring.material.opacity = (1 - e) * 0.4;
         if (k >= 1) {
           this.propMask.visible = false;
           rig.facepiece.visible = true;
+          rig.face.visible = false;
           this.snd.click(1900, 0.16);
           this.snd.hiss(0.7, 0.16);
           setTimeout(() => this.snd.breath(1), 320);
@@ -787,8 +800,8 @@ class Game {
 
     // Camera eases between a front three-quarter and a shot over the back.
     const wantBack = this.gearStep === 1;
-    const camT = wantBack ? new THREE.Vector3(-1.35, 1.45, 4.35) : new THREE.Vector3(1.62, 1.40, 4.05);
-    const lookT = wantBack ? new THREE.Vector3(0.35, 1.20, 5.45) : new THREE.Vector3(0.35, 1.15, 5.4);
+    const camT = wantBack ? new THREE.Vector3(-1.05, 1.50, 4.45) : new THREE.Vector3(1.30, 1.46, 4.45);
+    const lookT = wantBack ? new THREE.Vector3(0.35, 1.22, 5.5) : new THREE.Vector3(0.35, 1.30, 5.5);
     this.camera.position.lerp(camT, 1 - Math.exp(-2.0 * dt));
     this.camLook.lerp(lookT, 1 - Math.exp(-2.0 * dt));
   }
@@ -807,7 +820,7 @@ class Game {
     poseFirefighter(rig, 0, this.enterT * 7.2, 1, 1);
     if (this.enterT % 0.44 < dt) this.snd.thud(0.22, 120);
 
-    const camFrom = new THREE.Vector3(1.62, 1.40, 4.05);
+    const camFrom = new THREE.Vector3(1.30, 1.46, 4.45);
     const camTo = new THREE.Vector3(0.0, 1.55, 3.9);
     this.camera.position.lerpVectors(camFrom, camTo, e);
     this.camLook.lerp(new THREE.Vector3(0, 1.35, 2.0), 1 - Math.exp(-2.4 * dt));
@@ -1017,7 +1030,7 @@ class Game {
         }, i * 420);
       }
     }
-    if (this.rescueT > 6.2 && !this._endShown) {
+    if (this.rescueT > 5.6 && !this._endShown) {
       this._endShown = true;
       const end = document.getElementById('end');
       end.classList.remove('hidden');
@@ -1045,6 +1058,7 @@ class Game {
     this.rig.root.position.set(at[0], at[1], at[2]);
     this.rig.root.rotation.y = yaw;
     this.rig.facepiece.visible = gear;
+    this.rig.face.visible = !gear;
     this.rig.cylMount.visible = gear;
     this.rig.harness.visible = gear;
     this.torchOn = false;

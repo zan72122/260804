@@ -109,20 +109,20 @@ function buildHelmet() {
   }));
   // Shell: a structural fire helmet. Crown 225 mm across, extending to about
   // 300 mm front-to-back once the neck brim is included.
-  const shell = new THREE.SphereGeometry(0.112, 30, 24, 0, Math.PI * 2, 0, Math.PI * 0.74);
+  const shell = new THREE.SphereGeometry(0.112, 30, 24, 0, Math.PI * 2, 0, Math.PI * 0.62);
   shell.scale(1.0, 1.06, 1.16);
   g.add(mesh(shell, shellMat, { pos: [0, -0.004, -0.016] }));
   // Rolled rim all the way round the shell edge
   const rim = new THREE.TorusGeometry(0.1105, 0.010, 10, 36);
   rim.scale(1.0, 1.16, 1.0);
-  const rm = mesh(rim, shellMat, { pos: [0, -0.040, -0.016] });
+  const rm = mesh(rim, shellMat, { pos: [0, -0.016, -0.016] });
   rm.rotation.x = Math.PI / 2;
   g.add(rm);
   // Brim: a shallow dish, wide behind the ears, cut back at the front so it
   // clears the facepiece.
   const brimG = new THREE.LatheGeometry(
-    [new THREE.Vector2(0.108, -0.044), new THREE.Vector2(0.126, -0.052),
-     new THREE.Vector2(0.146, -0.068), new THREE.Vector2(0.149, -0.075)], 36);
+    [new THREE.Vector2(0.106, -0.020), new THREE.Vector2(0.126, -0.030),
+     new THREE.Vector2(0.146, -0.048), new THREE.Vector2(0.149, -0.056)], 36);
   const bp = brimG.attributes.position;
   for (let i = 0; i < bp.count; i++) {
     const z = bp.getZ(i), x = bp.getX(i);
@@ -140,7 +140,7 @@ function buildHelmet() {
   // Retro-reflective tape round the shell
   const tapeRing = new THREE.TorusGeometry(0.1095, 0.007, 8, 36);
   tapeRing.scale(1.0, 1.15, 1.0);
-  const tr = mesh(tapeRing, M.tape, { pos: [0, -0.012, -0.016] });
+  const tr = mesh(tapeRing, M.tape, { pos: [0, 0.008, -0.016] });
   tr.rotation.x = Math.PI / 2;
   g.add(tr);
   // Drop-down visor, parked up under the front peak
@@ -154,7 +154,7 @@ function buildHelmet() {
   // Chin strap over the ears
   for (const sx of [-1, 1]) {
     g.add(mesh(tube([
-      [sx * 0.100, -0.036, -0.016], [sx * 0.086, -0.080, 0.010], [sx * 0.048, -0.112, 0.024], [0, -0.120, 0.028],
+      [sx * 0.100, -0.028, -0.016], [sx * 0.090, -0.100, 0.006], [sx * 0.050, -0.150, 0.022], [0, -0.162, 0.026],
     ], 0.008, { tubular: 12, radial: 6 }), M.rubberGrey, {}));
   }
   // Helmet lamp: bracketed torch with a real bezel and lens
@@ -340,7 +340,7 @@ export function buildFirefighter() {
   applyBoxUV(coat, 2.0);
   spine.add(mesh(coat, M.turnoutCoat, {}));
   // Collar standing up round the neck
-  const collar = lathe([[0.098, 0.455], [0.118, 0.472], [0.126, 0.505], [0.120, 0.545], [0.106, 0.552], [0.100, 0.520]], 26);
+  const collar = lathe([[0.098, 0.408], [0.120, 0.426], [0.128, 0.462], [0.122, 0.500], [0.108, 0.506], [0.100, 0.470]], 26);
   collar.scale(1.0, 1.0, 0.80);
   spine.add(mesh(collar, M.turnoutCoat, {}));
   // Storm flap up the centre front, standing proud with a stitch shadow
@@ -379,14 +379,42 @@ export function buildFirefighter() {
   head.position.set(0, 0.085, 0.0);
   neck.add(head);
   // Nomex hood over the head, under the facepiece straps
-  const hood = new THREE.SphereGeometry(0.098, 22, 18);
+  // Nomex hood, open at the face the way a real one is.
+  const hood = new THREE.SphereGeometry(0.100, 24, 18, Math.PI * 0.30, Math.PI * 1.40);
   hood.scale(0.96, 1.06, 1.02);
-  head.add(mesh(hood, M.hood, { pos: [0, 0.008, -0.008] }));
+  const hoodMesh = mesh(hood, M.hood, { pos: [0, 0.008, -0.008] });
+  hoodMesh.material = M.hood;
+  head.add(hoodMesh);
+  // Rolled edge round the face opening
+  const hoodEdge = new THREE.TorusGeometry(0.086, 0.010, 8, 22);
+  hoodEdge.scale(1.0, 1.10, 1.0);
+  head.add(mesh(hoodEdge, M.hood, { pos: [0, 0.004, 0.028] }));
   // The hood's bib tucks down inside the collar
   const bib = lathe([[0.052, -0.055], [0.082, -0.115], [0.098, -0.175], [0.104, -0.215]], 22);
   head.add(mesh(bib, M.hood, { pos: [0, 0, -0.008] }));
+  // A face inside the hood, so there is a person in there before the mask goes
+  // on — and a clear before/after when it does.
+  const face = group('face');
+  const skinG = new THREE.SphereGeometry(0.086, 20, 16);
+  skinG.scale(0.92, 1.02, 0.98);
+  face.add(mesh(skinG, M.skin, { pos: [0, -0.004, 0.012] }));
+  for (const sx of [-1, 1]) {
+    face.add(mesh(new THREE.SphereGeometry(0.0105, 12, 10), M.plasticBlack, { pos: [sx * 0.031, -0.006, 0.078] }));
+    face.add(mesh(new THREE.SphereGeometry(0.0042, 8, 6), M.exitWhite, { pos: [sx * 0.031 + 0.004, -0.002, 0.085] }));
+    const brow = mesh(chamferBox(0.024, 0.006, 0.005, 0.002, 0.0015), M.hood, { pos: [sx * 0.031, 0.014, 0.078] });
+    brow.rotation.z = sx * 0.12;
+    face.add(brow);
+  }
+  face.add(mesh(new THREE.SphereGeometry(0.012, 12, 10), M.skin, { pos: [0, -0.028, 0.084] }));
+  const smile = new THREE.TorusGeometry(0.022, 0.005, 8, 16, Math.PI * 0.8);
+  const sm = mesh(smile, M.plasticBlack, { pos: [0, -0.048, 0.076] });
+  sm.rotation.z = Math.PI + 0.4;
+  face.add(sm);
+  head.add(face);
+
   const facepiece = buildFacepiece();
-  facepiece.position.set(0, -0.005, 0.055);
+  facepiece.position.set(0, -0.014, 0.036);
+  facepiece.scale.setScalar(0.80);
   head.add(facepiece);
   // Head harness webbing over the hood
   for (const [a, r] of [[0, 0.10], [0.55, 0.098], [-0.55, 0.098]]) {
@@ -397,7 +425,7 @@ export function buildFirefighter() {
     ], 0.010, { tubular: 12, radial: 6 }), M.webbing, {}));
   }
   const helmet = buildHelmet();
-  helmet.position.set(0, 0.038, 0.004);
+  helmet.position.set(0, 0.086, 0.002);
   head.add(helmet);
 
   const armL = buildArm(-1), armR = buildArm(1);
@@ -434,7 +462,7 @@ export function buildFirefighter() {
   torch.target = torchTarget;
 
   return {
-    root, hips, spine, neck, head, helmet, facepiece, harness, cylMount, cylinder,
+    root, hips, spine, neck, head, helmet, facepiece, face, harness, cylMount, cylinder,
     armL, armR, legL, legR, beltSocket, backSocket,
     torch, torchTarget,
     lampLens: helmet.userData.lampLens,
