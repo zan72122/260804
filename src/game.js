@@ -84,7 +84,7 @@ class Sparkles {
     for (let i = 0; i < this.max; i++) {
       if (this.life[i] <= 0) continue;
       any = true;
-      this.life[i] -= dt * 0.62;
+      this.life[i] -= dt * 0.78;
       this.vel[i * 3 + 1] -= 2.6 * dt;
       this.pos[i * 3] += this.vel[i * 3] * dt;
       this.pos[i * 3 + 1] += this.vel[i * 3 + 1] * dt;
@@ -567,7 +567,7 @@ class Game {
     const obj = which === 'teddy' ? this.teddy : this.kitten;
     const sh = which === 'teddy' ? this.teddyShadow : this.kittenShadow;
     if (sh) sh.visible = false;
-    this.sparkles.burst(obj.getWorldPosition(new THREE.Vector3()).setY(0.25), 90, 0xffd07a, 1.5, 1.6, 110);
+    this.sparkles.burst(obj.getWorldPosition(new THREE.Vector3()).setY(0.22), 46, 0xffd07a, 1.1, 1.3, 30);
     this.snd.chime(which === 'teddy' ? 620 : 720, 5, 0.15);
     if (which === 'kitten') this.snd.meow();
     this.setPhase('spot');
@@ -966,7 +966,7 @@ class Game {
     this.spotZoom = Math.sin(clamp(this.spotT / 1.9, 0, 1) * Math.PI) * 9.0;
     if (this.spotT > 0.35 && !this._spotBurst) {
       this._spotBurst = true;
-      this.sparkles.burst(wp.clone().setY(wp.y + 0.1), 60, 0xfff0c0, 1.1, 1.3, 80);
+      this.sparkles.burst(wp.clone().setY(wp.y + 0.1), 34, 0xfff0c0, 0.85, 1.1, 24);
     }
     if (this.spotT > 1.9) { this._spotBurst = false; this.finishSpot(); }
   }
@@ -1032,7 +1032,7 @@ class Game {
       for (let i = 0; i < 5; i++) {
         setTimeout(() => {
           this.sparkles.burst(new THREE.Vector3(OUT.x + (Math.random() - 0.5) * 2.0, 1.9, OUT.z + (Math.random() - 0.5) * 1.6),
-            70, [0xffd166, 0x6fe3a0, 0xff8fa3, 0x8fd2ff][i % 4], 2.1, 2.6, 120);
+            48, [0xffd166, 0x6fe3a0, 0xff8fa3, 0x8fd2ff][i % 4], 2.1, 2.6, 40);
         }, i * 420);
       }
     }
