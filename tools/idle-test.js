@@ -8,7 +8,8 @@ const which = process.argv[2] || 'iphone-p';
 
 (async () => {
   const browser = await chromium.launch({
-    executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'
+    executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
+    args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader']
   });
   const page = await (await browser.newContext({
     viewport: { width: D[which][0], height: D[which][1] }, deviceScaleFactor: 1, hasTouch: true, isMobile: true
@@ -16,10 +17,11 @@ const which = process.argv[2] || 'iphone-p';
   const errs = [];
   page.on('pageerror', e => errs.push(e.message));
   await page.goto('file://' + path.join(__dirname, '..', 'index.html'));
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(2500);
 
   const res = await page.evaluate(() => {
     const g = window.PZ.game;
+    g.paused = true;
     const seen = [];
     let last = '';
     // レシピだけ選んで、あとは一切触らない
@@ -30,7 +32,7 @@ const which = process.argv[2] || 'iphone-p';
       if (g.stageName !== last) { last = g.stageName; seen.push({ s: last, t: +(i * 0.05).toFixed(1) }); }
       if (last === 'DONE' && i * 0.05 > 5) break;
     }
-    return { seen: seen, bake: +g.pizza.bake.toFixed(2), sauce: +g.pizza.sauceCover.toFixed(2), tops: g.pizza.toppings.length, cuts: g.pizza.cuts.length };
+    return { seen: seen, bake: +g.pizza.bake.toFixed(2), sauce: +g.pizza.sauceCover.toFixed(2), tops: g.pizza.toppings.length, cuts: g.pizza.sliceCount };
   });
 
   console.log('[' + which + '] 無操作でたどった流れ:');
