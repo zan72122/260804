@@ -106,7 +106,10 @@ function ingotSvg(metalKey) {
 /** pulsing marker that says "touch this" without saying anything */
 class Beacon {
   constructor(scene) {
-    const tex = makeDotTexture(0.72, 128);
+    // A tight core with a short falloff reads as a glow sitting ON the thing
+    // it marks.  The old wide, soft blob read as a ball of light hanging in
+    // front of the furnace -- an object in the world that could not be one.
+    const tex = makeDotTexture(0.26, 128);
     const mat = new THREE.SpriteMaterial({
       map: tex, color: 0xffd08a, transparent: true, opacity: 0,
       blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, fog: false,
@@ -127,8 +130,8 @@ class Beacon {
   update(t) {
     if (!this.sprite.visible) return;
     const p = 0.5 + 0.5 * Math.sin(t * 3.4);
-    this.mat.opacity = 0.30 + p * 0.34;
-    const s = this.size * (1.0 + p * 0.22);
+    this.mat.opacity = 0.26 + p * 0.30;
+    const s = this.size * 0.55 * (1.0 + p * 0.18);
     this.sprite.scale.set(s, s, s);
   }
 }
