@@ -13,7 +13,10 @@
 
   const AUTO_HELP = 15;
   const GUIDE_DELAY = 1.1;
-  const FOV = 38;
+  /* 縦の画角。38°は望遠寄りで、奥行きが圧縮されて空間が模型に見える。
+     人が実際に注視するときの画角に近づけると、遠近の分離が強くなり、
+     手元の道具も視野に入る。frame から距離を逆算しているので構図は変わらない。 */
+  const FOV = 46;
 
   /* カメラの構え：見る点・画面に収める幅(m)・振り角・伏せ角。
      t は縦横共通。tL があれば横画面ではそちらを使う
@@ -23,9 +26,11 @@
     bench: { t: [-0.62, 0.965, -0.34], frame: [0.62, 0.70], yaw: [4, -10], pitch: [44, 40] },
     toss: { t: [-0.62, 1.22, -0.34], frame: [1.18, 1.25], yaw: [4, -10], pitch: [28, 26] },
     topping: { t: [-0.62, 0.98, -0.22], frame: [0.86, 1.00], yaw: [4, -10], pitch: [42, 38] },
+    /* 窯へ入れる場面は「操作している本人の目の高さ」。
+       ピールを握った手が画面の下に入るので、道具が支えなしで滑らない。 */
     oven: {
-      t: [0.55, 1.13, -1.15], tL: [0.18, 1.15, -1.24],
-      frame: [0.98, 1.74], yaw: [3, -11], pitch: [25, 19]
+      t: [0.55, 1.24, -1.30], tL: [0.55, 1.30, -1.35],
+      frame: [1.34, 2.02], yaw: [2, -5], pitch: [11, 6.3]
     },
     bake: { t: [0.55, 1.14, -1.62], frame: [1.02, 1.34], yaw: [2, -6], pitch: [21, 17] },
     serve: { t: [-0.30, 0.98, -0.18], frame: [0.86, 1.02], yaw: [6, -12], pitch: [42, 34] }
@@ -45,9 +50,17 @@
     this.camPush = 0;
     this.input = { down: false, sx: 0, sy: 0, x: 0, y: 0, z: 0, lx: 0, ly: 0, lz: 0, dt: 1 / 60, hist: [], moved: false, vsx: 0, vsy: 0 };
     this.queue = [];
-    this.pz = { pos: new THREE.Vector3(), scale: 1, flip: 0, v: -1, inOven: false, visible: true };
+    this.pz = { pos: new THREE.Vector3(), scale: 1, flip: 0, v: -1, inOven: false, visible: true, squash: 1 };
     this.peel = { visible: false, held: false, v: -1, pos: new THREE.Vector3(), yaw: 0 };
+    this.sq = { k: 1, v: 0 };            // 生地のつぶれ（バネで戻る）
+    this.camV = {};                      // カメラの速度（質量を持たせるため）
   }
+
+  /* ぶつかったときに縦へ潰す。k<1 で潰れ、バネで戻る。 */
+  Game.prototype.squash = function (k, strength) {
+    this.sq.k = Math.min(this.sq.k, k);
+    this.sq.v = Math.min(this.sq.v, -(strength || 0.2) * 4);
+  };
   PZ.Game = Game;
 
   /* ================================================================
@@ -144,6 +157,23 @@
     this.pSmoke = new F.Particles(scene, { max: 120, rgb: '200,190,180', color: 0x8a7c70, drag: 0.6, gravity: 0.32, grow: 3.0, alpha: 0.30, swirl: 0.25 });
     this.pEmber = new F.Particles(scene, { max: 200, rgb: '255,190,90', color: 0xffae4a, drag: 0.9, gravity: 0.55, grow: -0.4, alpha: 1, additive: true, swirl: 0.6 });
     this.pSpark = new F.Particles(scene, { max: 160, rgb: '255,240,180', color: 0xfff0b4, drag: 1.6, gravity: -0.9, grow: -0.3, alpha: 1, additive: true });
+
+    /* --- 接地の影 -----------------------------------------------
+       窯の中は影を落とす光源がないので、ピザが炉床に貼り付いて見える。
+       支持面へ落ちる柔らかい影を 1 枚持たせて、浮きと高さを読ませる。
+       空中にいるあいだは薄く広がるので、投げた高さも影で分かる。      */
+    const shadowTex = new THREE.CanvasTexture(T.softDisc('255,255,255', 1.5));
+    this.contact = new THREE.Mesh(
+      new THREE.CircleGeometry(1, 40),
+      new THREE.MeshBasicMaterial({
+        color: 0x120b06, alphaMap: shadowTex, transparent: true,
+        depthWrite: false, opacity: 0
+      })
+    );
+    this.contact.rotation.x = -Math.PI / 2;
+    this.contact.renderOrder = 3;
+    this.contact.visible = false;
+    scene.add(this.contact);
 
     /* --- 案内表示 --- */
     this.buildGuide();
@@ -289,14 +319,26 @@
 
   Game.prototype.setCam = function (name, instant) {
     this.camTarget = this.camPreset(name);
-    if (instant || !this.cam) this.cam = Object.assign({}, this.camTarget);
+    if (instant || !this.cam) { this.cam = Object.assign({}, this.camTarget); this.camV = {}; }
   };
 
   Game.prototype.updateCam = function (dt) {
     if (!this.cam) this.setCam('bench', true);
-    const c = this.cam, t = this.camTarget;
-    const r = 3.0;
-    for (const k in t) c[k] = U.approach(c[k], t[k], r, dt);
+    const c = this.cam, t = this.camTarget, V = this.camV;
+    /* 臨界減衰バネ。指数追従だと 1 フレーム目が最高速になり、
+       質量のないドローンに見える。速度の状態を持たせて加減速を作る。 */
+    const w = 5.4;
+    const h = Math.min(dt, 1 / 40);            // 大きな dt でも発散させない
+    for (const k in t) {
+      const v = V[k] || 0;
+      const x = c[k] - t[k];
+      const nv = (v - w * w * x * h) / (1 + 2 * w * h + w * w * h * h);
+      V[k] = nv;
+      c[k] += nv * h;
+    }
+    /* 手で構えている視点のごく小さな揺れ。頭の揺れではなく、体重移動くらい。 */
+    const bx = Math.sin(this.t * 0.37) * 0.0022 + Math.sin(this.t * 0.83) * 0.0011;
+    const by = Math.sin(this.t * 0.29 + 1.7) * 0.0018;
     const vFov = FOV * Math.PI / 180;
     const fit = Math.min(1, this.aspect);
     const d = (c.frame * (1 - this.camPush * 0.06)) / (2 * Math.tan(vFov / 2) * fit);
@@ -306,8 +348,8 @@
     const pz = c.tz + Math.cos(c.yaw) * cy * d;
     const sh = this.shakeAmt;
     this.camera.position.set(
-      px + (sh ? Math.sin(this.t * 47) * sh : 0),
-      py + (sh ? Math.cos(this.t * 39) * sh : 0),
+      px + bx + (sh ? Math.sin(this.t * 47) * sh : 0),
+      py + by + (sh ? Math.cos(this.t * 39) * sh : 0),
       pz);
     this.camera.lookAt(c.tx, c.ty, c.tz);
     this.camera.updateMatrixWorld(true);
@@ -498,18 +540,41 @@
     this.processInput(dt);
     if (this.stage && this.stage.update) this.stage.update(this, dt);
 
-    // ピザの姿勢
+    // ピザの姿勢。つぶれはバネで戻す（瞬間的に元へ戻ると弾力が消える）
+    const sq = this.sq;
+    sq.v += (1 - sq.k) * 220 * dt - sq.v * 13 * dt;
+    sq.k += sq.v * dt;
+    if (Math.abs(sq.k - 1) < 0.0004 && Math.abs(sq.v) < 0.004) { sq.k = 1; sq.v = 0; }
     const p = this.pizza;
+    const sy = U.clamp(sq.k * (this.pz.squash || 1), 0.45, 1.5);
+    const sxz = 1 / Math.sqrt(sy);                       // 体積をだいたい保つ
     p.group.visible = this.pz.visible;
     p.group.position.copy(this.pz.pos);
-    p.group.scale.setScalar(this.pz.scale);
+    p.group.scale.set(this.pz.scale * sxz, this.pz.scale * sy, this.pz.scale * sxz);
     p.group.rotation.set(this.pz.flip * TAU, -p.rot, 0);
+    this.pz.squash = 1;
     p.updateToppings(dt);
     p.sync();
 
-    // ピール
+    // 接地の影。支持面からの高さで、薄く・広くなる。
+    const ct = this.contact;
+    ct.visible = this.pz.visible;
+    if (ct.visible) {
+      const ground = this.pz.ground === undefined ? PZ.LAY.counterY + 0.030 : this.pz.ground;
+      const h = Math.max(0, this.pz.pos.y - ground);
+      const r = Math.max(0.02, p.meanR() * 0.00075) * this.pz.scale;
+      const k = 1 / (1 + h * 7);
+      ct.position.set(this.pz.pos.x, ground + 0.0016, this.pz.pos.z);
+      const s = r * (1.02 + h * 1.15);
+      ct.scale.set(s, s, 1);
+      ct.material.opacity = 0.46 * k;
+    }
+    this.pz.ground = undefined;
+
+    // ピール。手は握っているあいだだけ出す（置いてあるときは手だけ残らない）
     const peel = PZ.scene3.peel;
     peel.visible = this.peel.visible;
+    PZ.scene3.peelHands.visible = this.peel.held;
     if (this.peel.visible) {
       peel.position.copy(this.peel.pos);
       peel.rotation.set(this.peel.pitch || 0, this.peel.yaw || 0, 0);
@@ -556,7 +621,12 @@
     const rad = Math.abs(edge.x - mouth.x) / this.W;
     this.heat.set(mouth.x / this.W, 1 - mouth.y / this.H, Math.max(0.05, rad * 1.5), 0.85 * this.fireLevel);
 
-    S.fireLevel(this.fireLevel * 0.9);
+    /* 火の音。窯は最初から燃えているので、音も最初から鳴らす
+       （見えているのに無音、が半分続いていた）。
+       音量はカメラから炎までの距離で decay させる。 */
+    S.startFire();
+    const dFire = this.camera.position.distanceTo(this.fire.group.position);
+    S.fireLevel(this.fireLevel * U.clamp(1.7 / Math.max(0.6, dFire), 0.22, 1.5) * 0.95);
     S.updateMusic(dt);
   };
 
@@ -598,6 +668,24 @@
     }
     PZ.scene3.solveArm(ch, ch.armR, ch.shoulderR, hR, 1);
     PZ.scene3.solveArm(ch, ch.armL, ch.shoulderL, hL, -1);
+
+    /* 起きていることを目で追う。人がいるのに一度もこちらを見ないと、
+       その人形は「置いてある小道具」に見える。首だけを可動域内で向ける。 */
+    if (ch.headParts) {
+      const look = this.pz.visible ? this.pz.pos
+        : (this.peel.visible ? this.peel.pos : null);
+      let ty = 0, tx = 0;
+      if (look) {
+        _hp.copy(look);
+        ch.group.worldToLocal(_hp);
+        _hp.y -= 1.43;
+        ty = U.clamp(Math.atan2(_hp.x, _hp.z), -1.05, 1.05);
+        tx = U.clamp(-Math.atan2(_hp.y, Math.hypot(_hp.x, _hp.z)), -0.45, 0.32);
+      }
+      const hp = ch.headParts;
+      hp.rotation.y = U.approach(hp.rotation.y, ty, 3.4, dt);
+      hp.rotation.x = U.approach(hp.rotation.x, tx, 3.4, dt);
+    }
   };
 
   /* ================================================================

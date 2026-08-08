@@ -29,10 +29,13 @@
     chefX: -1.34, chefZ: -0.98,
     pizzaMaxR: 0.15
   });
+  /* 炉床の上面。ここがピザの「床」。経路の y はブレードの上面なので別物。 */
+  L.hearthTop = L.hearthY + 0.03;
+  L.peelThick = 0.009;
 
   /* ピール経路：手前 → 窯口 → 炉床の奥 */
   L.path = [
-    { z: -0.22, y: L.counterY + 0.045 },
+    { z: -0.22, y: L.counterY + 0.009 },     // ブレードの厚みぶん。台に置いてある。
     { z: L.faceZ, y: L.hearthY + 0.042 },
     { z: -2.55, y: L.hearthY + 0.038 }
   ];
@@ -44,7 +47,9 @@
     if (v <= 0) {
       const t = v + 1;
       z = U.lerp(p[0].z, p[1].z, t);
-      y = U.lerp(p[0].y, p[1].y, t);
+      /* 手前へ引き抜くときは水平に引く。外挿で下がると、
+         作業台の天板をブレードが突き抜けてしまう。 */
+      y = t < 0 ? p[0].y : U.lerp(p[0].y, p[1].y, t);
     } else {
       z = U.lerp(p[1].z, p[2].z, v);
       y = U.lerp(p[1].y, p[2].y, v);
@@ -145,7 +150,7 @@
     M.sleeve = new THREE.MeshStandardMaterial({ color: 0xdcd3c2, roughness: 0.88, envMapIntensity: 0.35 });
     M.cuff = new THREE.MeshStandardMaterial({ color: 0xe4759f, roughness: 0.7, envMapIntensity: 0.4 });
     M.apron = new THREE.MeshStandardMaterial({ color: 0xe4759f, roughness: 0.8, envMapIntensity: 0.4 });
-    M.skin = new THREE.MeshStandardMaterial({ color: 0xf0c9a8, roughness: 0.75, envMapIntensity: 0.4 });
+    M.skin = new THREE.MeshStandardMaterial({ color: 0xcf9c76, roughness: 0.82, envMapIntensity: 0.25 });
     M.hair = new THREE.MeshStandardMaterial({ color: 0x3a241a, roughness: 0.7, envMapIntensity: 0.4 });
     M.dark = new THREE.MeshStandardMaterial({ color: 0x2a1a12, roughness: 0.95 });
     M.charcoal = new THREE.MeshStandardMaterial({ color: 0x1c1310, roughness: 0.95 });
@@ -459,7 +464,7 @@
     blade.castShadow = blade.receiveShadow = true;
     peel.add(blade);
     const handleLen = 1.45;
-    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.017, 0.020, handleLen, 14), M.birch);
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.017, 0.020, handleLen, 14), M.oakDark);
     handle.rotation.x = Math.PI / 2;
     handle.position.set(0, 0.006, bladeR * 0.82 + handleLen / 2);
     handle.castShadow = true;
@@ -470,14 +475,24 @@
     grip.position.set(0, 0.006, bladeR * 0.82 + handleLen - 0.30);
     grip.castShadow = true;
     peel.add(grip);
-    const knobEnd = new THREE.Mesh(new THREE.SphereGeometry(0.026, 14, 10), M.birch);
+    const knobEnd = new THREE.Mesh(new THREE.SphereGeometry(0.026, 14, 10), M.oakDark);
     knobEnd.position.set(0, 0.006, bladeR * 0.82 + handleLen);
     peel.add(knobEnd);
+    const gripZ = bladeR * 0.82 + handleLen - 0.30;
+
+    /* 手は描かない。
+       このカメラは柄の軸をほぼ真後ろから見るので、前腕が極端に foreshorten して
+       「腕」ではなく「筒」に見えてしまい、かえって作り物らしくなる。
+       代わりにカメラを操作者の目の高さへ下げ、柄が画面の下（＝プレイヤー側）へ
+       抜けるようにした。道具が自分のほうから伸びていることが構図で伝わる。 */
+    S.peelHands = new THREE.Group();
+    peel.add(S.peelHands);
+
     peel.visible = false;
     root.add(peel);
     S.peel = peel;
     S.peelBladeR = bladeR;
-    S.peelGripZ = bladeR * 0.82 + handleLen - 0.30;
+    S.peelGripZ = gripZ;
 
     /* ================== 具材の器 ================== */
     S.bowls = [];
@@ -539,44 +554,48 @@
     apronStrap.rotation.z = Math.PI;
     g.add(apronStrap);
 
-    // 首と頭
+    // 首と頭。頭は首のつけ根を軸に振れるよう、まとめて子にする
     const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.065, 0.08, 14), M.skin);
     neck.position.y = 1.40;
     g.add(neck);
+    const headParts = new THREE.Group();
+    headParts.position.y = 1.43;                 // 首の付け根＝回転の中心
+    g.add(headParts);
+    const gHead = { add: function (o) { o.position.y -= 1.43; headParts.add(o); } };
     const head = new THREE.Mesh(new THREE.SphereGeometry(0.108, 24, 18), M.skin);
     head.position.y = 1.52;
     head.scale.set(1, 1.06, 0.94);
     head.castShadow = true;
-    g.add(head);
+    gHead.add(head);
     const hair = new THREE.Mesh(new THREE.SphereGeometry(0.112, 22, 16, 0, TAU, 0, Math.PI * 0.55), M.hair);
     hair.position.y = 1.525;
     hair.scale.set(1, 1.02, 0.96);
-    g.add(hair);
+    gHead.add(hair);
     // 目と口
     const eyeMat = new THREE.MeshStandardMaterial({ color: 0x2a1a14, roughness: 0.4 });
     for (let s = -1; s <= 1; s += 2) {
       const e = new THREE.Mesh(new THREE.SphereGeometry(0.011, 10, 8), eyeMat);
       e.position.set(s * 0.038, 1.535, 0.098);
-      g.add(e);
+      gHead.add(e);
       const cheek = new THREE.Mesh(new THREE.SphereGeometry(0.022, 10, 8),
         new THREE.MeshStandardMaterial({ color: 0xe89a92, roughness: 0.9, transparent: true, opacity: 0.55 }));
       cheek.position.set(s * 0.062, 1.512, 0.086);
       cheek.scale.set(1, 0.7, 0.4);
-      g.add(cheek);
+      gHead.add(cheek);
     }
     const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.022, 0.005, 6, 14, Math.PI), eyeMat);
     mouth.position.set(0, 1.508, 0.098);
     mouth.rotation.z = Math.PI;
-    g.add(mouth);
+    gHead.add(mouth);
 
     // コック帽
     const hatBand = new THREE.Mesh(new THREE.CylinderGeometry(0.114, 0.114, 0.055, 22), M.coat);
     hatBand.position.y = 1.625;
     hatBand.castShadow = true;
-    g.add(hatBand);
+    gHead.add(hatBand);
     const band = new THREE.Mesh(new THREE.CylinderGeometry(0.116, 0.116, 0.022, 22), M.apron);
     band.position.y = 1.618;
-    g.add(band);
+    gHead.add(band);
     const puff = new THREE.Group();
     for (let i = 0; i < 5; i++) {
       const a = (i / 5) * TAU;
@@ -589,7 +608,8 @@
     top.position.set(0, 1.706, 0);
     top.castShadow = true;
     puff.add(top);
-    g.add(puff);
+    puff.children.forEach(function (c) { c.position.y -= 1.43; });
+    headParts.add(puff);
 
     // 腕（2 関節）。肩・肘に球を入れて胴とつなげる
     function arm(side) {
@@ -614,8 +634,8 @@
     // 肩（三角筋）— 胴と腕の継ぎ目を埋める
     const shoulderY = 1.285;
     for (let s = -1; s <= 1; s += 2) {
-      const d = new THREE.Mesh(new THREE.SphereGeometry(0.072, 16, 12), M.coat);
-      d.position.set(s * 0.168, shoulderY + 0.012, 0.005);
+      const d = new THREE.Mesh(new THREE.SphereGeometry(0.081, 16, 12), M.coat);
+      d.position.set(s * 0.158, shoulderY + 0.010, 0.005);
       d.scale.set(1, 0.94, 0.86);
       d.castShadow = true;
       g.add(d);
@@ -629,9 +649,9 @@
     g.add(yoke);
 
     return {
-      group: g, armL: armL, armR: armR,
-      shoulderL: new THREE.Vector3(-0.188, 1.285, 0.005),
-      shoulderR: new THREE.Vector3(0.188, 1.285, 0.005),
+      group: g, armL: armL, armR: armR, headParts: headParts,
+      shoulderL: new THREE.Vector3(-0.166, 1.281, 0.005),
+      shoulderR: new THREE.Vector3(0.166, 1.281, 0.005),
       upperLen: 0.29, foreLen: 0.27,
       height: H
     };

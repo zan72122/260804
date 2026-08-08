@@ -189,17 +189,23 @@
     update(g, dt) {
       g.pz.visible = true;
       if (this.fly) {
-        this.fly.t += dt * 2.0;
-        const k = U.sat(this.fly.t), e = U.easeOut(k);
+        /* 投射体。水平は等速（横向きの力は働かない）、鉛直は重力だけ。 */
+        const f = this.fly;
+        f.t += dt;
+        const k = U.sat(f.t / f.dur);
         g.pz.pos.set(
-          U.lerp(this.fly.x0, L.boardX, e),
-          U.lerp(this.fly.y0, boardTop(), e) + Math.sin(k * Math.PI) * 0.16,
-          U.lerp(this.fly.z0, L.boardZ, e));
+          U.lerp(f.x0, L.boardX, k),
+          U.lerp(f.y0, boardTop(), k) + U.hopY(f.h, f.t) * (1 - k * 0.15),
+          U.lerp(f.z0, L.boardZ, k));
+        g.pz.ground = boardTop();
+        // 落ちぎわに少しだけ縦へ伸びる（生地玉の柔らかさ）
+        g.pz.squash = 1 + U.sat((f.t - f.dur * 0.62) / (f.dur * 0.38)) * 0.10;
         if (k >= 1) {
           this.fly = null; this.placed = true;
           S.doughDrop(); S.flour(1.4);
           g.pFlour.burst(L.boardX, boardTop() + 0.01, L.boardZ, 20, 0.05, 0.4, 1.0, 0.03);
           g.shake(0.006);
+          g.squash(0.68, 0.20);           // ぶつかって潰れ、戻る
           g.setStage('SHAPE');
         }
       }
@@ -215,7 +221,8 @@
     auto(g) { this.go(g); },
     go(g) {
       if (this.fly || this.placed) return;
-      this.fly = { t: 0, x0: g.pz.pos.x, y0: g.pz.pos.y, z0: g.pz.pos.z };
+      const h = 0.13;                                  // 器から板へのゆるい山なり
+      this.fly = { t: 0, dur: U.hopDur(h), h: h, x0: g.pz.pos.x, y0: g.pz.pos.y, z0: g.pz.pos.z };
       S.tap(0.9);
     }
   };
@@ -320,24 +327,32 @@
       p.applySpin(dt); p.relax(dt, 0.5);
       g.pz.pos.set(L.boardX, boardTop(), L.boardZ);
       g.pz.scale = 1; g.pz.flip = 0;
+      g.pz.ground = boardTop();
       if (this.flight) {
         const f = this.flight;
         f.t += dt;
         const k = U.sat(f.t / f.dur);
-        const h = Math.sin(k * Math.PI) * f.height;
+        /* 放物運動。滞空時間は頂点の高さから決まっていて、勝手には決められない。 */
+        const h = U.hopY(f.height, f.t);
         g.pz.pos.y = boardTop() + h;
-        g.pz.flip = f.flips * k;
+        g.pz.flip = f.flips * k;                       // 空中では等角速度（トルクがない）
         p.rot += f.spin * dt;
+        /* 遠心力で伸びるのは空中にいるあいだ。着地の瞬間に跳ねて大きくなるのは嘘。 */
+        const grow = k - f.grown;
+        if (grow > 0) { p.tossGrow(f.power * grow); f.grown = k; }
         if (U.chance(dt * 16 * f.power)) {
           g.pFlour.spawn(L.boardX + U.rand(-0.06, 0.06), boardTop() + h, L.boardZ + U.rand(-0.06, 0.06),
             U.rand(-0.1, 0.1), -0.15, U.rand(-0.1, 0.1), 1.1, 0.02);
         }
         if (k >= 1) {
           this.flight = null; g.pz.flip = 0;
-          p.tossGrow(f.power); p.spin *= 0.5;
+          p.spin *= 0.62;
           S.catchDough(f.power);
           g.pFlour.burst(L.boardX, boardTop() + 0.01, L.boardZ, 14 + f.power * 16, p.meanR() * MS, 0.5, 1.1, 0.03);
-          g.shake(0.004 + f.power * 0.008);
+          // 落ちてきた速さぶんだけ潰れる（重さの手がかり）
+          const vLand = U.hopV0(f.height);
+          g.squash(1 - U.sat(vLand / 5.0) * 0.30, 0.18);
+          g.shake(0.003 + U.sat(vLand / 4) * 0.007);
           this.count++; this.wait = 2.1;
           if (this.count === 1) sparkle(g, g.pz.pos, 12);
         }
@@ -374,7 +389,15 @@
     auto(g) { if (this.count === 0 && !this.flight) this.launch(g, 0.55); g.autoT = 6; },
     launch(g, power) {
       const p = U.clamp(power, 0.1, 1);
-      this.flight = { t: 0, dur: 0.62 + p * 0.8, height: 0.10 + p * 0.55, flips: 1 + Math.round(p * 2), power: p, spin: U.rand(-2, 2) + 3 * p };
+      const height = 0.10 + p * 0.62;
+      this.flight = {
+        t: 0, height: height,
+        dur: U.hopDur(height),                          // 高さが決まれば滞空時間も決まる
+        flips: 1 + Math.round(p * 1.2),
+        power: p, grown: 0,
+        // 手元の回転をそのまま持っていく（自分が回したから回っている、が伝わる）
+        spin: g.pizza.spin * 0.75 + (2.0 + 4.0 * p) * (g.pizza.spin < 0 ? -1 : 1)
+      };
       S.toss(p);
       g.pFlour.burst(L.boardX, boardTop() + 0.01, L.boardZ, 10 + p * 12, 0.06, 0.5, 1.0, 0.025);
       g.wake();
@@ -684,23 +707,36 @@
       g.peel.visible = true; g.peel.held = true; g.peel.yaw = 0;
 
       if (this.launch) {
+        /* ── 運動量と摩擦で動かす ────────────────────────────────
+           指を離した瞬間、ピザはピールの速度をそのまま持って離れ、
+           石床の摩擦で等減速して止まる。強く押せば奥で止まる。
+           ピールは腕が引き戻すので、減速して向きを変え、手前へ抜ける。 */
         const Lc = this.launch;
         Lc.t += dt;
-        const k1 = U.sat(Lc.t / 0.44);
-        const over = U.lerp(Lc.v0, g.vBake + 0.14, U.easeOut(k1));
-        const k2 = U.sat((Lc.t - 0.44) / 0.34);
-        this.v = k2 > 0 ? U.lerp(g.vBake + 0.14, g.vBake, U.easeOut(k2)) : over;
-        const pk = U.sat((Lc.t - 0.08) / 0.36);
-        Lc.peelV = U.lerp(Lc.v0, -1.5, U.easeIn(pk));
-        if (Lc.t > 0.16 && !Lc.snd) { Lc.snd = true; S.landStone(); }
-        if (Lc.t > 0.2 && !Lc.spark) {
-          Lc.spark = true;
-          const q = PZ.pathAt(g.vBake);
-          g.pEmber.burst(q.x, q.y + 0.02, q.z, 26, 0.10, 0.9, 1.2, 0.012);
+
+        // ピールは押しこみの終わりに減速し、反転して引き抜かれる
+        Lc.peelSpeed -= Lc.peelAccel * dt;
+        Lc.peelV += Lc.peelSpeed * dt;
+        if (!Lc.released && Lc.peelSpeed <= Lc.speed * 0.55) {
+          // ブレードがピザより遅くなった瞬間＝ピザが置き去りにされる
+          Lc.released = true;
+          Lc.dropT = 0;
+          S.landStone();
+          const q = PZ.pathAt(this.v);
+          g.pEmber.burst(q.x, q.y + 0.02, q.z, 22, 0.10, 0.8, 1.1, 0.012);
           g.pSmoke.burst(q.x, q.y + 0.05, q.z, 5, 0.08, 0.25, 1.6, 0.06);
         }
-        g.peel.visible = pk < 1;
-        if (Lc.t > 0.95) { g.setStage('BAKE'); return; }
+        if (Lc.released) {
+          Lc.speed = Math.max(0, Lc.speed - Lc.decel * dt);   // 石床の摩擦
+          Lc.dropT += dt;                                     // ブレードが抜けたら加算（下で 0 に戻る）
+          if (!Lc.woodSnd && Lc.peelSpeed < -0.8) { Lc.woodSnd = true; S.slide(0.55, 0.3); }
+        }
+        this.v = Math.min(this.v + Lc.speed * dt, Lc.target);
+        if (Lc.speed <= 0) Lc.rest = (Lc.rest || 0) + dt;
+        // ピールがカメラの後ろへ完全に抜けてから消す（画面内で消滅させない）
+        g.peel.visible = Lc.peelV > -2.15;
+        if (Lc.rest > 0.45) { g.vBake = this.v; g.setStage('BAKE'); return; }
+        if (Lc.t > 3.0) { g.vBake = this.v; g.setStage('BAKE'); return; }
       } else if (this.retreat) {
         this.retreat.t += dt;
         const k = U.sat(this.retreat.t / 0.5);
@@ -711,13 +747,30 @@
       this.v = U.clamp(this.v, -1.15, 1);
       g.pz.v = this.v;
       const q = PZ.pathAt(this.v);
-      const onPeel = !this.launch || this.launch.t < 0.2;
-      g.pz.pos.set(q.x, q.y + (onPeel ? 0.010 : 0.001), q.z);
-      g.pz.inOven = this.v > -0.05;
-
       const pv = this.launch ? this.launch.peelV : this.v;
       const pq = PZ.pathAt(pv);
       g.peel.pos.set(pq.x, pq.y, pq.z);
+      /* 接触：生地の底面はブレードの上面と同じ高さ。隙間をつくらない。
+         ピールから離れたら、ブレードの厚みぶん（9 mm）を重力で落ちて石床に着く。 */
+      /* ブレードがピザの真下から完全に抜けるまでは、ピザはまだブレードの上。
+         抜ける前に石床の高さへ落とすと、引き戻るブレードがピザを
+         9 mm ぶん斬り抜けてしまう（コマ送りで見つかった）。 */
+      let onPeel = !this.launch || !this.launch.released;
+      if (!onPeel) {
+        const bladeBack = pq.z - PZ.scene3.peelBladeR;      // ブレードの最も奥
+        const pizzaFront = q.z + p.meanR() * MS * 0.94;     // ピザの最も手前
+        if (bladeBack <= pizzaFront) { onPeel = true; this.launch.dropT = 0; }
+      }
+      if (onPeel) {
+        g.pz.pos.set(q.x, pq.y, q.z);          // ブレードの上面に接地
+        g.pz.ground = pq.y;
+      } else {
+        const fall = 0.5 * U.G * this.launch.dropT * this.launch.dropT;
+        const floor = this.v > -0.02 ? L.hearthTop : q.y;
+        g.pz.pos.set(q.x, Math.max(floor, pq.y - fall), q.z);
+        g.pz.ground = floor;
+      }
+      g.pz.inOven = this.v > -0.05;
 
       const spd = Math.abs(this.vSpeed);
       if (spd > 0.25) {
@@ -765,16 +818,27 @@
       this.grab = null; this.vSpeed = 0;
     },
     doLaunch(g) {
-      this.launch = { t: 0, v0: this.v, peelV: this.v };
-      S.slide(1, 0.5);
-      g.shake(0.008);
-      g.camPush = 0.9;
+      /* 指を離したときの押しこみ速度を、そのままピザの初速にする。
+         これがないと「自分が入れた」ではなく「入る演出が再生された」になる。 */
+      const sp = U.clamp(this.vSpeed, 0.85, 3.2);        // 経路パラメータ/秒
+      const target = U.clamp(this.v + sp * 0.34, 0.28, 0.66);
+      const dist = Math.max(0.06, target - this.v);
+      this.launch = {
+        t: 0, speed: sp, target: target,
+        decel: (sp * sp) / (2 * dist),                   // 等減速でちょうど止まる
+        peelV: this.v, peelSpeed: sp,
+        peelAccel: 9.0 + sp * 3.0,                       // 腕が引き戻す加速度
+        released: false, dropT: 0, rest: 0
+      };
+      S.slide(U.sat(sp / 2.6), 0.42);
+      g.shake(0.004 + U.sat(sp / 3.2) * 0.006);
+      g.camPush = 0.5 + U.sat(sp / 3.2) * 0.5;
     },
     auto(g) {
       if (this.launch) return;
       this.autoAnim += 0.06;
       this.v = U.lerp(-1, 0.5, U.easeInOut(U.sat(this.autoAnim)));
-      if (this.autoAnim >= 1) { this.doLaunch(g); this.autoAnim = 0; }
+      if (this.autoAnim >= 1) { this.vSpeed = 1.7; this.doLaunch(g); this.autoAnim = 0; }
       g.autoT = 0.1;
     }
   };
@@ -785,7 +849,8 @@
   function bakeCommon(g, dt) {
     const p = g.pizza;
     const q = PZ.pathAt(g.vBake);
-    g.pz.pos.set(q.x, q.y + 0.001 + Math.sin(g.t * 5) * 0.0004, q.z);
+    g.pz.pos.set(q.x, L.hearthTop, q.z);      // 石の上に、浮かずに乗っている
+    g.pz.ground = L.hearthTop;
     g.pz.v = g.vBake; g.pz.inOven = true;
     // 炎の方位（炉床の面で見た向き）
     const f = g.fire.group.position;
@@ -910,13 +975,18 @@
       this.v = U.clamp(this.v, -1.1, 1);
       const q = PZ.pathAt(this.v);
       const e = U.easeOut(this.peelIn);
-      g.pz.pos.set(q.x, q.y + (e > 0.9 ? 0.010 : 0.001), q.z);
-      g.pz.v = this.v; g.pz.inOven = this.v > -0.05;
       const from = PZ.pathAt(-1.25);
       g.peel.visible = this.peelIn > 0.02;
       g.peel.held = g.peel.visible;
       g.peel.yaw = 0;
-      g.peel.pos.set(q.x, U.lerp(from.y, q.y - 0.004, e), U.lerp(from.z, q.z, e));
+      const bladeY = U.lerp(from.y, q.y, e);
+      g.peel.pos.set(q.x, bladeY, U.lerp(from.z, q.z, e));
+      /* ピザは、ブレードが下へ入り込むまで石の上にある。
+         入り切ると、ブレードの厚みぶん（9 mm）だけ持ち上がる。 */
+      const seat = U.sat((this.peelIn - 0.80) / 0.20);
+      g.pz.pos.set(q.x, U.lerp(L.hearthTop, bladeY, U.smooth(seat)), q.z);
+      g.pz.ground = U.lerp(L.hearthTop, bladeY, U.smooth(seat));
+      g.pz.v = this.v; g.pz.inOven = this.v > -0.05;
       const spd = Math.abs(this.vSpeed);
       if (spd > 0.25) {
         this.slideSnd -= dt;

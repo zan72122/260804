@@ -9,6 +9,15 @@
   const TAU = Math.PI * 2;
   U.TAU = TAU;
 
+  /* 重力。空中にある物はすべてこれで落ちる。
+     「見た目が気持ちいい滞空時間」を手で決めると、必ず月面のように見える。 */
+  U.G = 9.81;
+  /* 頂点 h(m) まで上げるのに要る初速と、そこから戻るまでの滞空時間 */
+  U.hopV0 = (h) => Math.sqrt(2 * U.G * Math.max(0, h));
+  U.hopDur = (h) => 2 * U.hopV0(h) / U.G;
+  /* 滞空時間 T のうち t 秒後の高さ（放物線） */
+  U.hopY = (h, t, dur) => { const v0 = U.hopV0(h); return Math.max(0, v0 * t - 0.5 * U.G * t * t); };
+
   U.clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
   U.sat = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
   U.lerp = (a, b, t) => a + (b - a) * t;
