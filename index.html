@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no, maximum-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0a0908">
+<title>けむりのなかの きゅうじょたい</title>
+<link rel="stylesheet" href="css/hud.css">
+</head>
+<body>
+<canvas id="view"></canvas>
+
+<div id="hud">
+
+  <!-- top-left: what we are looking for -->
+  <div id="finds" class="hidden">
+    <div class="find" id="find-teddy"><svg viewBox="0 0 48 48"><use href="#ic-teddy"/></svg></div>
+    <div class="find" id="find-kitten"><svg viewBox="0 0 48 48"><use href="#ic-kitten"/></svg></div>
+  </div>
+
+  <!-- floating gesture coach -->
+  <div id="coach" class="hidden">
+    <svg class="coach-art" viewBox="0 0 120 120">
+      <g id="coach-arrows"></g>
+      <g id="coach-hand" transform="translate(60 60)">
+        <path d="M-11 22 L-11 -2 a5 5 0 0 1 10 0 L-1 -18 a5 5 0 0 1 10 0 L9 -4
+                 a5 5 0 0 1 9 3 L18 20 a14 14 0 0 1 -14 14 L-4 34 a12 12 0 0 1 -12 -12 Z"
+              fill="rgba(255,255,255,.94)" stroke="rgba(20,16,12,.55)" stroke-width="2.4" stroke-linejoin="round"/>
+      </g>
+    </svg>
+  </div>
+
+  <!-- posture meter: a little firefighter that ducks with you -->
+  <div id="posture" class="hidden">
+    <div class="post-track"><div class="post-fill"></div></div>
+    <svg class="post-icon" viewBox="0 0 48 48"><use href="#ic-crawl"/></svg>
+  </div>
+
+  <div id="lowbadge" class="hidden"><svg viewBox="0 0 48 48"><use href="#ic-eye"/></svg></div>
+</div>
+
+<div id="flash"></div>
+
+<!-- ---------------- title ---------------- -->
+<div id="title" class="screen">
+  <div class="tcard">
+    <svg class="temblem" viewBox="0 0 240 200" aria-hidden="true">
+      <defs>
+        <radialGradient id="beam" cx="50%" cy="18%" r="70%">
+          <stop offset="0%" stop-color="#ffe6a8" stop-opacity=".95"/>
+          <stop offset="60%" stop-color="#ffca6a" stop-opacity=".16"/>
+          <stop offset="100%" stop-color="#ffca6a" stop-opacity="0"/>
+        </radialGradient>
+        <linearGradient id="smk" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#4c4136" stop-opacity=".95"/>
+          <stop offset="100%" stop-color="#4c4136" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <rect x="0" y="0" width="240" height="200" fill="#171310"/>
+      <rect x="0" y="0" width="240" height="120" fill="url(#smk)"/>
+      <path d="M20 150 L220 150" stroke="#2b241d" stroke-width="10"/>
+      <polygon points="150,120 210,180 96,180" fill="url(#beam)"/>
+      <!-- crawling firefighter silhouette with cylinder -->
+      <g fill="#0d0b09">
+        <ellipse cx="120" cy="150" rx="46" ry="17"/>
+        <circle cx="156" cy="136" r="15"/>
+        <rect x="88" y="118" width="26" height="34" rx="12" transform="rotate(-14 101 135)"/>
+        <rect x="104" y="148" width="16" height="12" rx="5"/>
+        <rect x="136" y="148" width="16" height="12" rx="5"/>
+      </g>
+      <circle cx="163" cy="136" r="6" fill="#ffe9b0"/>
+      <text x="120" y="192" text-anchor="middle" font-size="13" fill="#6d6053">SCBA · LOW PROFILE SEARCH</text>
+    </svg>
+    <h1>けむりのなかの<br><b>きゅうじょたい</b></h1>
+    <button id="play" class="bigbtn" aria-label="はじめる">
+      <svg viewBox="0 0 100 100"><polygon points="36,26 78,50 36,74" fill="currentColor"/></svg>
+    </button>
+    <p class="sub">ゆびで あそべます · おと あり</p>
+  </div>
+</div>
+
+<!-- ---------------- loading ---------------- -->
+<div id="boot" class="screen">
+  <div class="bootbox">
+    <div class="ring"></div>
+    <p>じゅんびちゅう…</p>
+  </div>
+</div>
+
+<!-- ---------------- rescued ---------------- -->
+<div id="end" class="screen hidden">
+  <div class="tcard endcard">
+    <svg class="endart" viewBox="0 0 240 150">
+      <rect width="240" height="150" fill="none"/>
+      <g id="end-lamps">
+        <circle cx="70" cy="30" r="16" fill="#ff3b2f" opacity=".9"/>
+        <circle cx="170" cy="30" r="16" fill="#4a8bff" opacity=".9"/>
+      </g>
+      <g fill="#f4e9d8">
+        <circle cx="120" cy="66" r="21"/>
+        <rect x="99" y="86" width="42" height="44" rx="14"/>
+      </g>
+      <circle cx="120" cy="66" r="13" fill="#7fd4ff"/>
+      <g fill="#e8b45c"><circle cx="150" cy="96" r="16"/><circle cx="140" cy="82" r="6"/><circle cx="160" cy="82" r="6"/></g>
+      <circle cx="145" cy="94" r="2.6" fill="#221a12"/><circle cx="156" cy="94" r="2.6" fill="#221a12"/>
+    </svg>
+    <h1 class="big">たすかった！</h1>
+    <div class="endrow">
+      <div class="find got"><svg viewBox="0 0 48 48"><use href="#ic-teddy"/></svg></div>
+      <div class="find got"><svg viewBox="0 0 48 48"><use href="#ic-kitten"/></svg></div>
+    </div>
+    <button id="again" class="bigbtn" aria-label="もういちど">
+      <svg viewBox="0 0 100 100">
+        <path d="M50 20 a30 30 0 1 0 30 30" fill="none" stroke="currentColor" stroke-width="11" stroke-linecap="round"/>
+        <polygon points="42,10 62,22 40,34" fill="currentColor"/>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<!-- shared icon defs -->
+<svg style="position:absolute;width:0;height:0" aria-hidden="true">
+  <defs>
+    <g id="ic-teddy">
+      <circle cx="24" cy="30" r="12"/><circle cx="24" cy="14" r="9"/>
+      <circle cx="15" cy="6" r="5"/><circle cx="33" cy="6" r="5"/>
+      <circle cx="11" cy="30" r="5"/><circle cx="37" cy="30" r="5"/>
+    </g>
+    <g id="ic-kitten">
+      <circle cx="24" cy="31" r="12"/><circle cx="24" cy="15" r="10"/>
+      <polygon points="14,8 12,-1 22,5"/><polygon points="34,8 36,-1 26,5"/>
+      <path d="M36 34 q10 2 8 -10" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+    </g>
+    <g id="ic-crawl">
+      <ellipse cx="22" cy="30" rx="16" ry="7"/><circle cx="36" cy="24" r="7"/>
+      <rect x="8" y="16" width="12" height="16" rx="6" transform="rotate(-16 14 24)"/>
+    </g>
+    <g id="ic-eye">
+      <path d="M4 24 q20 -15 40 0 q-20 15 -40 0Z"/><circle cx="24" cy="24" r="7" fill="#12100e"/>
+    </g>
+  </defs>
+</svg>
+
+<script type="module" src="src/game.js"></script>
+</body>
+</html>

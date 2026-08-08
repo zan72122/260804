@@ -1,0 +1,196 @@
+/* HUD only. The world itself is entirely WebGL; nothing here pretends to be 3D. */
+
+:root {
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  --amber: #ffcf6a;
+  --ink: #17120d;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  margin: 0; padding: 0; height: 100%; width: 100%;
+  overflow: hidden; background: #070605;
+  font-family: "Hiragino Maru Gothic ProN", "Hiragino Sans", "Yu Gothic",
+               "Noto Sans JP", system-ui, -apple-system, sans-serif;
+  color: #fff;
+  overscroll-behavior: none; touch-action: none;
+  user-select: none; -webkit-user-select: none;
+}
+
+#view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+/* soft vignette + a faint facepiece edge, drawn over the render */
+body::after {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 5;
+  background:
+    radial-gradient(ellipse 78% 74% at 50% 50%, rgba(0,0,0,0) 52%, rgba(0,0,0,.55) 100%),
+    radial-gradient(ellipse 96% 92% at 50% 50%, rgba(0,0,0,0) 84%, rgba(10,8,6,.9) 100%);
+  mix-blend-mode: multiply;
+}
+
+#hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+
+/* stepping back out into the light */
+#flash {
+  position: fixed; inset: 0; z-index: 15; pointer-events: none;
+  background: #fff6e2; opacity: 0;
+}
+#flash.go { animation: flashOut 1.5s ease-out forwards; }
+@keyframes flashOut { 0% { opacity: 0; } 22% { opacity: 1; } 100% { opacity: 0; } }
+.hidden { display: none !important; }
+
+/* ------------------------- objectives ------------------------- */
+#finds {
+  position: absolute;
+  top: calc(var(--safe-t) + 10px); left: calc(var(--safe-l) + 10px);
+  display: flex; gap: 8px;
+}
+.find {
+  width: clamp(38px, 8.4vmin, 62px); aspect-ratio: 1;
+  border-radius: 50%;
+  background: rgba(18,15,12,.52);
+  border: 2px solid rgba(255,255,255,.16);
+  display: grid; place-items: center;
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  transition: transform .35s cubic-bezier(.2,1.7,.4,1), background .35s, border-color .35s;
+}
+.find svg { width: 62%; height: 62%; fill: rgba(255,255,255,.28); }
+.find.got {
+  background: rgba(255,196,92,.22); border-color: var(--amber);
+  transform: scale(1.12);
+  box-shadow: 0 0 20px rgba(255,190,90,.45);
+}
+.find.got svg { fill: var(--amber); }
+@keyframes pop { 0%{transform:scale(1)} 45%{transform:scale(1.45)} 100%{transform:scale(1.12)} }
+.find.pop { animation: pop .7s cubic-bezier(.2,1.5,.4,1); }
+
+/* ------------------------- gesture coach ------------------------- */
+#coach {
+  position: absolute; left: 50%; top: 50%;
+  width: clamp(96px, 24vmin, 180px); aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  opacity: .95;
+  filter: drop-shadow(0 4px 12px rgba(0,0,0,.6));
+}
+.coach-art { width: 100%; height: 100%; overflow: visible; }
+#coach-hand { transform-box: fill-box; transform-origin: 50% 50%; }
+#coach.g-down #coach-hand { animation: handDown 1.5s ease-in-out infinite; }
+#coach.g-side #coach-hand { animation: handSide 1.4s ease-in-out infinite; }
+#coach.g-tap  #coach-hand { animation: handTap 1.1s ease-in-out infinite; }
+@keyframes handDown { 0%,12%{transform:translateY(-22px)} 55%,100%{transform:translateY(20px)} }
+@keyframes handSide { 0%,100%{transform:translateX(-20px)} 50%{transform:translateX(20px)} }
+@keyframes handTap  { 0%,100%{transform:scale(1)} 50%{transform:scale(.82)} }
+#coach .arrow { fill: var(--amber); opacity: .0; }
+#coach.g-down .arrow, #coach.g-side .arrow, #coach.g-tap .arrow {
+  animation: arrowPulse 1.5s ease-in-out infinite;
+}
+@keyframes arrowPulse { 0%,100%{opacity:.25} 50%{opacity:.95} }
+#coach .ring {
+  fill: none; stroke: var(--amber); stroke-width: 3;
+  animation: ringPulse 1.4s ease-out infinite;
+}
+@keyframes ringPulse { 0%{r:14;opacity:.9} 100%{r:44;opacity:0} }
+
+/* ------------------------- posture meter ------------------------- */
+#posture {
+  position: absolute;
+  right: calc(var(--safe-r) + 12px); top: 50%;
+  transform: translateY(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+}
+.post-track {
+  width: clamp(9px, 2.2vmin, 15px); height: clamp(90px, 26vmin, 170px);
+  border-radius: 999px; background: rgba(12,10,8,.5);
+  border: 2px solid rgba(255,255,255,.14); overflow: hidden;
+  display: flex; align-items: flex-end;
+}
+.post-fill {
+  width: 100%; height: 0%;
+  background: linear-gradient(180deg, #ffe6a2, #ff9d3c);
+  border-radius: 999px; transition: height .12s linear;
+}
+.post-icon { width: clamp(26px, 6vmin, 42px); fill: rgba(255,255,255,.45); transition: fill .3s; }
+#posture.low .post-icon { fill: var(--amber); }
+
+/* "you can see now" badge that blooms when you drop into the clear layer */
+#lowbadge {
+  position: absolute; left: 50%; bottom: calc(var(--safe-b) + 8%);
+  transform: translateX(-50%);
+  width: clamp(48px, 12vmin, 88px); aspect-ratio: 1;
+  border-radius: 50%; display: grid; place-items: center;
+  background: radial-gradient(circle, rgba(255,205,120,.30), rgba(255,205,120,0) 70%);
+}
+#lowbadge svg { width: 60%; fill: var(--amber); }
+@keyframes bloom { 0%{transform:translateX(-50%) scale(.6);opacity:0} 30%{opacity:1} 100%{transform:translateX(-50%) scale(1.7);opacity:0} }
+#lowbadge.show { animation: bloom 1.1s ease-out; }
+
+/* ------------------------- screens ------------------------- */
+.screen {
+  position: fixed; inset: 0; z-index: 20;
+  display: grid; place-items: center;
+  padding: calc(var(--safe-t) + 12px) calc(var(--safe-r) + 12px) calc(var(--safe-b) + 12px) calc(var(--safe-l) + 12px);
+  background:
+    radial-gradient(ellipse at 50% 35%, rgba(60,42,26,.55), rgba(6,5,4,.93) 70%),
+    #060504;
+  transition: opacity .5s ease;
+}
+.screen.fade { opacity: 0; pointer-events: none; }
+
+.tcard {
+  width: min(92vw, 460px);
+  display: flex; flex-direction: column; align-items: center; gap: clamp(8px, 2.2vmin, 18px);
+  text-align: center;
+}
+.temblem, .endart {
+  width: min(78vw, 320px); border-radius: 18px;
+  box-shadow: 0 12px 40px rgba(0,0,0,.6), inset 0 0 0 2px rgba(255,255,255,.07);
+}
+.tcard h1 {
+  margin: 0; font-size: clamp(20px, 5.6vmin, 34px); line-height: 1.25;
+  letter-spacing: .04em; text-shadow: 0 3px 14px rgba(0,0,0,.7);
+}
+.tcard h1 b { color: var(--amber); font-size: 1.22em; }
+.tcard h1.big { font-size: clamp(30px, 8.6vmin, 54px); color: var(--amber); }
+.sub { margin: 0; font-size: clamp(11px, 2.8vmin, 15px); color: rgba(255,255,255,.55); }
+
+.bigbtn {
+  pointer-events: auto;
+  width: clamp(84px, 22vmin, 128px); aspect-ratio: 1;
+  border-radius: 50%; border: 0;
+  background: linear-gradient(160deg, #ffd884, #ff9b2f);
+  color: #2a1a06;
+  box-shadow: 0 10px 26px rgba(255,150,40,.38), inset 0 -6px 14px rgba(140,70,0,.35);
+  display: grid; place-items: center; cursor: pointer;
+  animation: breathe 2.4s ease-in-out infinite;
+}
+.bigbtn svg { width: 58%; height: 58%; }
+.bigbtn:active { transform: scale(.94); }
+@keyframes breathe { 0%,100%{transform:scale(1)} 50%{transform:scale(1.06)} }
+
+.endrow { display: flex; gap: 14px; }
+.endcard .find { width: clamp(44px, 10vmin, 68px); }
+
+/* ------------------------- boot ------------------------- */
+.bootbox { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.bootbox p { margin: 0; color: rgba(255,255,255,.6); font-size: clamp(12px, 3vmin, 16px); }
+.ring {
+  width: clamp(42px, 11vmin, 70px); aspect-ratio: 1; border-radius: 50%;
+  border: 5px solid rgba(255,255,255,.14); border-top-color: var(--amber);
+  animation: spin 1s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* landscape: keep the objective row and meter clear of the notch */
+@media (orientation: landscape) and (max-height: 460px) {
+  .temblem, .endart { width: min(46vw, 260px); }
+  .tcard { flex-direction: row; flex-wrap: wrap; justify-content: center; }
+  .tcard h1 { flex: 1 1 46%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bigbtn, #coach-hand, #coach .arrow, #coach .ring { animation: none !important; }
+}
