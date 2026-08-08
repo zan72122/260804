@@ -1,0 +1,226 @@
+:root{
+  --hot:#ff7a1a;
+  --hot2:#ffd05a;
+  --ink:#1a1512;
+  --paper:#fff6e6;
+  --safe:#ffd21f;
+  --clay:#b4763c;
+  --steel:#8fa3b0;
+  --ui-pad: max(14px, env(safe-area-inset-left));
+}
+
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{
+  margin:0; padding:0; height:100%; width:100%;
+  overflow:hidden; position:fixed; inset:0;
+  background:#0d0b0a;
+  overscroll-behavior:none;
+  touch-action:none;
+  user-select:none; -webkit-user-select:none;
+  font-family: "Hiragino Maru Gothic ProN","Hiragino Sans","Yu Gothic",
+               system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+canvas#gl{position:fixed; inset:0; width:100%; height:100%; display:block;}
+
+#ui{
+  position:fixed; inset:0;
+  pointer-events:none;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+.hidden{display:none !important;}
+
+/* ---------------- 擬音 ---------------- */
+.onomat{
+  position:absolute; left:50%; top:14%;
+  transform:translate(-50%,-50%) scale(.4);
+  font-size: clamp(38px, calc(8.5vmin + 3.2vw), 112px);
+  font-weight:900; letter-spacing:.02em;
+  color:#fff; opacity:0;
+  text-shadow:
+     0 0 10px rgba(255,140,30,.95),
+     0 0 30px rgba(255,90,10,.7),
+     0 6px 0 rgba(0,0,0,.35);
+  white-space:nowrap;
+  will-change:transform,opacity;
+}
+.onomat.pop{ animation: onopop 1.15s cubic-bezier(.14,.9,.3,1) forwards; }
+@keyframes onopop{
+  0%   {opacity:0; transform:translate(-50%,-50%) scale(.35) rotate(-7deg);}
+  16%  {opacity:1; transform:translate(-50%,-50%) scale(1.22) rotate(3deg);}
+  30%  {transform:translate(-50%,-50%) scale(1.0) rotate(-1.5deg);}
+  72%  {opacity:1; transform:translate(-50%,-50%) scale(1.03);}
+  100% {opacity:0; transform:translate(-50%,-58%) scale(1.05);}
+}
+
+/* ---------------- 上部タスクバッジ ---------------- */
+.task-badge{
+  position:absolute; left:50%; top: calc(env(safe-area-inset-top) + 10px);
+  transform:translateX(-50%);
+  display:flex; align-items:center; gap:10px;
+  background:rgba(24,18,14,.55);
+  border:3px solid rgba(255,214,110,.55);
+  border-radius:999px;
+  padding:7px 18px 7px 10px;
+  backdrop-filter: blur(6px);
+  animation: badgein .45s cubic-bezier(.2,1.3,.4,1);
+}
+@keyframes badgein{from{opacity:0;transform:translateX(-50%) translateY(-16px) scale(.85);}to{opacity:1;}}
+.task-icon{font-size: clamp(26px,6.2vmin,44px); line-height:1;}
+.task-word{
+  color:#ffe9bf; font-weight:900;
+  font-size: clamp(15px,3.6vmin,26px); letter-spacing:.04em;
+}
+
+/* ---------------- ゲージ ---------------- */
+.gauge{
+  position:absolute; width: clamp(180px, 52vmin, 340px); aspect-ratio:1/1;
+  left:50%; top:72%; transform:translate(-50%,-50%);
+  overflow:visible; opacity:.95;
+}
+.gauge .g-bg{
+  fill:rgba(20,15,12,.30); stroke:rgba(255,236,200,.30); stroke-width:13;
+}
+.gauge .g-fill{
+  fill:none; stroke:url(#none); stroke:#ffb42e; stroke-width:13; stroke-linecap:round;
+  transform:rotate(-90deg); transform-origin:100px 100px;
+  stroke-dasharray: 527.8; stroke-dashoffset: 527.8;
+  transition: stroke-dashoffset .10s linear;
+  filter: drop-shadow(0 0 10px rgba(255,150,30,.9));
+}
+.gauge.done .g-fill{ stroke:#7ff08a; filter:drop-shadow(0 0 14px rgba(120,255,140,.9)); }
+
+/* ---------------- ヒント ---------------- */
+.hint{
+  position:absolute; left:50%; top:72%; transform:translate(-50%,-50%);
+  width: clamp(180px, 52vmin, 340px); aspect-ratio:1/1;
+  pointer-events:none; opacity:0;
+  animation: hintin .5s ease forwards;
+}
+@keyframes hintin{to{opacity:1;}}
+.hint-svg{width:100%; height:100%; overflow:visible;}
+.hint-svg .dash{
+  fill:none; stroke:#fff3d0; stroke-width:7; stroke-linecap:round;
+  stroke-dasharray: 16 26; opacity:.85;
+  animation: dashspin 3s linear infinite;
+  transform-origin:100px 100px;
+}
+@keyframes dashspin{to{stroke-dashoffset:-420px;}}
+.finger{
+  position:absolute; font-size: clamp(34px,9vmin,64px);
+  left:50%; top:50%; margin-left:-.5em; margin-top:-.5em;
+  filter: drop-shadow(0 4px 6px rgba(0,0,0,.6));
+}
+.finger.spin{ animation: fspin 2.1s linear infinite; }
+@keyframes fspin{
+  from{transform: rotate(0deg) translateX(33%) rotate(0deg);}
+  to  {transform: rotate(360deg) translateX(33%) rotate(-360deg);}
+}
+.swipe-track{position:absolute; inset:0;}
+.finger.slide{ animation: fslide 1.8s cubic-bezier(.5,0,.5,1) infinite; }
+@keyframes fslide{
+  0%  {transform:translateX(-72%) scale(.9); opacity:0;}
+  18% {opacity:1;}
+  70% {transform:translateX(58%) scale(1.05); opacity:1;}
+  100%{transform:translateX(64%) scale(1); opacity:0;}
+}
+.arrows{
+  position:absolute; left:50%; top:64%; transform:translate(-50%,-50%);
+  display:flex; gap:6px; font-size: clamp(30px,8vmin,56px); font-weight:900; color:#ffd88a;
+}
+.arrows span{opacity:.25; animation: arrw 1.2s infinite;}
+.arrows span:nth-child(2){animation-delay:.18s}
+.arrows span:nth-child(3){animation-delay:.36s}
+@keyframes arrw{0%,100%{opacity:.2;}40%{opacity:1;}}
+.press-ring{
+  position:absolute; inset:14%;
+  border:8px solid #fff0c8; border-radius:50%;
+  animation: pressr 1.5s ease-out infinite;
+}
+@keyframes pressr{
+  0%{transform:scale(1); opacity:.9;}
+  70%{transform:scale(.7); opacity:.35;}
+  100%{transform:scale(.66); opacity:0;}
+}
+.finger.press{animation: fpress 1.5s ease-in-out infinite;}
+@keyframes fpress{0%,100%{transform:translateY(-8%) scale(1);}55%{transform:translateY(6%) scale(.9);}}
+
+/* ---------------- 画面 ---------------- */
+.screen{
+  position:absolute; inset:0;
+  display:flex; flex-direction:column; align-items:center; justify-content:space-between;
+  gap: 2vmin; pointer-events:auto;
+  background: linear-gradient(rgba(8,5,4,.66) 0%, rgba(8,5,4,.10) 34%, rgba(8,5,4,.12) 58%, rgba(8,5,4,.72) 100%);
+  padding: calc(env(safe-area-inset-top) + 3vmin) var(--ui-pad) calc(env(safe-area-inset-bottom) + 3vmin);
+}
+.screen > *:first-child{ margin-top:0; }
+.screen .tiny{ margin-bottom:0; }
+.title-art{ text-align:center; line-height:1.02; margin-bottom:1vmin; }
+.title-art div{ font-weight:900; letter-spacing:.01em; text-shadow: 0 6px 0 rgba(0,0,0,.35), 0 0 26px rgba(255,110,20,.5); }
+.t1{ font-size: clamp(40px,13vmin,120px); color:#ffd24a; }
+.t2{ font-size: clamp(46px,15vmin,140px); color:#ff7b26; margin-top:-.06em;}
+.t3{ font-size: clamp(38px,12vmin,110px); color:#ffe9c8; margin-top:-.06em;}
+.t4{ font-size: clamp(20px,6vmin,50px); color:#9ad9ff; margin-top:.25em; letter-spacing:.06em;}
+.cleared{
+  font-size: clamp(40px,11vmin,110px); font-weight:900; color:#8dff9d;
+  text-shadow:0 6px 0 rgba(0,0,0,.35), 0 0 30px rgba(90,255,120,.55);
+  animation: onopop 1.2s cubic-bezier(.14,.9,.3,1) forwards; animation-fill-mode:forwards;
+  opacity:1;
+}
+.cleared{animation:clr .7s cubic-bezier(.2,1.4,.4,1);}
+@keyframes clr{from{transform:scale(.4) rotate(-8deg); opacity:0;}to{transform:none;opacity:1;}}
+.ladle-count{ font-size: clamp(22px,6vmin,48px); letter-spacing:.12em; color:#ffcf7a;
+  text-shadow:0 3px 0 rgba(0,0,0,.4); }
+.btnrow{display:flex; gap:4vmin; flex-wrap:wrap; justify-content:center; margin-top:2vmin;}
+
+.bigbtn{
+  pointer-events:auto; cursor:pointer;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:.15em;
+  min-width: clamp(140px, 34vmin, 260px);
+  min-height: clamp(120px, 30vmin, 220px);
+  padding: 4vmin 5vmin;
+  border-radius: 8vmin;
+  border: 6px solid #ffe9a8;
+  background: linear-gradient(#ffb02e,#f4761a);
+  color:#3a1c05; font-weight:900;
+  font-size: clamp(20px,5.4vmin,40px); line-height:1.15; text-align:center;
+  box-shadow: 0 10px 0 #a9450b, 0 18px 34px rgba(0,0,0,.5);
+  transition: transform .09s ease, box-shadow .09s ease;
+  font-family:inherit;
+}
+.bigbtn.alt{ background:linear-gradient(#79d0ff,#2f8ede); border-color:#d8f2ff; color:#062338; box-shadow:0 10px 0 #14567f, 0 18px 34px rgba(0,0,0,.5);}
+.bigbtn:active{ transform:translateY(8px); box-shadow:0 2px 0 #a9450b, 0 8px 16px rgba(0,0,0,.5);}
+.bigbtn.alt:active{ box-shadow:0 2px 0 #14567f, 0 8px 16px rgba(0,0,0,.5);}
+.bigbtn-ico{font-size: clamp(34px,9vmin,66px); line-height:1;}
+.tiny{ color:#ffe6bd; opacity:.75; font-size: clamp(12px,3vmin,20px); letter-spacing:.08em; margin-top:1vmin;}
+
+.corner{ position:absolute; right: calc(env(safe-area-inset-right) + 10px); top: calc(env(safe-area-inset-top) + 10px); pointer-events:auto;}
+.mini{
+  width:46px;height:46px;border-radius:50%; border:2px solid rgba(255,230,180,.4);
+  background:rgba(25,18,14,.5); color:#ffe6bd; font-size:20px; cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+}
+.mini.off{opacity:.45;}
+
+.loading{
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center; gap:14px;
+  background:#0d0b0a; color:#ffca7a; font-size: clamp(14px,4vmin,24px); letter-spacing:.1em; font-weight:700;
+}
+.loading .spark{
+  width:22px;height:22px;border-radius:50%;
+  background: radial-gradient(circle,#fff2c0,#ff7b1a 60%, rgba(255,80,0,0) 72%);
+  animation: lpulse .9s ease-in-out infinite;
+}
+@keyframes lpulse{0%,100%{transform:scale(.7);opacity:.6;}50%{transform:scale(1.25);opacity:1;}}
+
+/* 縦画面では操作ゾーンをもう少し下に、横画面では中央寄せ */
+@media (orientation: portrait){
+  .gauge, .hint{ top: 76%; }
+  .onomat{ top: 19%; }
+}
+@media (orientation: landscape){
+  .gauge, .hint{ top: 74%; width: clamp(140px, 38vmin, 260px); }
+  .onomat{ top: 25%; }
+  .btnrow{gap:5vmin;}
+  .screen{ gap:1.4vmin; }
+  .bigbtn{ min-height: clamp(96px, 26vmin, 180px); padding:2.6vmin 4vmin; }
+}

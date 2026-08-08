@@ -1,0 +1,27 @@
+{
+  "name": "guruguru-doba-fusagu-blast-furnace",
+  "version": "1.0.0",
+  "description": "ぐるる！どばーっ！ふさぐ！こうろこうじょう — 4さいむけ 高炉出銑口あそび（Three.js / WebGL2）",
+  "scripts": {
+    "start": "npx --yes http-server -p 8123 -c-1",
+    "qa:shots": "node tools/shots.mjs landscape && node tools/shots.mjs portrait",
+    "qa:play": "node tools/playthrough.mjs",
+    "qa:perf": "node tools/perf.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zan72122/260804.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/zan72122/260804/issues"
+  },
+  "homepage": "https://github.com/zan72122/260804#readme",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "three": "^0.185.1"
+  }
+}

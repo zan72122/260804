@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#12100f">
+<meta name="description" content="ぐるる！どばーっ！ふさぐ！こうろこうじょう — 4さいからの こうろ（高炉）であそぶ 3Dゲーム">
+<title>ぐるる！どばーっ！ふさぐ！こうろこうじょう</title>
+<link rel="stylesheet" href="./styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🔥</text></svg>">
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three/three.module.min.js"
+  }
+}
+</script>
+</head>
+<body>
+
+<canvas id="gl"></canvas>
+
+<!-- ===================== UI OVERLAY ===================== -->
+<div id="ui">
+
+  <!-- 上部：いまなにをする？ を絵で示すピクトグラム -->
+  <div id="taskBadge" class="task-badge hidden">
+    <div class="task-icon" id="taskIcon"></div>
+    <div class="task-word" id="taskWord"></div>
+  </div>
+
+  <!-- 擬音（大きく・上のほうに出す。指でかくれないように） -->
+  <div id="onomat" class="onomat"></div>
+
+  <!-- 進み具合の大きなリング（操作ゾーンの中心） -->
+  <svg id="gaugeSvg" class="gauge hidden" viewBox="0 0 200 200">
+    <circle class="g-bg"   cx="100" cy="100" r="84"></circle>
+    <circle class="g-fill" cx="100" cy="100" r="84"></circle>
+  </svg>
+
+  <!-- ヒント：ぐるぐる -->
+  <div id="hintCircle" class="hint hidden">
+    <svg viewBox="0 0 200 200" class="hint-svg">
+      <circle class="dash" cx="100" cy="100" r="66"></circle>
+    </svg>
+    <div class="finger spin">👆</div>
+  </div>
+
+  <!-- ヒント：スワイプ -->
+  <div id="hintSwipe" class="hint hidden">
+    <div class="swipe-track"><div class="finger slide">👆</div></div>
+    <div class="arrows"><span>›</span><span>›</span><span>›</span></div>
+  </div>
+
+  <!-- ヒント：ながおし -->
+  <div id="hintHold" class="hint hidden">
+    <div class="press-ring"></div>
+    <div class="finger press">👇</div>
+  </div>
+
+  <!-- タイトル -->
+  <div id="titleScreen" class="screen">
+    <div class="title-art">
+      <div class="t1">ぐるる！</div>
+      <div class="t2">どばーっ！</div>
+      <div class="t3">ふさぐ！</div>
+      <div class="t4">こうろ こうじょう</div>
+    </div>
+    <button id="startBtn" class="bigbtn" aria-label="はじめる">
+      <span class="bigbtn-ico">▶</span>
+      <span class="bigbtn-txt">あそぶ</span>
+    </button>
+    <div class="tiny">4さいから／ゆびで あそべます</div>
+  </div>
+
+  <!-- もういっかい -->
+  <div id="replayScreen" class="screen hidden">
+    <div class="cleared">できた！</div>
+    <div class="ladle-count" id="ladleCount"></div>
+    <div class="btnrow">
+      <button id="againBtn" class="bigbtn" aria-label="もういっかい">
+        <span class="bigbtn-ico">🔁</span>
+        <span class="bigbtn-txt">もういっかい</span>
+      </button>
+      <button id="freeBtn" class="bigbtn alt" aria-label="じゆうにあそぶ">
+        <span class="bigbtn-ico">♾️</span>
+        <span class="bigbtn-txt">じゆうに<br>あそぶ</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- 右上の小さなトグル（おとなむけ・子どもの導線には出さない） -->
+  <div class="corner">
+    <button id="soundBtn" class="mini" aria-label="おと">🔊</button>
+  </div>
+
+  <div id="loading" class="loading"><div class="spark"></div><span>よみこみちゅう…</span></div>
+</div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
