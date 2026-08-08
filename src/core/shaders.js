@@ -43,7 +43,7 @@ vec3 F_Schlick(vec3 f0, float u){
 vec3 envColor(vec3 d){
   float up = d.y * 0.5 + 0.5;
   vec3 ceilingC = vec3(0.0075, 0.0068, 0.0065);
-  vec3 floorC   = vec3(0.0180, 0.0135, 0.0090);
+  vec3 floorC   = vec3(0.0250, 0.0185, 0.0120);
   vec3 base = mix(floorC, ceilingC, smoothstep(0.30, 0.9, up));
   // shoji panel: broad soft rectangle toward -Z, slightly above horizon
   float win = smoothstep(0.42, 0.99, -d.z) * smoothstep(-0.40, 0.30, d.y) * (1.0 - smoothstep(0.55, 0.92, d.y));
@@ -69,9 +69,11 @@ float shadowFactor(vec4 lightPos, float NoL){
   if (p.z > 1.0 || p.x < 0.0 || p.x > 1.0 || p.y < 0.0 || p.y > 1.0) return 1.0;
   float bias = mix(0.0016, 0.0004, NoL);
   float s = 0.0;
+  // Wider taps than a straight 3x3: the light source is a paper screen, so
+  // nothing in this room casts a razor edge.
   for (int y = -1; y <= 1; y++){
     for (int x = -1; x <= 1; x++){
-      vec2 o = vec2(float(x), float(y)) * uShadowTexel;
+      vec2 o = vec2(float(x), float(y)) * uShadowTexel * 2.1;
       s += texture(uShadowMap, vec3(p.xy + o, p.z - bias));
     }
   }
@@ -309,10 +311,10 @@ const vec3 TRANSMIT = vec3(0.10, 0.52, 0.44);
 // an area source, never a point, which is why its highlight is a moving band
 // rather than a dot.
 vec3 envLeaf(vec3 d){
-  vec3 c = envColor(d) * 1.10;
+  vec3 c = envColor(d) * 1.05;
   float win = smoothstep(0.05, 0.95, -d.z) * smoothstep(-0.65, 0.45, d.y);
-  c += vec3(1.00, 0.845, 0.57) * win * win * 0.52;
-  c += vec3(0.42, 0.24, 0.10) * smoothstep(0.15, -0.85, d.y) * 0.24;
+  c += vec3(1.00, 0.80, 0.47) * win * win * 0.58;
+  c += vec3(0.42, 0.22, 0.08) * smoothstep(0.15, -0.85, d.y) * 0.24;
   return c;
 }
 
@@ -349,7 +351,7 @@ void main(){
   // grain left by the hammer. The direct term is widened to stand in for the
   // shoji's angular size; a delta highlight on a flat sheet would simply turn
   // the whole thing white.
-  float rough = mix(0.16, 0.42, uWrinkle * 0.7 + 0.12 * w1);
+  float rough = mix(0.11, 0.32, uWrinkle * 0.7 + 0.12 * w1);
   float aniso = 0.55;
   float ax = max(rough * rough * (1.0 + aniso), 0.006);
   float ay = max(rough * rough * (1.0 - aniso), 0.003);
@@ -369,12 +371,14 @@ void main(){
 
   // Environment reflection is what makes leaf read as metal rather than paint.
   vec3 R = reflect(-V, N);
-  vec3 refl = envLeaf(R) * F_Schlick(GOLD_F0, NoV) * 0.80;
+  vec3 refl = envLeaf(R) * F_Schlick(GOLD_F0, NoV) * 0.62;
 
   // Kept well under the point where the tone curve would wash the hue out:
   // leaf that reads white is leaf that reads like paper.
-  vec3 color = spec * 0.62 + refl;
-  color += GOLD_F0 * 0.07 * envLeaf(N);
+  // Kept deliberately below 1 in most of the frame: past that the tone curve
+  // pulls every channel toward white and the gold turns into cream paper.
+  vec3 color = spec * 0.42 + refl;
+  color += GOLD_F0 * 0.05 * envLeaf(N);
 
   // Backlit transmission — visible from the back face and at thin grazing edges.
   float backLit = max(-NoL, 0.0);
@@ -387,9 +391,9 @@ void main(){
 
   // キラッ: a bright reflection band travelling across the sheet.
   float band = exp(-pow((vUV.x + vUV.y * 0.35 - (uSweep * 2.2 - 0.6)) * 6.0, 2.0));
-  color += vec3(1.0, 0.90, 0.62) * band * uSparkle * 3.2;
+  color += vec3(1.0, 0.90, 0.62) * band * uSparkle * 1.7;
   float glint = pow(max(dot(reflect(-L, N), V), 0.0), 220.0);
-  color += vec3(1.0, 0.93, 0.70) * glint * (1.0 + uSparkle * 6.0);
+  color += vec3(1.0, 0.93, 0.70) * glint * (1.0 + uSparkle * 3.5);
 
   float dist = length(uCameraPos - vWorld);
   float fog = 1.0 - exp(-uFogDensity * dist * dist);

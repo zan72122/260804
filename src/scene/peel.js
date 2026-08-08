@@ -63,6 +63,12 @@ export class PeelSheet {
         const lateral = (x / (this.w / 2)) ** 2;
         y -= lateral * Math.sin(phi) * t * 0.007;
         y += Math.sin(time * 5.1 + x * 26) * 0.0011 * t * Math.sin(phi);
+        // once it is right over, the far end sags down toward the board rather
+        // than hanging in the air like a shelf
+        if (this.progress > 0.68) {
+          const open = (this.progress - 0.68) / 0.32;
+          y -= open * t * t * 0.046;
+        }
         if (this.progress < 0.002) y = Math.sin(x * 34 + z0 * 21) * 0.00035;
         pos[k * 3] = x; pos[k * 3 + 1] = y; pos[k * 3 + 2] = z;
       }

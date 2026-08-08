@@ -25,10 +25,10 @@ const SHOTS = {
   intro: { target: [0, 0.03, -0.03], yaw: 0.22, pitch: 0.40, span: 1.15 },
   uchi: { target: [0, 0.055, -0.055], yaw: 0.16, pitch: 0.46, span: 0.46 },
   peron: { target: [0, 0.055, -0.055], yaw: 0.04, pitch: 0.36, span: 0.36 },
-  fuwa: { target: [0, 0.062, -0.055], yaw: -0.12, pitch: 0.235, span: 0.29 },
+  fuwa: { target: [0, 0.066, -0.055], yaw: -0.12, pitch: 0.26, span: 0.25 },
   peta: { target: [0, 0.035, 0.055], yaw: 0.04, pitch: 0.52, span: 0.50 },
-  kira: { target: [0, 0.045, 0.185], yaw: 0.10, pitch: 0.30, span: 0.27 },
-  done: { target: [0, 0.050, 0.185], yaw: 0.10, pitch: 0.28, span: 0.26 },
+  kira: { target: [0, 0.030, 0.185], yaw: 0.10, pitch: 0.34, span: 0.32 },
+  done: { target: [0, 0.034, 0.185], yaw: 0.10, pitch: 0.32, span: 0.30 },
 };
 
 const WORDS = {
@@ -376,7 +376,11 @@ class Game {
       this.leaf.gust(this.leaf.pos, vec3.create(dx, 0, dz), 0.045, 0.07);
       this.audio.fuwa(0.35);
     }
-    const d = Math.hypot(this.leaf.pos[0] - LAYOUT.base[0], this.leaf.pos[2] - LAYOUT.base[2]);
+    // Measured from where the finger is, not from where the sheet has drifted
+    // to — the sheet lags on purpose, and the child should not have to wait for
+    // it to catch up before the drop registers.
+    const d = Math.hypot(this.leaf.posTarget[0] - LAYOUT.base[0],
+      this.leaf.posTarget[2] - LAYOUT.base[2]);
     // The piece pulls the leaf in once it is close: aiming precisely is not a
     // skill a four-year-old should need.
     if (d < 0.13) {
@@ -390,7 +394,8 @@ class Game {
 
   onRelease() {
     if (this.landed) return;
-    const d = Math.hypot(this.leaf.pos[0] - LAYOUT.base[0], this.leaf.pos[2] - LAYOUT.base[2]);
+    const d = Math.hypot(this.leaf.posTarget[0] - LAYOUT.base[0],
+      this.leaf.posTarget[2] - LAYOUT.base[2]);
     if (d < 0.17) this.land();
     else {
       // never a failure: it just drifts back up and waits
@@ -410,6 +415,9 @@ class Game {
     this.leaf.velWorld[1] = -0.012;
     // the air trapped underneath escapes as the sheet meets the lacquer
     this.leaf.gust(this.leaf.pos, vec3.create(0, 0, 1), 0.05, 0.075);
+    // Descent is an explicit tween, not a spring: when the leaf finishes taking
+    // the shape of the piece it must be exactly on it, never hovering above.
+    this.landFrom = [this.leaf.pos[0], this.leaf.pos[1], this.leaf.pos[2]];
     this.landT = 0;
     this.ui.setAction('', null);
     setTimeout(() => this.audio.peta(), 620);
@@ -495,9 +503,15 @@ class Game {
       const k = smoothstep(0, 1, clamp(this.landT / 0.9, 0, 1));
       this.leaf.conform = k;
       this.leaf.adhesion = k * 0.45;
-      if (this.landT > 0.55 && !this._petaSounded) {
-        this._petaSounded = true;
-      }
+      // sink slowly at first, then settle — a sheet with no weight to speak of
+      const fall = 1 - Math.pow(1 - k, 2.6);
+      const f = this.landFrom;
+      vec3.set(this.leaf.pos,
+        lerp(f[0], LAYOUT.base[0], fall),
+        lerp(f[1], 0, fall),
+        lerp(f[2], LAYOUT.base[2], fall));
+      vec3.set(this.leaf.posTarget, LAYOUT.base[0], 0, LAYOUT.base[2]);
+      vec3.set(this.leaf.velWorld, 0, 0, 0);
     }
 
     // ---- キラッ sweep -----------------------------------------------------
@@ -505,8 +519,8 @@ class Game {
       this.sweepT += dt;
       const k = clamp(this.sweepT / 1.25, 0, 1);
       this.leaf.sweep = k;
-      this.leaf.sparkle = Math.sin(k * Math.PI) * 1.4;
-      this.renderer.flash = Math.max(this.renderer.flash, Math.sin(k * Math.PI) * 0.28);
+      this.leaf.sparkle = Math.sin(k * Math.PI) * 1.0;
+      this.renderer.flash = Math.max(this.renderer.flash, Math.sin(k * Math.PI) * 0.16);
     } else {
       this.leaf.sparkle = damp(this.leaf.sparkle, 0, 2.2, dt);
     }

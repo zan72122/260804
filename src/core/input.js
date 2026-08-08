@@ -55,6 +55,9 @@ export class Input {
   }
 
   _move(e) {
+    // A small hand rests on the glass while the other finger plays; only the
+    // first pointer down is allowed to drive anything.
+    if (e.isPrimary === false) return;
     const c = this._coords(e);
     this.px = this.x; this.py = this.y;
     this.x = c.x; this.y = c.y;
@@ -68,6 +71,7 @@ export class Input {
   }
 
   _up(e) {
+    if (e.isPrimary === false) return;
     if (!this.down) return;
     this.down = false;
     const dt = performance.now() - this.startTime;
