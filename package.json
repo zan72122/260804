@@ -1,0 +1,22 @@
+{
+  "name": "ukai-no-yoru",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Ukai no Yoru - a gentle traditional cormorant-fishing game for young children",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "three": "^0.185.1"
+  },
+  "devDependencies": {
+    "@types/three": "^0.185.4",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.6",
+    "vite-plugin-singlefile": "^2.3.3"
+  }
+}

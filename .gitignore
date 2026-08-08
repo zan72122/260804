@@ -1,0 +1,4 @@
+node_modules/
+shots/
+*.log
+tools/_probe.mjs
