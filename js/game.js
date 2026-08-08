@@ -16,6 +16,7 @@
   const CAMS = {
     choose: { L: { x: 480, y: 260, w: 1180, h: 820 }, P: { x: 150, y: 300, w: 600, h: 1000 } },
     bench: { L: { x: -70, y: 655, w: 800, h: 520 }, P: { x: 140, y: 770, w: 620, h: 620 } },
+    toss: { L: { x: -70, y: 470, w: 800, h: 520 }, P: { x: 140, y: 700, w: 620, h: 620 } },
     topping: { L: { x: -150, y: 660, w: 840, h: 570 }, P: { x: 130, y: 880, w: 640, h: 660 } },
     oven: { L: { x: 480, y: 390, w: 1150, h: 670 }, P: { x: 170, y: 380, w: 560, h: 930 } },
     bake: { L: { x: 900, y: 430, w: 620, h: 420 }, P: { x: 215, y: 400, w: 470, h: 450 } }
@@ -34,7 +35,7 @@
     this.pizza = new PZ.Pizza(2);
     this.recipe = PZ.RECIPES[0];
 
-    this.pz = { visible: false, x: 0, y: 0, scale: 1, squash: 0.6, flip: 0, inOven: false, v: -1, shade: 1 };
+    this.pz = { visible: false, x: 0, y: 0, scale: 1, squash: 0.6, flip: 0, inOven: false, v: -1, shade: 1, groundY: null };
     this.peel = { visible: false, held: false, x: 0, y: 0, scale: 1, squash: 0.5, shade: 1, inOven: false, glow: 0, shadow: true, under: false };
 
     this.input = {
@@ -89,7 +90,7 @@
       };
       this.board = { x: 330, y: 915, rx: 272, ry: 160 };
       this.counter = { x: 400, topY: 1000, halfW: 640, depth: 520 };
-      this.pathA = { x: 630, y: 1005 };
+      this.pathA = { x: 686, y: 1012 };
       this.pathM = { x: 1195, y: 745 };
       this.pathB = { x: 1195, y: 668 };
       this.chefBase = { x: 815, y: 1024, scale: 1.0, faceDir: 1, ik: true };
@@ -103,7 +104,7 @@
       };
       this.board = { x: 450, y: 1090, rx: 262, ry: 154 };
       this.counter = { x: 450, topY: 1272, halfW: 580, depth: 560 };
-      this.pathA = { x: 450, y: 1300 };
+      this.pathA = { x: 450, y: 1348 };
       this.pathM = { x: 450, y: 722 };
       this.pathB = { x: 450, y: 655 };
       this.chefBase = { x: 200, y: 1300, scale: 0.60, faceDir: 1, ik: false };
@@ -156,6 +157,15 @@
     };
     this.facadeLayer = bakeLayer(fr, 1250, function (x) {
       A.drawOvenFacade(x, o, 0, 1);
+    });
+    const c = this.counter, pr = this.props;
+    const cr = {
+      x: c.x - c.halfW - 40, y: c.topY - 230,
+      w: c.halfW * 2 + 80, h: c.depth + 280
+    };
+    this.counterLayer = bakeLayer(cr, 1500, function (x) {
+      A.drawCounter(x, c.x, c.topY, c.halfW, c.depth);
+      A.drawProps(x, pr);
     });
   };
 
@@ -406,6 +416,7 @@
     this.fireLevel = 0.8;
     this.pz.visible = true;
     this.pz.inOven = false;
+    this.pz.groundY = null;
     this.peel.visible = false;
     this.peel.under = false;
     this.peel.held = false;
@@ -469,11 +480,17 @@
       ctx.fill();
       ctx.restore();
     }
+    // 空中にいるときは、影は台の上に落として小さくする
+    const air = p.groundY !== null ? Math.max(0, p.groundY - p.y) : 0;
+    const shY = p.groundY !== null
+      ? (p.groundY - p.y) + this.pizza.meanR() * sq * 0.16
+      : this.pizza.meanR() * sq * 0.16;
     this.pizza.draw(ctx, p.x, p.y, sc, sq, {
       flip: p.flip,
       shadow: !p.inOven,
-      shadowY: this.pizza.meanR() * sq * 0.16 + (p.flip ? 30 : 0),
-      shadowAlpha: p.flip ? 0.16 : 0.3,
+      shadowY: shY,
+      shadowScale: air > 0 ? U.clamp(1 - air / 620, 0.42, 1) : 1,
+      shadowAlpha: air > 0 ? U.clamp(0.3 - air / 1500, 0.10, 0.3) : 0.3,
       cuts: this.stageName === 'CUT' || this.stageName === 'DONE',
       spread: this.pizza.cuts.length >= 4 ? 4 : 0,
       sliceLift: this.sliceLiftInfo()
@@ -653,8 +670,7 @@
     this.applyCam(ctx);
     this.drawChefNow(ctx, hands);
     // 作業台（職人の下半身を隠す）
-    A.drawCounter(ctx, this.counter.x, this.counter.topY, this.counter.halfW, this.counter.depth);
-    A.drawProps(ctx, this.props);
+    this.blit(ctx, this.counterLayer);
     ctx.restore();
 
     // --- 手前のもの ---

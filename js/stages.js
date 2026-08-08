@@ -405,7 +405,7 @@
      空中へ！
   --------------------------------------------------------------- */
   St.TOSS = {
-    cam: 'bench',
+    cam: 'toss',
     enter(g) {
       this.flight = null;
       this.count = 0;
@@ -428,6 +428,7 @@
         const k = U.sat(f.t / f.dur);
         const h = Math.sin(k * Math.PI) * f.height;
         g.pz.y = g.board.y - h;
+        g.pz.groundY = g.board.y;
         g.pz.scale = 1 + (h / 900) * 0.55;
         g.pz.flip = f.flips * k;
         p.rot += f.spin * dt;
@@ -492,7 +493,7 @@
     launch(g, power) {
       const p = U.clamp(power, 0.12, 1);
       this.flight = {
-        t: 0, dur: 0.62 + p * 0.85, height: 70 + p * 330,
+        t: 0, dur: 0.62 + p * 0.8, height: 62 + p * 232,
         flips: 1 + Math.round(p * 2), power: p,
         spin: U.rand(-2, 2) + 3 * p
       };
@@ -539,7 +540,7 @@
         if (this.doneT > 0.8) g.setStage('TOPPING');
       }
     },
-    drawWorld(g, ctx) {
+    drawTop(g, ctx) {
       const l = this.ladle;
       const sc = 0.85 + l.on * 0.15;
       drawLadle(ctx, l.x, l.y - 26 * (1 - l.on) - 8, this.ladle.a, sc, U.sat(1 - g.pizza.sauceCover * 0.8));

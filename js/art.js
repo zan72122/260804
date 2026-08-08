@@ -34,6 +34,9 @@
     olive: [64, 62, 50],
     broccoli: [86, 152, 78],
     wood: [186, 138, 84],
+    peel: [222, 194, 150],
+    peelLight: [242, 222, 190],
+    peelDark: [186, 152, 104],
     woodDark: [140, 96, 52],
     woodLight: [214, 172, 118],
     stone: [186, 168, 148],
@@ -325,6 +328,57 @@
     }
     ctx.restore();
 
+    // 戸棚（扉とオープン棚）
+    const doorTop = topY + 126, doorH = Math.max(120, Math.min(300, depth - 170));
+    const unit = 330;
+    const n0 = Math.floor((x0 + 20 - cx) / unit) - 1, n1 = Math.ceil((x0 + w - 20 - cx) / unit) + 1;
+    for (let k = n0; k <= n1; k++) {
+      const dx = cx + k * unit;
+      if (dx - unit * 0.42 < x0 + 14 || dx + unit * 0.42 > x0 + w - 14) continue;
+      const dw = unit * 0.84;
+      if (((k % 3) + 3) % 3 === 1) {
+        // オープン棚（お皿を積んである）
+        ctx.fillStyle = 'rgba(28,14,8,0.72)';
+        U.roundRect(ctx, dx - dw / 2, doorTop, dw, doorH, 14);
+        ctx.fill();
+        ctx.save();
+        U.roundRect(ctx, dx - dw / 2, doorTop, dw, doorH, 14);
+        ctx.clip();
+        for (let i = 0; i < 5; i++) {
+          const py = doorTop + doorH - 26 - i * 17;
+          ctx.fillStyle = i % 2 ? '#fdeef4' : '#f6dbe7';
+          U.ellipse(ctx, dx - dw * 0.2, py, dw * 0.27, 9); ctx.fill();
+        }
+        for (let i = 0; i < 3; i++) {
+          const py = doorTop + doorH - 26 - i * 19;
+          ctx.fillStyle = i % 2 ? '#f3e6cf' : '#e7d5b6';
+          U.ellipse(ctx, dx + dw * 0.24, py, dw * 0.22, 10); ctx.fill();
+        }
+        ctx.restore();
+        ctx.strokeStyle = 'rgba(255,235,210,0.22)';
+        ctx.lineWidth = 5;
+        U.roundRect(ctx, dx - dw / 2, doorTop, dw, doorH, 14);
+        ctx.stroke();
+      } else {
+        // 扉
+        ctx.fillStyle = 'rgba(255,232,206,0.10)';
+        U.roundRect(ctx, dx - dw / 2, doorTop, dw, doorH, 14);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(60,30,14,0.42)';
+        ctx.lineWidth = 6;
+        U.roundRect(ctx, dx - dw / 2, doorTop, dw, doorH, 14);
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,226,196,0.20)';
+        ctx.lineWidth = 4;
+        U.roundRect(ctx, dx - dw / 2 + 16, doorTop + 16, dw - 32, doorH - 32, 10);
+        ctx.stroke();
+        ctx.fillStyle = U.css(C.pink);
+        ctx.beginPath(); ctx.arc(dx, doorTop + 30, 13, 0, TAU); ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.beginPath(); ctx.arc(dx - 4, doorTop + 26, 5, 0, TAU); ctx.fill();
+      }
+    }
+
     // 前板の虹タイル帯
     const ty = topY + 84;
     for (let i = 0; i * 96 < w - 40; i++) {
@@ -427,18 +481,18 @@
     ctx.save();
     A.softBlob(ctx, cx, cy + ry * 0.30, rx * 1.12, [24, 10, 4], 0.34);
     const g = ctx.createLinearGradient(cx, cy - ry, cx, cy + ry);
-    g.addColorStop(0, '#d7ab77');
-    g.addColorStop(0.55, '#c1904f');
-    g.addColorStop(1, '#a2743c');
+    g.addColorStop(0, '#c69457');
+    g.addColorStop(0.55, '#ac7a3d');
+    g.addColorStop(1, '#8c6030');
     ctx.fillStyle = g;
     U.ellipse(ctx, cx, cy, rx, ry); ctx.fill();
     // 木目
     ctx.save();
     U.ellipse(ctx, cx, cy, rx, ry); ctx.clip();
-    ctx.globalAlpha = 0.18;
+    ctx.globalAlpha = 0.09;
     ctx.strokeStyle = '#7d5628';
     ctx.lineWidth = 3;
-    for (let i = 0; i < woodGrain.length; i++) {
+    for (let i = 0; i < woodGrain.length; i += 2) {
       const s = woodGrain[i];
       ctx.beginPath();
       const yy = cy - ry + s[0] * ry * 2;
@@ -838,7 +892,7 @@
   A.drawPeel = function (ctx, bx, by, dx, dy, scale, squash, opt) {
     opt = opt || {};
     const part = opt.part || 'all';
-    const bladeR = 132 * scale;
+    const bladeR = 152 * scale;
     const handleLen = Math.max(320, opt.handleLen || 620);
     const hx = bx + dx * handleLen, hy = by + dy * handleLen;
     const ang = Math.atan2(dy, dx);
@@ -848,11 +902,7 @@
     if (part === 'blade') { A.peelBlade(ctx, bx, by, ang, bladeR, scale, squash, shade, opt); ctx.restore(); return; }
     // 影
     if (opt.shadow) {
-      ctx.globalAlpha = 0.25;
-      ctx.fillStyle = '#000';
-      U.ellipse(ctx, bx, by + bladeR * squash * 0.5, bladeR * 1.02, bladeR * squash * 0.8);
-      ctx.fill();
-      ctx.globalAlpha = 1;
+      A.softBlob(ctx, bx, by + bladeR * squash * 0.55, bladeR * 1.15, [22, 9, 4], 0.30);
     }
 
     // 柄
@@ -865,9 +915,9 @@
     ctx.lineTo(bx - nx * w0, by - ny * w0);
     ctx.closePath();
     const hg = ctx.createLinearGradient(bx + nx * w0, by + ny * w0, bx - nx * w0, by - ny * w0);
-    hg.addColorStop(0, shadeCss(C.woodLight, shade));
-    hg.addColorStop(0.5, shadeCss(C.wood, shade));
-    hg.addColorStop(1, shadeCss(C.woodDark, shade));
+    hg.addColorStop(0, shadeCss(C.peelLight, shade));
+    hg.addColorStop(0.5, shadeCss(C.peel, shade));
+    hg.addColorStop(1, shadeCss(C.peelDark, shade));
     ctx.fillStyle = hg;
     ctx.fill();
 
@@ -909,16 +959,16 @@
     ctx.bezierCurveTo(bladeR * 0.72, bladeR * 0.86, -bladeR * 0.95, bladeR * 0.98, -bladeR * 1.02, 0);
     ctx.closePath();
     const bgd = ctx.createLinearGradient(-bladeR, -bladeR, bladeR, bladeR);
-    bgd.addColorStop(0, shadeCss(C.woodLight, shade));
-    bgd.addColorStop(0.55, shadeCss(C.wood, shade));
-    bgd.addColorStop(1, shadeCss(C.woodDark, shade));
+    bgd.addColorStop(0, shadeCss(C.peelLight, shade));
+    bgd.addColorStop(0.55, shadeCss(C.peel, shade));
+    bgd.addColorStop(1, shadeCss(C.peelDark, shade));
     ctx.fillStyle = bgd;
     ctx.fill();
     // 木目
     ctx.save();
     ctx.clip();
     ctx.globalAlpha = 0.16 * shade;
-    ctx.strokeStyle = '#7a5227';
+    ctx.strokeStyle = '#a67c42';
     ctx.lineWidth = 3.5 * scale;
     for (let i = 0; i < 9; i++) {
       const yy = -bladeR + (i / 8) * bladeR * 2;
@@ -926,8 +976,8 @@
     }
     ctx.restore();
     // ふち
-    ctx.strokeStyle = 'rgba(90,58,26,' + 0.5 * shade + ')';
-    ctx.lineWidth = 3 * scale;
+    ctx.strokeStyle = 'rgba(126,90,48,' + 0.55 * shade + ')';
+    ctx.lineWidth = 4 * scale;
     ctx.stroke();
     ctx.restore();
   };

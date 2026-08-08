@@ -543,7 +543,8 @@
       ctx.save();
       ctx.globalAlpha = opt.shadowAlpha === undefined ? 0.3 : opt.shadowAlpha;
       ctx.fillStyle = '#000';
-      U.ellipse(ctx, 0, opt.shadowY || 0, m * scale * 1.02, m * scale * squash * 0.9);
+      const ss = opt.shadowScale === undefined ? 1 : opt.shadowScale;
+      U.ellipse(ctx, 0, opt.shadowY || 0, m * scale * 1.02 * ss, m * scale * squash * 0.9 * ss);
       ctx.fill();
       ctx.restore();
     }
