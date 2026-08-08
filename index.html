@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0d1319">
+<title>まぐろ かいたい</title>
+<link rel="stylesheet" href="./css/style.css">
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
+</head>
+<body>
+<div id="app">
+  <canvas id="scene"></canvas>
+  <div id="vignette"></div>
+
+  <div id="hud">
+    <button id="btn-restart" class="iconbtn" aria-label="もういちど">
+      <svg viewBox="0 0 48 48" aria-hidden="true">
+        <path d="M24 10a14 14 0 1 0 13.2 9.4" fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round"/>
+        <path d="M24 3.5 33 10.5 24 17z" fill="currentColor"/>
+      </svg>
+    </button>
+    <button id="btn-sound" class="iconbtn" aria-label="おと">
+      <svg viewBox="0 0 48 48" aria-hidden="true">
+        <path d="M11 19h7l9-7v24l-9-7h-7z" fill="currentColor"/>
+        <g class="on"><path d="M31 18a9 9 0 0 1 0 12M36 13.5a15 15 0 0 1 0 21" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></g>
+        <g class="off"><path d="M32 18.5 43 30.5M43 18.5 32 30.5" fill="none" stroke="currentColor" stroke-width="4.2" stroke-linecap="round"/></g>
+      </svg>
+    </button>
+  </div>
+
+  <div id="boot">
+    <div class="boot-fish">
+      <svg viewBox="0 0 120 44" aria-hidden="true">
+        <path d="M8 22c14-16 46-19 68-12 10 3 17 8 21 12-4 4-11 9-21 12-22 7-54 4-68-12z" fill="#8fa6b6"/>
+        <path d="M96 22c6-6 12-10 18-12-3 5-4 9-4 12s1 7 4 12c-6-2-12-6-18-12z" fill="#6d8496"/>
+        <circle cx="27" cy="19" r="3" fill="#1b2733"/>
+      </svg>
+    </div>
+    <div class="boot-bar"><i></i></div>
+  </div>
+</div>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
