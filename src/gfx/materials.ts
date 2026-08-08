@@ -196,10 +196,10 @@ export function makeRingMaterial(color: THREE.ColorRepresentation) {
       void main() {
         vec2 p = vUv * 2.0 - 1.0;
         float r = length(p);
-        float w = 0.13 + 0.05 * sin(uTime * 3.2);
-        float ring = smoothstep(1.0, 1.0 - w, r) * smoothstep(0.52 - w, 0.62, r);
-        float halo = smoothstep(1.0, 0.15, r) * 0.09;
-        float a = (ring * 0.42 + halo) * uPulse;
+        float w = 0.065 + 0.025 * sin(uTime * 3.2);
+        float ring = smoothstep(1.0, 1.0 - w, r) * smoothstep(0.86 - w, 0.94, r);
+        float halo = smoothstep(1.0, 0.55, r) * 0.05;
+        float a = (ring * 0.55 + halo) * uPulse;
         // dashed spokes read as "turn me"
         float ang = atan(p.y, p.x);
         a *= 0.75 + 0.25 * smoothstep(0.2, 0.8, abs(sin(ang * 6.0 - uTime * 2.0)));

@@ -103,8 +103,8 @@ export class Game {
   private stageT = 0;
 
   // microtome
-  private wheelTracker = new CircleTracker({ friction: 2.2, deadzone: 14 });
-  private knobTracker = new CircleTracker({ friction: 3.4, deadzone: 14 });
+  private wheelTracker = new CircleTracker({ friction: 4.2, deadzone: 14 });
+  private knobTracker = new CircleTracker({ friction: 5.0, deadzone: 14 });
   private ribbon!: Ribbon;
   private ribbonLen = 0;
   private ribbonCut = 0;          // sections already taken off the ribbon
@@ -115,6 +115,13 @@ export class Game {
   private macroTimer = 0;
   private inMacro = false;
   private wheelEngaged = false;
+  /**
+   * Screen-space centre a circular gesture turns around. It is frozen for the
+   * whole time the finger is down: the camera is free to drift or fly during a
+   * crank, and the turn the player feels is still the turn they get.
+   */
+  private gestureAnchor = { x: 0, y: 0 };
+  private macroShown = false;
   private grabbing: 'none' | 'block' | 'section' | 'slide' | 'cover' | 'dropper' = 'none';
   private grabLift = 0;
 
@@ -224,7 +231,7 @@ export class Game {
     this.wheelTracker.reset(); this.knobTracker.reset();
     this.ribbonLen = 0; this.ribbonCut = 0; this.completed = 0;
     this.lastTickAngle = 0; this.cutFired = false;
-    this.macroPending = false; this.inMacro = false; this.macroTimer = 0;
+    this.macroPending = false; this.inMacro = false; this.macroTimer = 0; this.macroShown = false;
     this.grabbing = 'none'; this.grabLift = 0;
     this.relaxT = 0; this.stroke = 0; this.lifting = false; this.liftT = 0;
     this.dipT = -1; this.dipIndex = -1; this.stained = [false, false, false];
@@ -544,8 +551,8 @@ export class Game {
     const mt = this.lab.microtome;
     const p = this.input.p;
     const wheelWorld = this.worldOf(mt.wheel).clone();
-    const ws = this.screenOf(wheelWorld);
-    const wsx = ws.x, wsy = ws.y;
+    if (!p.down) this.setAnchor(wheelWorld);
+    const wsx = this.gestureAnchor.x, wsy = this.gestureAnchor.y;
 
     // --- is the finger on the ribbon (take it) or on the wheel (make more)?
     const canTake = this.ribbonLen >= RIBBON_READY;
@@ -562,9 +569,16 @@ export class Game {
         }
       }
     }
-    const onRibbon = canTake && ribbonPx < 78;
+    // A tap counts as "take the ribbon" only if it is near the ribbon AND
+    // clear of the handwheel. Anything that turns into a drag becomes a crank,
+    // mid-gesture — so a child who reaches for the wheel during the close-up
+    // insert is never left turning nothing.
+    const wheelPx = Math.hypot(p.x - wsx, p.y - wsy);
+    const wheelGrab = Math.max(120, this.wheelScreenRadius() * 1.5);
+    const onRibbon = canTake && ribbonPx < 78 && wheelPx > wheelGrab;
 
     if (p.justDown) this.wheelEngaged = !onRibbon;
+    if (p.down && !this.wheelEngaged && p.travel > 30) this.wheelEngaged = true;
     if (!p.down) this.wheelEngaged = false;
 
     if (onRibbon && p.justUp && p.travel < 26) {
@@ -609,8 +623,10 @@ export class Game {
       this.rig.bump(0.35);
       mt.blockHolder.position.z = -ADVANCE_PER_SECTION * (this.completed + this.ribbonCut);
       mt.gauge.position.x = -0.55 + clamp((this.completed + this.ribbonCut) / MAX_SECTIONS) * 0.5;
-      if (this.ribbonLen >= RIBBON_READY && !this.macroPending && !this.inMacro && this.completed <= RIBBON_READY)
+      if (this.ribbonLen >= 2 && !this.macroShown && !this.inMacro) {
+        this.macroShown = true;
         this.macroPending = true;
+      }
     }
     if (emerge < 0.5) this.cutFired = false;
 
@@ -620,23 +636,22 @@ export class Game {
     // the frame opens up as the ribbon grows — never a cut, always a drift
     if (!this.inMacro) this.rig.follow(this.slicingShot(), dt, 1.5);
 
-    // --- Ribbon Macro insert: only when the player is not mid-crank -------
-    if (this.macroPending && !p.down && Math.abs(this.wheelTracker.velocity) < 0.4) {
+    // --- Ribbon Macro insert ---------------------------------------------
+    // A short "look how thin this is" push-in, offered only when the player
+    // has already stopped, and taken straight back by the first touch: the
+    // handwheel is this game's centre of gravity and must never be withheld.
+    if (this.macroPending && !p.down && this.input.idle > 0.7
+        && Math.abs(this.wheelTracker.velocity) < 0.3) {
       this.macroPending = false;
       this.inMacro = true;
       this.macroTimer = 0;
-      this.rig.moveTo(this.shot('ribbonMacro'), 1.3);
+      this.rig.moveTo(this.shot('ribbonMacro'), 1.2);
     }
     if (this.inMacro) {
       this.macroTimer += dt;
-      if (this.macroTimer > 2.6) {
+      if (this.macroTimer > 2.4 || p.justDown) {
         this.inMacro = false;
-        this.rig.moveTo(this.shot('ribbonPick'), 1.2);
-      }
-      // let the player crank straight out of the macro shot
-      if (p.down && this.macroTimer > 0.5) {
-        this.inMacro = false;
-        this.rig.moveTo(this.shot('action'), 0.8);
+        this.rig.moveTo(this.slicingShot(), p.justDown ? 0.45 : 1.0);
       }
     }
 
@@ -650,6 +665,28 @@ export class Game {
       }
       if (this.input.idle > 3.3 && this.input.idle < 3.4) audio.hint();
     } else this.hints.hide();
+  }
+
+  /**
+   * Park the circular-gesture centre on a widget, but never outside the
+   * screen: if a camera move has carried the wheel off-frame, a circle drawn
+   * anywhere still turns it. A control the player cannot reach is worse than
+   * one that is slightly out of place.
+   */
+  private setAnchor(world: THREE.Vector3) {
+    const s = this.screenOf(world);
+    const m = 40;
+    this.gestureAnchor.x = clamp(s.x, m, this.w - m);
+    this.gestureAnchor.y = clamp(s.y, m, this.h - m);
+  }
+
+  /** Projected radius of the handwheel, in css pixels. */
+  private wheelScreenRadius() {
+    const w = this.worldOf(this.lab.microtome.wheel).clone();
+    const c = this.screenOf(w);
+    const cx = c.x, cy = c.y;
+    const edge = this.screenOf(w.clone().add(_v1.set(0, 0.3, 0)));
+    return Math.max(40, Math.hypot(edge.x - cx, edge.y - cy));
   }
 
   /** The player picked a piece of the ribbon: take one section off it. */
@@ -1159,7 +1196,8 @@ export class Game {
   private upFocus(dt: number) {
     const p = this.input.p;
     const knobWorld = this.worldOf(this.lab.scope.knob).clone();
-    const ks = this.screenOf(knobWorld);
+    if (!p.down) this.setAnchor(knobWorld);
+    const ks = this.gestureAnchor;
 
     // the optical transition: the circular field opens up in front of the lab
     const open = clamp(this.stageT / 1.8);
@@ -1174,10 +1212,19 @@ export class Game {
     const engaged = p.down;
     this.knobTracker.update(dt, engaged, p.x, p.y, ks.x, ks.y);
     this.lab.scope.knob.rotation.z = -this.knobTracker.angle;
-    this.focalPos = clamp(-1 + this.knobTracker.angle * 0.10, -1.4, 1.4);
+    const raw = clamp(-1 + this.knobTracker.angle * 0.115, -1.4, 1.4);
+    // A detent near the plane of focus: the last fraction of a turn pulls
+    // itself in, the way a real fine focus does when you finally find it. It
+    // is what makes パッ reachable for a four-year-old without making the knob
+    // feel automatic.
+    const off = raw - this.focalBest;
+    const detent = smoothstep(0.34, 0.05, Math.abs(off)) * 0.72;
+    this.focalPos = lerp(raw, this.focalBest, detent);
 
-    const sharp = 1 - clamp(Math.abs(this.focalPos - this.focalBest) / 0.62);
-    const focus = Math.pow(sharp, 1.35);
+    // The falloff is deliberately wide, so *every* degree of rotation changes
+    // the picture — there is no dead zone where turning does nothing.
+    const sharp = 1 - clamp(Math.abs(this.focalPos - this.focalBest) / 1.5);
+    const focus = Math.pow(sharp, 2.2);
     this.fluoro.focus = focus;
 
     if (Math.abs(this.knobTracker.angle - this.lastTickAngle) > 0.34) {
@@ -1185,8 +1232,8 @@ export class Game {
       if (this.knobTracker.active) audio.knob(this.knobTracker.revsPerSec);
     }
 
-    if (focus > 0.94) this.focusHold += dt; else this.focusHold = 0;
-    if (this.focusHold > 0.3) {
+    if (focus > 0.88) this.focusHold += dt; else this.focusHold = 0;
+    if (this.focusHold > 0.18) {
       this.revealT = 0;
       this.flash = 1;
       audio.pop();
@@ -1207,7 +1254,7 @@ export class Game {
     const k = clamp(this.revealT / 1.2);
 
     // lock focus, then close the world down to the eyepiece
-    this.fluoro.focus = lerp(0.94, 1.0, easeOutCubic(k));
+    this.fluoro.focus = lerp(0.88, 1.0, easeOutCubic(k));
     this.fluoro.cover = easeInOutCubic(clamp((this.revealT - 0.25) / 1.1));
     this.fluoro.maskR = lerp(this.portrait ? 0.40 : 0.32, this.portrait ? 0.64 : 0.58,
       easeInOutCubic(clamp((this.revealT - 0.25) / 1.4)));
@@ -1226,7 +1273,8 @@ export class Game {
 
     // a small amount of live focus control remains, so the knob still answers
     const knobWorld = this.worldOf(this.lab.scope.knob).clone();
-    const ks = this.screenOf(knobWorld);
+    if (!p.down) this.setAnchor(knobWorld);
+    const ks = this.gestureAnchor;
     this.knobTracker.update(dt, p.down, p.x, p.y, ks.x, ks.y);
     if (this.knobTracker.active) {
       this.lab.scope.knob.rotation.z = -this.knobTracker.angle;
@@ -1294,7 +1342,8 @@ export class Game {
         put('drop', this.worldOf(mt.blockGhost).clone());
         break;
       case Stage.Slicing:
-        put('wheel', this.worldOf(mt.wheel).clone());
+        this.setAnchor(this.worldOf(mt.wheel).clone());
+        out.wheel = { x: this.gestureAnchor.x, y: this.gestureAnchor.y };
         if (this.ribbonLen >= RIBBON_READY)
           put('ribbon', this.ribbon.worldAt(Math.max(0.5, this.ribbonLen - 0.6), _v1).clone());
         break;
@@ -1326,7 +1375,8 @@ export class Game {
         break;
       case Stage.Focus:
       case Stage.Reveal:
-        put('knob', this.worldOf(this.lab.scope.knob).clone());
+        this.setAnchor(this.worldOf(this.lab.scope.knob).clone());
+        out.knob = { x: this.gestureAnchor.x, y: this.gestureAnchor.y };
         break;
       default: break;
     }
@@ -1421,7 +1471,7 @@ export class Game {
       this.cover.group.position.copy(slot).add(new THREE.Vector3(0.06, 0.019, 0));
       this.slide.group.userData.movedToScope = true;
     }
-    if (s === Stage.Reveal) { this.revealT = 0; this.knobTracker.angle = (this.focalBest + 1) / 0.10; }
+    if (s === Stage.Reveal) { this.revealT = 0; this.knobTracker.angle = (this.focalBest + 1) / 0.115; }
     this.enter(s);
     if (s === Stage.Slicing) this.rig.snap(this.slicingShot());
     else if (s !== Stage.Intro) this.rig.snap(this.shot(SHOT_OF[s]));

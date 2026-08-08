@@ -142,9 +142,9 @@ function paintGland(g: CanvasRenderingContext2D, r: Rng, o: PaintOpts) {
   if (z > 2) {
     // Cell level: one gland fills the middle of the field and its neighbours
     // crowd in from the corners, so wherever the zoom lands there is structure.
-    glands.push({ x: S * 0.5, y: S * 0.5, r: S * 0.30 });
-    for (const [dx, dy] of [[0, 1], [1, 0.3], [-0.9, -0.4], [0.4, -1]])
-      glands.push({ x: S * (0.5 + dx * 0.62), y: S * (0.5 + dy * 0.62), r: S * rand(r, 0.26, 0.34) });
+    glands.push({ x: S * 0.5, y: S * 0.5, r: S * 0.21 });
+    for (const [dx, dy] of [[0, 1], [1, 0.25], [-0.95, -0.3], [0.35, -1], [-0.5, 0.85], [0.85, -0.65]])
+      glands.push({ x: S * (0.5 + dx * 0.46), y: S * (0.5 + dy * 0.46), r: S * rand(r, 0.17, 0.23) });
   } else {
     const baseR = S * 0.14;
     let guard = 0;

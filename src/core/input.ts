@@ -178,11 +178,14 @@ export class CircleTracker {
       this.active = true;
     } else {
       this.hasPrev = false;
+      // A deliberate slow turn stops where you left it; only a flick keeps
+      // spinning. Without this, every crank overshoots by half a section and
+      // the "one turn, one slice" link stops being legible.
+      if (this.active && Math.abs(this.velocity) < 1.6) this.velocity = 0;
       this.active = false;
-      // coast
       const damping = Math.exp(-this.friction * dt);
       this.velocity *= damping;
-      if (Math.abs(this.velocity) < 0.02) this.velocity = 0;
+      if (Math.abs(this.velocity) < 0.15) this.velocity = 0;
       const d = this.velocity * dt;
       this.delta = d;
       this.angle += d;
