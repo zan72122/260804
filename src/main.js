@@ -309,10 +309,15 @@ class Game {
       this.audio.peron(1);
     }
     this.ui.fadeHint(clamp(1 - this.peelProgress * 2.2, 0, 1));
-    // the leaf feels the paper lifting off it
-    if (this.peelProgress > 0.25) {
-      this.leaf.adhesion = damp(this.leaf.adhesion, 0.1, 3, 0.016);
-      this.leaf.liftAmp = lerp(0.18, 0.85, smoothstep(0.25, 0.95, this.peelProgress));
+    // The leaf feels the paper come off it: it stops being pressed flat, its
+    // edges start to lift, and the sheet swinging overhead drags air across it.
+    // By the time the paper is out of the way the leaf is already breathing.
+    const k = smoothstep(0.18, 0.9, this.peelProgress);
+    this.leaf.adhesion = lerp(0.55, 0.04, k);
+    this.leaf.liftAmp = lerp(0.18, 1.0, k);
+    if (k > 0.02 && contribution > 0.003) {
+      this.leaf.gust(this.leaf.pos, vec3.create(0, 0, -1),
+        clamp(contribution * 2.2, 0.004, 0.05), 0.075);
     }
     if (this.peelProgress >= 0.999 && this.phase === 'peron') {
       this.setPhase('fuwa');
