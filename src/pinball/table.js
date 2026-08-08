@@ -39,6 +39,26 @@ TABLE.laneCentre = (TABLE.laneU[0] + TABLE.laneU[1]) / 2;
 TABLE.gravity = 9.81 * Math.sin(TABLE.tilt);     // ≈ 1.20 m/s² down the slope
 TABLE.nearZ = COUNTER.centerZ + TABLE.depth / 2; // world z of the hinge edge
 
+/**
+ * Per-city dressing. The table is the same table everywhere — same geometry,
+ * same physics — but a stall in Kyoto does not paint its slingshots Lisbon
+ * red. Only the painted and printed parts move; the wood stays wood.
+ */
+const SKIN = {
+  lisbon: {
+    sling: 0xc4452f, paint: 0xf0dcae, broth: 0xb8341f,
+    sign: '#2b3230', ink: '#f0e2bd', edge: '#8a6a3a',
+  },
+  kyoto: {
+    sling: 0x2f4f45, paint: 0xdfe6e2, broth: 0x8a5a1e,
+    sign: '#1d2622', ink: '#e9efe6', edge: '#6f8a72',
+  },
+  marrakech: {
+    sling: 0x1f6f77, paint: 0xf3d9a0, broth: 0xc0651e,
+    sign: '#2a1c12', ink: '#f6dfae', edge: '#c08a3a',
+  },
+};
+
 /** Sample an elliptical arc, used for the top of the playfield. */
 function arc(cx, cy, rx, ry, a0, a1, steps) {
   const pts = [];
@@ -68,30 +88,39 @@ export function layout() {
       { pts: [[laneIn, 0.03], [laneOut, 0.03]], tag: 'lane' },
     ],
     gate: { p0: [laneIn, TABLE.laneTop], p1: [laneOut, 0.735], tag: 'gate' },
-    // Inlane walls funnelling everything down onto the flippers. They end
-    // exactly on the flipper pivot, not short of it: any notch left between
-    // wall and pivot boss is narrower than the ball, and a ball that rolls
-    // into it wedges there for good. Ending on the pivot leaves a continuous
-    // surface — down the wall, over the boss, onto the bat.
+    // The bottom of the table, in two pieces a side.
     //
-    // The lower half of each is the slingshot: same wall, but it kicks. That
-    // avoids the classic outlane gap, which on a table this small would be a
-    // coin-flip drain rather than a skill test.
+    // The guide brings the ball down from the rail and stops short. Below it
+    // the slingshot carries on to the flipper, and it ends exactly on the
+    // pivot, not short of it: any notch left between wall and pivot boss is
+    // narrower than the ball, and a ball that rolls into one wedges there for
+    // good. Ending on the pivot leaves a continuous surface — down the wall,
+    // over the boss, onto the bat.
+    //
+    // The gap between guide and sling is the outlane. A ball with pace crosses
+    // it and comes back to the flipper; a slow one drops through into the open
+    // corner, where nothing is holding it above the drain line, and is lost.
+    // The mouth is 84 mm across for a 66 mm ball — a real threat rather than a
+    // coin flip, and the reason the nudge keys and the slingshots exist.
     inlanes: [
-      { pts: [[-H, 0.36], [-0.34, 0.20]], tag: 'inlane' },
-      { pts: [[laneIn, 0.36], [0.34, 0.20]], tag: 'inlane' },
+      { pts: [[-H, 0.36], [-0.435, 0.263]], tag: 'inlane' },
+      { pts: [[laneIn, 0.36], [0.435, 0.263]], tag: 'inlane' },
     ],
     slings: [
-      { pts: [[-0.34, 0.20], [-F.pivotU, F.pivotV]], tag: 'sling' },
-      { pts: [[0.34, 0.20], [F.pivotU, F.pivotV]], tag: 'sling' },
+      { pts: [[-0.362, 0.222], [-F.pivotU, F.pivotV]], tag: 'sling' },
+      { pts: [[0.362, 0.222], [F.pivotU, F.pivotV]], tag: 'sling' },
     ],
 
     // Pots hanging over the fire: pop bumpers that also put heat into
-    // whatever hits them. They sit right where a launched ball arrives.
+    // whatever hits them. They sit where a launched ball arrives, but pushed
+    // off the centre line — one of them used to stand directly under the
+    // delivery chute and screen the one shot the whole game ends on. The lane
+    // left between them is 222 mm wide against a 66 mm ball, so a decent
+    // centre shot runs straight up into the chute funnel.
     bumpers: [
       { u: -0.30, v: 0.60, r: 0.056 },
-      { u: -0.09, v: 0.71, r: 0.056 },
-      { u: 0.12, v: 0.60, r: 0.056 },
+      { u: -0.19, v: 0.73, r: 0.056 },
+      { u: 0.21, v: 0.62, r: 0.056 },
     ],
 
     // Preserve jars standing in a row on the left. Knock all five down and
@@ -111,6 +140,16 @@ export function layout() {
     spinner: { u: -0.42, v: 0.46, r: 0.05 },
     pot: { u: 0.33, v: 0.72, r: 0.052 },
     chute: { u: 0.0, v: 0.845, r: 0.055 },
+
+    // The cheeks of the delivery chute, as real walls. They used to be drawn
+    // and not collided with, which broke this file's one rule — and made the
+    // shot the whole game ends on land in 1 attempt out of 54, because the
+    // mouth was a bare 110 mm target at the top of the table. As a funnel,
+    // 350 mm wide at the bottom, a decent centre shot is gathered into it.
+    chuteWalls: [
+      { pts: [[-0.175, 0.755], [-0.062, 0.862]], tag: 'chutewall' },
+      { pts: [[0.175, 0.755], [0.062, 0.862]], tag: 'chutewall' },
+    ],
   };
 }
 
@@ -140,6 +179,10 @@ export class Table {
     world.clearStatics();
 
     const L = layout();
+    // paintedWood bakes the colour into its texture and caches by key, so the
+    // dressing is not readable off the materials afterwards. Keep it here.
+    const sk = SKIN[dest?.id] ?? SKIN.lisbon;
+    this.skin = sk;
     const wood = M.counterWood();
     const rail = M.darkWood();
     const brass = M.brass();
@@ -156,10 +199,14 @@ export class Table {
 
     // Painted lane markings: cheap, and they tell you where the ball will go.
     const paint = new THREE.MeshStandardMaterial({
-      color: 0xf0dcae, roughness: 0.7, transparent: true, opacity: 0.35, depthWrite: false,
+      color: sk.paint, roughness: 0.7, transparent: true, opacity: 0.35, depthWrite: false,
     });
+    // Two strokes a side: the line the ball takes to the flipper, and the one
+    // it takes out of the game. Painting the outlane is the only warning the
+    // player gets that the corner past the sling is not a wall.
     for (const [u0, v0, u1, v1] of [
-      [-0.62, 0.30, -0.30, 0.14], [0.30, 0.14, 0.52, 0.30],
+      [-0.60, 0.315, -0.30, 0.155], [0.60, 0.315, 0.30, 0.155],
+      [-0.50, 0.235, -0.60, 0.055], [0.50, 0.235, 0.60, 0.055],
     ]) {
       const len = Math.hypot(u1 - u0, v1 - v0);
       const m = new THREE.Mesh(new THREE.PlaneGeometry(len, 0.012), paint);
@@ -182,7 +229,7 @@ export class Table {
     // Slingshots: the same funnel wall, but sprung. kickMin is the switch — a
     // ball rolling along the rubber must not get a free shove every pass.
     addWalls(L.slings, { restitution: 0.5, friction: 1.5, kick: 1.15, kickMin: 0.45 },
-      M.paintedWood(0xc4452f, 4));
+      M.paintedWood(sk.sling, 4));
 
     // One-way gate: the ball leaves the lane through it and can never fall back in.
     world.addSegment(L.gate.p0[0], L.gate.p0[1], L.gate.p1[0], L.gate.p1[1], {
@@ -204,7 +251,7 @@ export class Table {
         [0.001, 0.006], [b.r * 0.72, 0.008], [b.r * 0.95, 0.03], [b.r, 0.055],
         [b.r * 1.02, 0.062], [b.r * 0.96, 0.062], [b.r * 0.94, 0.03], [b.r * 0.68, 0.012], [0.001, 0.012],
       ], 22), M.brass(), { pos: [0, 0, 0], parent: g });
-      G.mesh(G.cyl(b.r * 0.9, b.r * 0.9, 0.006, 20), M.food(0xb8341f, { rough: 0.4, clearcoat: 0.5 }),
+      G.mesh(G.cyl(b.r * 0.9, b.r * 0.9, 0.006, 20), M.food(sk.broth, { rough: 0.4, clearcoat: 0.5 }),
         { pos: [0, 0.05, 0], parent: g, cast: false });
       // Glow under the pot: the fire it sits on, and the hit flash. Cloned per
       // bumper, since the flash writes opacity and the library copy is shared.
@@ -272,19 +319,16 @@ export class Table {
 
     // ---- delivery chute -------------------------------------------------
     world.addSensor(L.chute.u, L.chute.v, L.chute.r, { tag: 'chute' });
+    // The cheeks are colliders first and scenery second — same polylines, so
+    // the funnel the player aims into is the funnel the ball meets.
+    addWalls(L.chuteWalls, { restitution: 0.3, friction: 2.2 }, M.crateWood(2));
     const chute = new THREE.Group();
     chute.position.set(L.chute.u, 0, -L.chute.v);
-    for (const sx of [-1, 1]) {
-      const w = G.mesh(G.box(0.02, 0.05, 0.13, 0.004), M.crateWood(2), {
-        pos: [sx * (L.chute.r + 0.012), 0.025, 0.02], parent: chute,
-      });
-      w.rotation.y = sx * 0.16;
-    }
     G.mesh(G.box(0.14, 0.006, 0.1, 0.002), M.crateWood(1), { pos: [0, 0.002, 0.01], parent: chute });
     const sign = TEX.label({
-      w: 256, h: 96, bg: '#2b3230',
-      lines: [{ text: '納品口', size: 46, color: '#f0e2bd', y: 48 }],
-      border: '#8a6a3a', grain: 0.1,
+      w: 256, h: 96, bg: sk.sign,
+      lines: [{ text: '納品口', size: 46, color: sk.ink, y: 48 }],
+      border: sk.edge, grain: 0.1,
     });
     G.mesh(G.plane(0.13, 0.048), new THREE.MeshStandardMaterial({ map: sign, roughness: 0.9 }),
       { pos: [0, 0.055, -0.03], rot: [-0.5, 0, 0], parent: chute, cast: false });

@@ -39,6 +39,15 @@ const HEAT = { bumper: 0.20, pot: 0.55, bank: 0.35, spinner: 0.05 };
 const SCORE = { bumper: 120, sling: 40, target: 350, bank: 2500, spinner: 90, pot: 800, dish: 5000 };
 const POT_COOK = 1.1;       // seconds the stew pot holds a ball
 
+// A nudge has to be worth something — it is the only answer to the outlane —
+// so it moves the ball a real distance. Which means it also has to cost
+// something, or the outlanes stop mattering again: lean on the table three
+// times in quick succession and it tilts, killing the flippers until the ball
+// is gone. The count bleeds off, so spacing your nudges out is the skill.
+const NUDGE = 0.30;
+const TILT_LIMIT = 3;
+const TILT_DECAY = 0.55;    // warnings per second
+
 /** Splash colour per ingredient, for the mess left on the playfield. */
 const SPLAT = {
   veg2: 0xa8281c, bread2: 0xe8d6ae, sea2: 0xbcd0d8, drink1: 0xe9c62f,
@@ -69,6 +78,7 @@ export class Pinball {
     this.score = 0;
     this.bankResetIn = 0;
     this.tiltWarn = 0;
+    this.tilted = false;
     this.ballsLeft = SHIFT_BALLS;
     this.shiftOver = true;
     // 0 = flat counter, 1 = fully raised table. Driven every frame, including
@@ -108,6 +118,8 @@ export class Pinball {
     this.bankResetIn = 0;
     this.ballsLeft = SHIFT_BALLS;
     this.shiftOver = false;
+    this.tiltWarn = 0;
+    this.tilted = false;
     this.table.clearStains();
     this.table.resetTargets();
     this.loadBall(LOADABLE[0]);
@@ -282,7 +294,7 @@ export class Pinball {
 
   // ----------------------------------------------------------- input ----
   setFlipper(side, pressed) {
-    if (!this.active) return;
+    if (!this.active || this.tilted) return;
     for (const f of this.world.flippers) {
       if (f.side !== side) continue;
       if (pressed && !f.pressed) this.audio?.pickup();
@@ -311,10 +323,20 @@ export class Pinball {
   }
 
   nudge(dir) {
-    if (!this.active) return;
-    this.world.applyNudge(dir * 0.16, 0.05);
+    if (!this.active || this.tilted) return;
+    this.world.applyNudge(dir * NUDGE, 0.08);
     this.view.addShake(0.18);
     this.audio?.drop(3);
+    this.tiltWarn += 1;
+    if (this.tiltWarn >= TILT_LIMIT) {
+      this.tilted = true;
+      for (const f of this.world.flippers) f.pressed = false;
+      this.audio?.deny();
+      this.view.addShake(0.5);
+      this.onTilt?.(true);
+    } else {
+      this.onTilt?.(false);
+    }
   }
 
   // ---------------------------------------------------------- update ----
@@ -326,6 +348,8 @@ export class Pinball {
     this.plungerV = damp(this.plungerV, this.charging ? targetV : TABLE.plungerRest, 24, dt);
     const w = this.table.plungerWall;
     if (w) { w.y0 = this.plungerV; w.y1 = this.plungerV; }
+
+    if (this.tiltWarn > 0) this.tiltWarn = Math.max(0, this.tiltWarn - TILT_DECAY * dt);
 
     const events = this.world.step(dt);
     this._handleEvents(events);
@@ -572,6 +596,13 @@ export class Pinball {
     this.fx.dust(at, 6, 0.05);
     this.audio?.deny();
     this.despawn(ball);
+    // A tilt is served on the ball that earned it: once the table is clear the
+    // flippers come back.
+    if (this.tilted && this.balls.length === 0) {
+      this.tilted = false;
+      this.tiltWarn = 0;
+      this.onTilt?.(false);
+    }
     this.onBallLost?.(this.ballsLeft);
   }
 

@@ -182,6 +182,10 @@ class Game {
       if (left > 0) this.hud.toast(`球を落としました（残り ${left}）`, 'bad');
     };
     this.pinball.onShiftEnd = (s) => this.finishShift(s);
+    this.pinball.onTilt = (tilted) => {
+      if (tilted) this.hud.toast('傾斜！ フリッパーが死にました', 'bad');
+      else if (this.pinball.tiltWarn >= 1) this.hud.toast('揺らしすぎ注意', 'bad');
+    };
 
     this.orders.onChange = () => {
       this.hud.setOrders(this.orders.list());
