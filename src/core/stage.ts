@@ -1,5 +1,6 @@
 import {
   ACESFilmicToneMapping,
+  PCFShadowMap,
   FogExp2,
   PerspectiveCamera,
   Scene,
@@ -74,7 +75,7 @@ export class Stage {
     this.renderer.toneMapping = ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.0;
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = 2; // PCFSoftShadowMap
+    this.renderer.shadowMap.type = PCFShadowMap;
     this.renderer.setClearColor(0x05070f, 1);
 
     this.maxDpr = Math.min(window.devicePixelRatio || 1, 2);
