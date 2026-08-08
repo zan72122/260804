@@ -85,10 +85,22 @@ the arm on their own.
 
 ```sh
 npm run preview &
-node tools/play.mjs iphone-portrait     # drives the whole loop twice with real gestures
-node tools/shots.mjs out/               # frames from every stage, all five screen sizes
-node tools/studio.mjs out/              # hawk turntable: folded / gliding / braking
+node tools/play.mjs  iphone-portrait   # drives the whole loop twice with real gestures
+node tools/rotate.mjs out/             # flips the viewport mid-game, five sizes
+node tools/shots.mjs out/ ipad-landscape   # a frame from every stage of the loop
+node tools/studio.mjs out/             # hawk turntable: folded / gliding / braking
+node tools/perf.mjs                    # draw-call and triangle budget
 ```
 
-`tools/play.mjs` runs the game with `?quality=low` and a debug time scale,
-because the headless browser rasterises in software at a few frames a second.
+Devices covered: `iphone-portrait`, `iphone-landscape`, `iphone-se-portrait`,
+`ipad-portrait`, `ipad-landscape`.
+
+`play.mjs` runs the game with `?quality=low` and a debug time scale, because
+the headless browser rasterises in software at about two frames a second —
+without it, game time barely advances and the loop never completes. For the
+same reason `shots.mjs` waits on the game's own internal progress rather than
+on wall-clock delays, and waits for the camera to stop moving before it
+captures, so no frame is caught mid-cut.
+
+The game currently draws in 221 calls / ~590k triangles at full quality, and
+96 calls / ~270k in `?quality=low`.

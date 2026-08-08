@@ -683,7 +683,7 @@ export function createHawk() {
     apply,
     // How far the root sits above the feet, so anything the bird stands on can
     // place it by the perch surface rather than by its belly.
-    standOffset: 0.205,
+    standOffset: 0.19,
     wings: [wingR, wingL],
     legs: [legR, legL],
     tailFeathers,

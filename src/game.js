@@ -60,7 +60,7 @@ export function createGame({ scene, camera, renderer, dom, hintLayer, quality })
   lure.cordGroup.visible = false;
 
   // The gauntlet starts off the hand, waiting on the grass by the perch.
-  const gloveRest = new THREE.Vector3(-0.85, 0, 1.15);
+  const gloveRest = new THREE.Vector3(-0.5, 0, 1.05);
   gloveRest.y = groundHeight(gloveRest.x, gloveRest.z) + 0.1;
   falconer.detachGlove(scene, gloveRest);
 
@@ -666,11 +666,11 @@ export function createGame({ scene, camera, renderer, dom, hintLayer, quality })
         updateHawkPerched(dt, world.perchPoint, new THREE.Quaternion());
         updateHead(dt, _tmp.copy(falconer.root.position).setY(1.4));
         setShot({
-          look: _tmp.set(-0.35, 1.05, 0.6),
+          look: _tmp.set(-0.28, 0.95, 0.6),
           yaw: 0.2,
           pitch: 0.17,
-          fitH: 1.25,
-          minW: 0.95,
+          fitH: 1.5,
+          minW: 1.25,
         });
         // Nudge: the falconer glances at the glove, then a ring appears on it.
         if (idle > 2.2) hints.show('ring', toScreen(gloveRest).x, toScreen(gloveRest).y);
@@ -1126,6 +1126,12 @@ export function createGame({ scene, camera, renderer, dom, hintLayer, quality })
       armRecall: () => (recallArmed = true),
       info: () => ({
         state,
+        render: {
+          calls: renderer.info.render.calls,
+          tris: renderer.info.render.triangles,
+          textures: renderer.info.memory.textures,
+          geometries: renderer.info.memory.geometries,
+        },
         lurePasses,
         recallArmed,
         hawk: flight.pos.toArray().map((n) => +n.toFixed(2)),

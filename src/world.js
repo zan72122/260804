@@ -479,50 +479,63 @@ function makeTree(seed) {
     metalness: 0,
   });
 
+  /*
+   * Trunk, boughs and every canopy blob are baked down to two meshes. Drawn
+   * separately, seven trees alone cost about eighty draw calls, which is most
+   * of a phone's budget spent on scenery; merged they cost fourteen. The
+   * canopy stays its own mesh because it still has to sway in the wind, and
+   * tonal variation between blobs moves into vertex colours.
+   */
   const trunkH = 2.6 + r() * 1.5;
-  const trunk = new THREE.Mesh(
-    limbGeometry(trunkH, 0.11, 0.3, 12, 12, 0.05 * (r() - 0.5)),
-    barkMat,
-  );
+  const woodParts = [limbGeometry(trunkH, 0.11, 0.3, 12, 12, 0.05 * (r() - 0.5)).toNonIndexed()];
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * TAU + r();
+    const bough = limbGeometry(1.0, 0.035, 0.075, 6, 8, 0.25).toNonIndexed();
+    bough.applyMatrix4(
+      new THREE.Matrix4().compose(
+        new THREE.Vector3(0, trunkH * (0.55 + r() * 0.2), 0),
+        new THREE.Quaternion().setFromEuler(new THREE.Euler(0, -a, 0.85 + r() * 0.25)),
+        new THREE.Vector3(1, 1, 1),
+      ),
+    );
+    woodParts.push(bough);
+  }
+  const trunk = new THREE.Mesh(mergeGeometries(woodParts), barkMat);
   trunk.castShadow = true;
   trunk.receiveShadow = true;
   g.add(trunk);
 
-  // A couple of boughs so the canopy has something to sit on.
-  for (let i = 0; i < 3; i++) {
-    const a = (i / 3) * TAU + r();
-    const bough = new THREE.Mesh(limbGeometry(1.0, 0.035, 0.075, 6, 8, 0.25), barkMat);
-    bough.position.set(0, trunkH * (0.55 + r() * 0.2), 0);
-    bough.rotation.set(0, -a, 0.85 + r() * 0.25);
-    bough.castShadow = true;
-    g.add(bough);
-  }
-
   const canopy = new THREE.Group();
   canopy.position.y = trunkH * 0.95;
-  const leafMats = [
-    new THREE.MeshStandardMaterial({ color: 0x4a6d34, roughness: 0.92, flatShading: true }),
-    new THREE.MeshStandardMaterial({ color: 0x5c8140, roughness: 0.9, flatShading: true }),
-    new THREE.MeshStandardMaterial({ color: 0x709a4c, roughness: 0.88, flatShading: true }),
-  ];
+  const leafTones = [0x4a6d34, 0x5c8140, 0x709a4c];
   const blobs = 7 + Math.floor(r() * 3);
+  const leafParts = [];
+  const tone = new THREE.Color();
   for (let i = 0; i < blobs; i++) {
     const rad = 0.65 + r() * 0.6;
-    const geo = new THREE.IcosahedronGeometry(rad, 1);
+    const geo = new THREE.IcosahedronGeometry(rad, 1).toNonIndexed();
     const p = geo.attributes.position;
     for (let k = 0; k < p.count; k++) {
       const n = 1 + (r() - 0.5) * 0.3;
       p.setXYZ(k, p.getX(k) * n, p.getY(k) * n * 0.82, p.getZ(k) * n);
     }
-    geo.computeVertexNormals();
-    const m = new THREE.Mesh(geo, leafMats[i % leafMats.length]);
     const a = (i / blobs) * TAU + r() * 0.6;
     const rr = i === 0 ? 0 : 0.6 + r() * 0.8;
-    m.position.set(Math.cos(a) * rr, (i === 0 ? 0.45 : 0) + r() * 0.8, Math.sin(a) * rr);
-    m.castShadow = true;
-    m.receiveShadow = true;
-    canopy.add(m);
+    geo.translate(Math.cos(a) * rr, (i === 0 ? 0.45 : 0) + r() * 0.8, Math.sin(a) * rr);
+    geo.computeVertexNormals();
+    tone.setHex(leafTones[i % leafTones.length]);
+    const cols = new Float32Array(p.count * 3);
+    for (let k = 0; k < p.count; k++) tone.toArray(cols, k * 3);
+    geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+    leafParts.push(geo);
   }
+  const leaves = new THREE.Mesh(
+    mergeGeometries(leafParts),
+    new THREE.MeshStandardMaterial({ roughness: 0.9, flatShading: true, vertexColors: true }),
+  );
+  leaves.castShadow = true;
+  leaves.receiveShadow = true;
+  canopy.add(leaves);
   g.add(canopy);
   g.userData.canopy = canopy;
   g.userData.phase = r() * TAU;
@@ -572,34 +585,47 @@ function makeDistantWoods() {
 /* ---------- rocks ---------- */
 
 function makeRocks() {
-  const group = new THREE.Group();
   const r = rand(515);
-  const mat = new THREE.MeshStandardMaterial({
-    color: 0xa8a294,
-    roughness: 0.92,
-    metalness: 0,
-    flatShading: true,
-  });
+  const parts = [];
+  const tone = new THREE.Color();
   for (let i = 0; i < 16; i++) {
-    const geo = new THREE.DodecahedronGeometry(0.16 + r() * 0.34, 0);
+    const geo = new THREE.DodecahedronGeometry(0.16 + r() * 0.34, 0).toNonIndexed();
     const p = geo.attributes.position;
     for (let k = 0; k < p.count; k++) {
       const n = 1 + (r() - 0.5) * 0.45;
       p.setXYZ(k, p.getX(k) * n, p.getY(k) * n * 0.6, p.getZ(k) * n);
     }
-    geo.computeVertexNormals();
-    const m = new THREE.Mesh(geo, mat);
     const a = r() * TAU;
     const rad = 4 + Math.pow(r(), 0.6) * 20;
     const x = Math.cos(a) * rad,
       z = Math.sin(a) * rad;
-    m.position.set(x, groundHeight(x, z) - 0.06, z);
-    m.rotation.set(r(), r() * TAU, r() * 0.4);
-    m.castShadow = true;
-    m.receiveShadow = true;
-    group.add(m);
+    geo.applyMatrix4(
+      new THREE.Matrix4().compose(
+        new THREE.Vector3(x, groundHeight(x, z) - 0.06, z),
+        new THREE.Quaternion().setFromEuler(new THREE.Euler(r(), r() * TAU, r() * 0.4)),
+        new THREE.Vector3(1, 1, 1),
+      ),
+    );
+    geo.computeVertexNormals();
+    // Per-boulder tone, since they all share one merged mesh now.
+    tone.setHSL(0.1 + r() * 0.05, 0.06 + r() * 0.05, 0.5 + r() * 0.12);
+    const cols = new Float32Array(p.count * 3);
+    for (let k = 0; k < p.count; k++) tone.toArray(cols, k * 3);
+    geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+    parts.push(geo);
   }
-  return group;
+  const m = new THREE.Mesh(
+    mergeGeometries(parts),
+    new THREE.MeshStandardMaterial({
+      roughness: 0.92,
+      metalness: 0,
+      flatShading: true,
+      vertexColors: true,
+    }),
+  );
+  m.castShadow = true;
+  m.receiveShadow = true;
+  return m;
 }
 
 /* ---------- rustic fence marking the training ground ---------- */
@@ -618,8 +644,11 @@ function makeFence() {
   const ropeMat = new THREE.MeshStandardMaterial({ color: 0xbfa273, roughness: 1 });
   const r = rand(707);
   const posts = [];
+  const postParts = [];
+  const ropeParts = [];
   const N = 14;
-  // A shallow arc of posts behind the falconer, framing the shot.
+  // A shallow arc of posts behind the falconer, framing the shot. Baked into
+  // two meshes: it is background, and it never moves.
   for (let i = 0; i < N; i++) {
     const a = Math.PI * (0.6 + (i / (N - 1)) * 1.05);
     const rad = 13.5 + Math.sin(i * 1.7) * 0.8;
@@ -627,12 +656,17 @@ function makeFence() {
       z = Math.sin(a) * rad;
     const y = groundHeight(x, z);
     const h = 1.05 + r() * 0.2;
-    const post = new THREE.Mesh(limbGeometry(h, 0.055, 0.075, 8, 8, 0), mat);
-    post.position.set(x, y - 0.08, z);
-    post.rotation.set((r() - 0.5) * 0.1, r() * TAU, (r() - 0.5) * 0.1);
-    post.castShadow = true;
-    post.receiveShadow = true;
-    group.add(post);
+    const post = limbGeometry(h, 0.055, 0.075, 8, 8, 0).toNonIndexed();
+    post.applyMatrix4(
+      new THREE.Matrix4().compose(
+        new THREE.Vector3(x, y - 0.08, z),
+        new THREE.Quaternion().setFromEuler(
+          new THREE.Euler((r() - 0.5) * 0.1, r() * TAU, (r() - 0.5) * 0.1),
+        ),
+        new THREE.Vector3(1, 1, 1),
+      ),
+    );
+    postParts.push(post);
     posts.push(new THREE.Vector3(x, y + h * 0.8, z));
   }
   for (let i = 0; i < posts.length - 1; i++) {
@@ -641,10 +675,15 @@ function makeFence() {
     const mid = a.clone().add(b).multiplyScalar(0.5);
     mid.y -= 0.18;
     const curve = new THREE.QuadraticBezierCurve3(a, mid, b);
-    const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 8, 0.018, 5, false), ropeMat);
-    tube.castShadow = true;
-    group.add(tube);
+    ropeParts.push(new THREE.TubeGeometry(curve, 8, 0.018, 5, false).toNonIndexed());
   }
+  const postMesh = new THREE.Mesh(mergeGeometries(postParts), mat);
+  postMesh.castShadow = true;
+  postMesh.receiveShadow = true;
+  group.add(postMesh);
+  const ropeMesh = new THREE.Mesh(mergeGeometries(ropeParts), ropeMat);
+  ropeMesh.castShadow = true;
+  group.add(ropeMesh);
   return group;
 }
 
@@ -771,7 +810,7 @@ export function createWorld(scene, opts = {}) {
   });
 
   const perch = makePerch();
-  const perchAt = new THREE.Vector3(-1.55, 0, 0.7);
+  const perchAt = new THREE.Vector3(-1.05, 0, 0.62);
   perch.group.position.set(perchAt.x, groundHeight(perchAt.x, perchAt.z), perchAt.z);
   perch.group.rotation.y = 0.5;
   world.add(perch.group);
