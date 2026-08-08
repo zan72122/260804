@@ -22,7 +22,7 @@
     toss: { t: [-0.62, 1.22, -0.34], frame: [1.18, 1.25], yaw: [4, -10], pitch: [28, 26] },
     topping: { t: [-0.62, 0.98, -0.22], frame: [0.86, 1.00], yaw: [4, -10], pitch: [42, 38] },
     oven: { t: [0.55, 1.13, -1.15], frame: [0.98, 1.62], yaw: [3, -20], pitch: [25, 20] },
-    bake: { t: [0.55, 1.13, -1.80], frame: [0.62, 0.78], yaw: [2, -7], pitch: [24, 22] },
+    bake: { t: [0.57, 1.15, -1.98], frame: [0.80, 0.98], yaw: [2, -6], pitch: [22, 20] },
     serve: { t: [-0.30, 0.99, -0.30], frame: [0.72, 0.82], yaw: [6, -12], pitch: [40, 34] }
   };
 
@@ -72,12 +72,12 @@
 
     const key = new THREE.DirectionalLight(0xffeed2, 0.72);
     key.position.set(-2.6, 4.2, 2.6);
-    key.target.position.set(-0.4, 0.9, -0.9);
+    key.target.position.set(-0.1, 0.9, -1.1);
     key.castShadow = true;
     key.shadow.mapSize.set(1536, 1536);
-    key.shadow.camera.left = -2.6; key.shadow.camera.right = 2.6;
-    key.shadow.camera.top = 2.6; key.shadow.camera.bottom = -2.2;
-    key.shadow.camera.near = 0.5; key.shadow.camera.far = 12;
+    key.shadow.camera.left = -3.6; key.shadow.camera.right = 3.6;
+    key.shadow.camera.top = 3.2; key.shadow.camera.bottom = -3.0;
+    key.shadow.camera.near = 0.5; key.shadow.camera.far = 15;
     key.shadow.bias = -0.0012;
     key.shadow.normalBias = 0.02;
     scene.add(key); scene.add(key.target);
@@ -118,13 +118,18 @@
     scene.add(this.pizza.group);
 
     /* --- 炎 --- */
-    this.fire = new F.Fire(scene, new THREE.Vector3(L.ovenX + 0.34, L.hearthY + 0.04, L.ovenZ - 0.40));
+    this.fire = new F.Fire(scene, new THREE.Vector3(L.ovenX + 0.19, L.hearthY + 0.075, L.ovenZ - 0.50));
     // 薪
     const M = PZ.scene3.mats;
-    for (let i = 0; i < 3; i++) {
-      const lg = new THREE.Mesh(G.log(0.045, 0.42, 40 + i), M.charcoal);
-      lg.position.set(L.ovenX + 0.34 + (i - 1) * 0.05, L.hearthY + 0.075, L.ovenZ - 0.40 + (i - 1) * 0.06);
-      lg.rotation.y = 0.4 + i * 0.5;
+    const emberMat = new THREE.MeshStandardMaterial({
+      color: 0x140d0a, roughness: 0.95,
+      emissive: 0xff4a08, emissiveIntensity: 0.55
+    });
+    for (let i = 0; i < 4; i++) {
+      const lg = new THREE.Mesh(G.log(0.032, 0.30, 40 + i), i === 1 ? emberMat : M.charcoal);
+      lg.position.set(L.ovenX + 0.19 + (i - 1.5) * 0.055, L.hearthY + 0.032 + (i % 2) * 0.026, L.ovenZ - 0.50 + (i - 1.5) * 0.05);
+      lg.rotation.y = 0.3 + i * 0.6;
+      lg.rotation.z = (i % 2 ? 0.08 : -0.06);
       lg.castShadow = true;
       scene.add(lg);
     }
@@ -513,8 +518,8 @@
       const f = this.fire.group.position;
       this.pEmber.spawn(
         f.x + U.rand(-0.12, 0.12), f.y + 0.06, f.z + U.rand(-0.08, 0.08),
-        U.rand(-0.15, 0.15), U.rand(0.5, 1.3), U.rand(-0.1, 0.1),
-        U.rand(0.7, 1.8), U.rand(0.006, 0.014));
+        U.rand(-0.10, 0.10), U.rand(0.30, 0.72), U.rand(-0.08, 0.08),
+        U.rand(0.5, 1.1), U.rand(0.005, 0.012));
     }
 
     // 案内の濃さ

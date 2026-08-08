@@ -116,15 +116,15 @@
     M.birch = mat(T.wood({ seed: 25, light: [232, 208, 168], dark: [186, 154, 108], rings: 30, roughBase: 150 }),
       { repeat: [1, 1], normalScale: 0.7, envIntensity: 0.5 });
     M.marble = mat(T.marble({ seed: 31 }),
-      { repeat: [2, 1], normalScale: 0.35, envIntensity: 0.55 });
+      { repeat: [2, 1], normalScale: 0.35, color: 0xd6d0c4, envIntensity: 0.55 });
     M.floor = mat(T.floorTiles({ seed: 41, n: 3 }),
       { repeat: [8, 8], normalScale: 1.0, envIntensity: 0.3 });
     M.hearth = mat(T.hearth(),
       { repeat: [2, 2], normalScale: 1.2, envIntensity: 0.2 });
     M.hearthIn = mat(T.hearth(),
-      { repeat: [3, 3], normalScale: 1.3, color: 0x8a7258, envIntensity: 0.04 });
+      { repeat: [3, 3], normalScale: 1.3, color: 0x4e3b2a, envIntensity: 0.02 });
     M.hearthWall = mat(T.hearth(),
-      { repeat: [3, 2], normalScale: 1.0, color: 0x3a2418, envIntensity: 0.03 });
+      { repeat: [3, 2], normalScale: 1.0, color: 0x241409, envIntensity: 0.02 });
     M.hearthWall.clippingPlanes = [clipFace];
     M.hearthWall.side = THREE.BackSide;
     M.tileBand = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.25, metalness: 0, envMapIntensity: 0.7 });
@@ -224,7 +224,7 @@
     S.hearth = hearth;
 
     // 内側のドーム（空洞）
-    const inner = new THREE.Mesh(G.dome(L.domeInner, true, L.domeSquash), M.hearthWall);
+    const inner = new THREE.Mesh(G.dome(L.domeInner, false, L.domeSquash), M.hearthWall);
     inner.position.set(0, L.hearthY + 0.03, 0);
     inner.receiveShadow = true;
     O.add(inner);

@@ -32,7 +32,7 @@
       this.tongues.push({
         s: s, ph: Math.random() * TAU, sp: 0.8 + Math.random() * 0.9,
         ox: (Math.random() - 0.5) * 0.26, oz: (Math.random() - 0.5) * 0.16,
-        h: 0.26 + Math.random() * 0.30
+        h: 0.30 + Math.random() * 0.34
       });
     }
 
@@ -41,12 +41,12 @@
     this.coals = new THREE.Sprite(new THREE.SpriteMaterial({
       map: coalTex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true
     }));
-    this.coals.scale.set(0.7, 0.32, 1);
+    this.coals.scale.set(0.62, 0.26, 1);
     this.coals.position.y = 0.02;
     this.group.add(this.coals);
 
     // 光源
-    this.light = new THREE.PointLight(0xff7418, 1.5, 3.0, 2);
+    this.light = new THREE.PointLight(0xff7418, 2.0, 3.6, 2);
     this.light.position.set(0, 0.24, 0);
     this.group.add(this.light);
     this.spill = new THREE.PointLight(0xff8c38, 0.6, 2.2, 2);
@@ -73,11 +73,11 @@
         0.01,
         f.oz + Math.cos(this.t * f.sp * 1.3 + f.ph) * 0.03
       );
-      f.s.material.opacity = U.clamp(L * (0.34 + w * 0.4), 0, 1);
+      f.s.material.opacity = U.clamp(L * (0.46 + w * 0.48), 0, 1);
     }
     const cg = 0.7 + 0.3 * Math.sin(this.t * 2.3);
-    this.coals.material.opacity = 0.5 * L * cg;
-    this.light.intensity = (1.2 + 0.9 * flick) * L;
+    this.coals.material.opacity = 0.72 * L * cg;
+    this.light.intensity = (1.9 + 1.3 * flick) * L;
     this.light.position.y = 0.2 + 0.05 * flick;
     this.spill.intensity = 0.8 * L * flick;
   };
