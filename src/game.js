@@ -226,19 +226,38 @@ export function createGame({ scene, camera, renderer, dom, hintLayer, quality })
 
   /* ---------- camera ---------- */
 
+  /*
+   * Two camera modes.
+   *
+   * Framed shots put the camera at whatever distance fits `fitH` of world
+   * height (and at least `minW` of width) around `look` — right for anything
+   * happening on or near the fist.
+   *
+   * Anchored shots pin the camera to a spot and simply aim it. That is the only
+   * thing that works for a bird circling on an eleven-metre radius: try to fit
+   * the hawk and the falconer into one frame and the shot swings across half
+   * the field and ends up pointing at empty grass. Standing still and turning
+   * your head is what a person watching a hawk actually does.
+   */
   const shot = {
     look: new THREE.Vector3(0, 1.3, 0),
+    anchor: new THREE.Vector3(0, 2, 6),
     yaw: 0.3,
     pitch: 0.14,
     fitH: 1.2,
     minW: 1.05,
+    anchored: 0,
+    fov: 0,
   };
   const shotTarget = {
     look: new THREE.Vector3(0, 1.3, 0),
+    anchor: new THREE.Vector3(0, 2, 6),
     yaw: 0.3,
     pitch: 0.14,
     fitH: 1.2,
     minW: 1.05,
+    anchored: 0,
+    fov: 0,
   };
   let camRate = 2.2;
   let shakeAmt = 0;
@@ -246,9 +265,12 @@ export function createGame({ scene, camera, renderer, dom, hintLayer, quality })
 
   function setShot(o, rate = 2.2) {
     if (o.look) shotTarget.look.copy(o.look);
+    if (o.anchor) shotTarget.anchor.copy(o.anchor);
+    shotTarget.anchored = o.anchor ? 1 : 0;
     for (const k of ['yaw', 'pitch', 'fitH', 'minW']) {
       if (o[k] !== undefined) shotTarget[k] = o[k];
     }
+    shotTarget.fov = o.fov || 0;
     camRate = rate;
   }
 
@@ -263,14 +285,19 @@ export function createGame({ scene, camera, renderer, dom, hintLayer, quality })
       return;
     }
     shot.look.lerp(shotTarget.look, approach(camRate, dt));
+    shot.anchor.lerp(shotTarget.anchor, approach(camRate, dt));
     shot.yaw = damp(shot.yaw, shotTarget.yaw, camRate, dt);
     shot.pitch = damp(shot.pitch, shotTarget.pitch, camRate, dt);
     shot.fitH = damp(shot.fitH, shotTarget.fitH, camRate, dt);
     shot.minW = damp(shot.minW, shotTarget.minW, camRate, dt);
+    shot.anchored = damp(shot.anchored, shotTarget.anchored, camRate, dt);
+    shot.fov = damp(shot.fov, shotTarget.fov, camRate, dt);
 
     const aspect = camera.aspect;
     // Narrow screens get a wider lens so the diorama does not shrink away.
-    camera.fov = lerp(47, 39, clamp((aspect - 0.5) / 1.3, 0, 1));
+    const wideFov = lerp(47, 39, clamp((aspect - 0.5) / 1.3, 0, 1));
+    // A shot may ask for a longer lens; blend in as the shot itself blends.
+    camera.fov = shot.fov > 1 ? lerp(wideFov, shot.fov, clamp(shot.anchored, 0, 1)) : wideFov;
     const tan = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
     // Fit the vertical extent always, and guarantee a minimum width — in
     // portrait the sides crop rather than pushing the camera into the next county.
@@ -282,6 +309,8 @@ export function createGame({ scene, camera, renderer, dom, hintLayer, quality })
       Math.cos(shot.yaw) * Math.cos(shot.pitch),
     );
     _camPos.multiplyScalar(dist).add(shot.look);
+    // Cross-fade to the anchored position so switching modes is a move, not a cut.
+    if (shot.anchored > 0.001) _camPos.lerp(shot.anchor, shot.anchored);
     // Never let the lens dip below the turf.
     _camPos.y = Math.max(_camPos.y, groundHeight(_camPos.x, _camPos.z) + 0.55);
     camera.position.copy(_camPos);
@@ -437,8 +466,8 @@ export function createGame({ scene, camera, renderer, dom, hintLayer, quality })
     go('soar');
     falconer.setPose(POSES.watch, 2.2);
     flight.orbitCenter.set(-2.0, 0, -6.0);
-    flight.orbitR = 11.5;
-    flight.orbitH = 10.5;
+    flight.orbitR = 9.0;
+    flight.orbitH = 7.6;
     flight.orbitOmega = 0.46;
     // Start the orbit phase from where the bird actually is, so it slots into
     // the circle instead of snapping across the sky.
@@ -778,7 +807,7 @@ export function createGame({ scene, camera, renderer, dom, hintLayer, quality })
         // Camera stays low and lets the bird tear out of frame — the shove
         // reads better than a polite follow.
         setShot({
-          look: _tmp.copy(fistPos).lerp(flight.pos, clamp(stateT * 0.5, 0, 0.55)),
+          look: _tmp.copy(fistPos).lerp(flight.pos, clamp(stateT * 0.6, 0, 0.75)),
           yaw: 0.26,
           pitch: lerp(0.1, 0.3, clamp(stateT * 0.5, 0, 1)),
           fitH: lerp(0.95, 4.0, clamp(stateT * 0.45, 0, 1)),
@@ -792,7 +821,7 @@ export function createGame({ scene, camera, renderer, dom, hintLayer, quality })
       case 'soar': {
         orbitStep(dt, 0.55);
         setSkyShot(dt);
-        if (stateT > 3.2) beginLure();
+        if (stateT > 2.7) beginLure();
         break;
       }
 
@@ -800,8 +829,8 @@ export function createGame({ scene, camera, renderer, dom, hintLayer, quality })
         // The circle the hawk flies tightens toward the lure as the child keeps
         // the lure moving: their circle pulls the bird's circle in.
         const engage = clamp(c.energy, 0, 1);
-        flight.orbitR = damp(flight.orbitR, lerp(11.5, 5.0, engage), 0.55, dt);
-        flight.orbitH = damp(flight.orbitH, lerp(10.5, 3.6, engage), 0.5, dt);
+        flight.orbitR = damp(flight.orbitR, lerp(9.0, 5.0, engage), 0.55, dt);
+        flight.orbitH = damp(flight.orbitH, lerp(7.6, 3.6, engage), 0.5, dt);
         flight.orbitCenter.x = damp(flight.orbitCenter.x, lerp(-2.0, fistPos.x, engage), 0.5, dt);
         flight.orbitCenter.z = damp(flight.orbitCenter.z, lerp(-6.0, fistPos.z - 1.0, engage), 0.5, dt);
         // Faster finger, faster bird.
@@ -917,23 +946,28 @@ export function createGame({ scene, camera, renderer, dom, hintLayer, quality })
     updateHead(dt, lure.group.visible ? lurePos : _tmp.copy(fistPos));
   }
 
+  const _anchor = new THREE.Vector3();
   function setSkyShot(dt) {
-    // Frame both the falconer and the circling hawk, letting the frame breathe
-    // as the bird climbs. The camera stays low and looks *up* into the sky —
-    // tilting down turns a soaring shot into a picture of a field.
-    const mid = _tmp.copy(fistPos).lerp(flight.pos, 0.48);
-    mid.y = clamp(mid.y, 2.0, 8.0);
-    const spread = flight.pos.distanceTo(fistPos);
-    setShot(
-      {
-        look: mid,
-        yaw: 0.26,
-        pitch: 0.09,
-        fitH: clamp(spread * 0.4, 2.8, 6.2),
-        minW: clamp(spread * 0.2, 1.4, 3.2),
-      },
-      1.8,
-    );
+    /*
+     * Stand still and follow the bird.
+     *
+     * A portrait phone is about twenty-two degrees wide. A hawk circling on a
+     * nine-metre radius swings through seventy or more, so there is no framing
+     * that holds the bird and the falconer together up here — every attempt
+     * ends up aimed at the grass between them. So this shot commits to the
+     * hawk, briefly, the way you would actually watch one. The pairing the
+     * game is about is carried by the shots on either side: the cast just
+     * before, and the lure phase just after, which is framed on the falconer
+     * and which the hawk's own circle tightens into.
+     *
+     * Aimed well below the bird, which puts it in the upper third and keeps
+     * the treeline along the bottom edge — without the horizon in shot there is
+     * nothing to measure the height against and the frame is just blue.
+     */
+    _anchor.copy(falconer.root.position).add(_tmp.set(1.7, 1.5, 5.0));
+    const aim = _tmp.copy(flight.pos);
+    aim.y -= 3.6;
+    setShot({ anchor: _anchor, look: aim }, 2.4);
   }
 
   /**

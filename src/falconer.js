@@ -121,12 +121,12 @@ export const POSES = {
 
   // Watching the hawk work overhead.
   watch: P({
-    spine: [-0.12, 0.05, 0],
-    lShoulder: [0.26, 0.05, -0.36],
-    lElbow: [-0.72, 0, 0],
-    rShoulder: [0.22, 0, -0.22],
-    rElbow: [-0.62, 0, 0],
-    neck: [-0.46, -0.15, 0],
+    spine: [-0.14, 0.05, 0],
+    lShoulder: [0.14, 0.06, -0.22],
+    lElbow: [-0.3, 0, 0.04],
+    rShoulder: [0.18, 0, -0.2],
+    rElbow: [-0.34, 0, 0],
+    neck: [-0.5, -0.15, 0],
   }),
 
   // Base for the lure swing; the right arm is overwritten procedurally.
