@@ -1,0 +1,28 @@
+{
+  "name": "baguette-baker",
+  "version": "1.0.0",
+  "description": "4歳からのバゲット職人 — WebGLの3Dパン工房",
+  "scripts": {
+    "build": "esbuild src/main.js --bundle --format=iife --target=es2019 --outfile=dist/game.js --minify --legal-comments=none",
+    "watch": "esbuild src/main.js --bundle --format=iife --target=es2019 --outfile=dist/game.js --watch",
+    "serve": "python3 -m http.server 8080"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zan72122/260804.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/zan72122/260804/issues"
+  },
+  "homepage": "https://github.com/zan72122/260804#readme",
+  "dependencies": {
+    "three": "0.185.1"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.1"
+  },
+  "private": true
+}

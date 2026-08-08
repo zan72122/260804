@@ -1,15 +1,10 @@
 /* =========================================================
-   audio.js — WebAudio による手続き的効果音
-   すべてその場で合成する（外部ファイル不要）
-   ・ポフ   : 生地を置く
-   ・サーッ : 成形の柔らかい摩擦音（ドラッグ速度に追従）
-   ・スッ   : クープ
-   ・シュワッ: 蒸気
-   ・パチパチ: 焼き上がりの皮
-   ・コンコン: 叩いた音
+   audio.js — WebAudio による手続き的効果音（ES module 版）
+   音声ファイルは一切持たず、その場で合成する。
    ========================================================= */
-(function (global) {
-  'use strict';
+'use strict';
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+
 
   const Audio = {
     ctx: null,
@@ -22,7 +17,7 @@
 
   function ensure() {
     if (Audio.ctx) return Audio.ctx;
-    const AC = global.AudioContext || global.webkitAudioContext;
+    const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return null;
     Audio.ctx = new AC();
     Audio.master = Audio.ctx.createGain();
@@ -156,7 +151,7 @@
     const fn = Audio._frictionNode;
     if (!fn || !Audio.ctx) return;
     const t = now();
-    const v = U.clamp(level, 0, 1);
+    const v = clamp(level, 0, 1);
     fn.gain.gain.setTargetAtTime(0.0001 + v * 0.16, t, 0.05);
     fn.filt.frequency.setTargetAtTime(420 + v * 1500, t, 0.06);
   };
@@ -173,7 +168,7 @@
   Audio.slash = function (speed) {
     if (!guard()) return;
     const t = now();
-    const sp = U.clamp(speed === undefined ? 0.6 : speed, 0.2, 1.4);
+    const sp = clamp(speed === undefined ? 0.6 : speed, 0.2, 1.4);
     const n = noiseSource(0.3);
     const f = Audio.ctx.createBiquadFilter();
     f.type = 'bandpass';
@@ -379,5 +374,6 @@
     }
   };
 
-  global.Sfx = Audio;
-})(window);
+
+export const Sfx = Audio;
+export default Audio;
