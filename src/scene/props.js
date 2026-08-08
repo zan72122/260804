@@ -13,11 +13,22 @@ import { MAT, makeNode, paperStack } from './atelier.js';
 const M = (t = [0, 0, 0], r = [0, 0, 0], s = [1, 1, 1]) => mat4.fromTRS(mat4.create(), t, r, s);
 
 export const LAYOUT = {
-  board: [0, 0, -0.055],       // 革板 center, its top face at y = BOARD_TOP
-  base: [0, 0, 0.185],         // 下地 (lacquer object) center on the bench
+  board: [0, 0, -0.055],       // 革盤 centre, its hide face at y = BOARD_TOP
+  packet: [0, 0, -0.115],      // 打紙束 sits at the back of the board
+  cut: [0, 0, 0.035],          // where the 枠 cuts the leaf, on bare hide
+  base: [0, 0, 0.185],         // 下地 (lacquer object) centre on the bench
 };
-export const BOARD_TOP = 0.024;
-export const LEAF_SIZE = 0.109;  // 金沢四号: 109 mm square
+export const BOARD_TOP = 0.025;
+
+// The gold's sizes along the way, in metres.
+//   上澄 is cut into a dozen pieces; one piece is the 小間 you start beating.
+//   Beating spreads it well past the finished size, and 箔切り cuts it back to
+//   the Kanazawa standard 三寸六分 = 109 mm square.
+export const LEAF_KOMA = 0.055;  // 小間, as it goes into the papers
+export const LEAF_RAW = 0.128;   // as it comes off the papers, ragged
+export const LEAF_CUT = 0.109;   // 金沢四号 / 三寸六分, cut square
+export const LEAF_MESH = 0.140;  // simulation grid, larger than any of them
+export const LEAF_SIZE = LEAF_CUT;
 
 export function buildProps(gl) {
   const nodes = [];
@@ -32,13 +43,13 @@ export function buildProps(gl) {
   // ---- 革板 : hardwood board faced with deer hide -------------------------
   add('boardWood', G.translated(G.chamferBox(0.322, 0.020, 0.322, 0.003), 0, 0.010, 0),
     MAT.postWood, M(LAYOUT.board));
-  add('boardHide', G.translated(G.box(0.298, 0.005, 0.298, { uvScale: 0.06 }), 0, 0.0225, 0),
+  add('boardHide', G.translated(G.box(0.298, 0.006, 0.298, { uvScale: 0.06 }), 0, 0.022, 0),
     MAT.hide, M(LAYOUT.board));
 
   // ---- 打紙束 : the bundle you beat -------------------------------------
   // 24 sheets at 2.1 mm apparent spacing -> a 50 mm bundle.
   refs.packet = add('packet', paperStack(0.158, 0.158, 24, 0.0021), MAT.washi,
-    M([LAYOUT.board[0], BOARD_TOP, LAYOUT.board[2]]));
+    M([LAYOUT.packet[0], BOARD_TOP, LAYOUT.packet[2]]));
   // The single sheet that gets peeled open sits on top of the bundle and is
   // rebuilt as a deformable mesh in peel.js; this is only its resting stand-in.
 
@@ -114,15 +125,17 @@ export function buildProps(gl) {
   }
   refs.bases = bases;
 
-  // A 竹枠 (bamboo cutting frame) resting at the back of the bench: pure set dressing.
+  // 枠 — the square bamboo blade that cuts the beaten leaf to size. Its inside
+  // edge is exactly 109 mm, because that is what defines 金沢四号.
   {
+    const half = LEAF_CUT / 2, bar = 0.012, thick = 0.009;
     const f = G.merge(
-      G.translated(G.box(0.13, 0.006, 0.010), 0, 0, -0.060),
-      G.translated(G.box(0.13, 0.006, 0.010), 0, 0, 0.060),
-      G.translated(G.box(0.010, 0.006, 0.130), -0.060, 0, 0),
-      G.translated(G.box(0.010, 0.006, 0.130), 0.060, 0, 0),
+      G.translated(G.box(LEAF_CUT + bar * 2, thick, bar), 0, 0, -half - bar / 2),
+      G.translated(G.box(LEAF_CUT + bar * 2, thick, bar), 0, 0, half + bar / 2),
+      G.translated(G.box(bar, thick, LEAF_CUT), -half - bar / 2, 0, 0),
+      G.translated(G.box(bar, thick, LEAF_CUT), half + bar / 2, 0, 0),
     );
-    add('frame', f, MAT.bamboo, M([-0.30, 0.004, -0.20], [0, 0.25, 0]));
+    refs.frame = add('frame', f, MAT.bamboo, M([-0.30, 0.005, -0.20], [0, 0.25, 0]));
   }
 
   return { nodes, refs };
@@ -148,3 +161,24 @@ export function baseHeight(kind, r) {
 
 /** Radius over which the leaf can wrap onto the base before it hangs free. */
 export const BASE_RADIUS = [0.078, 0.068, 0.042];
+
+/**
+ * The top of the solid at a given radius — the height below which a point is
+ * inside the piece. Outside the piece there is nothing, so the answer is the
+ * bench. This is what stops the leaf from cutting through the lacquerware.
+ */
+export function baseClearance(kind, r) {
+  if (kind === 0) {                       // 小皿: well, then rim, then nothing
+    if (r <= 0.0735) return baseHeight(0, r);
+    if (r <= 0.0785) return 0.0258;
+    return 0;
+  }
+  if (kind === 1) {                       // 椀
+    if (r <= 0.0645) return baseHeight(1, r);
+    if (r <= 0.0685) return 0.0828;
+    return 0;
+  }
+  if (r <= 0.0418) return baseHeight(2, r); // まり
+  if (r <= 0.0365) return 0.012;
+  return 0;
+}

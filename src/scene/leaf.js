@@ -10,10 +10,9 @@
 
 import { mat4, vec3, clamp, lerp, damp, fbm2, valueNoise2 } from '../core/math.js';
 import * as GL from '../core/gl.js';
-import { baseHeight, BASE_RADIUS, LEAF_SIZE } from './props.js';
+import { baseHeight, BASE_RADIUS, LEAF_MESH, LEAF_KOMA, LEAF_RAW, LEAF_CUT } from './props.js';
 
 const N = 44;                 // quads per side -> 45x45 vertices
-const HALF = LEAF_SIZE / 2;
 
 export class GoldLeaf {
   constructor(gl) {
@@ -68,6 +67,18 @@ export class GoldLeaf {
     this.liftAmp = 1;
     this.visible = false;
 
+    // --- the gold's own journey ----------------------------------------
+    // It arrives as 小間: a piece of 上澄 cut down to about 55 mm, three
+    // thousandths of a millimetre thick, dull and stiff. Beating spreads it to
+    // roughly 128 mm and one ten-thousandth of a millimetre, at which point it
+    // is translucent. 箔切り then cuts it square to 109 mm.
+    this.width = LEAF_KOMA;     // current extent of the metal, metres
+    this.thinness = 0;          // 0 = 上澄/小間, 1 = finished 箔
+    this.trim = 0;              // 0 = ragged as beaten, 1 = cut to 109 mm
+    this.bond = 0;              // wetting front radius as it grabs the urushi
+    this.groundFn = null;       // world (x,z) -> surface height it may not enter
+    this.ceilingFn = null;      // world (x,z) -> surface height above it
+
     this.reset();
   }
 
@@ -89,6 +100,10 @@ export class GoldLeaf {
     this.sparkle = 0;
     this.sweep = 0;
     this.liftAmp = 1;
+    this.width = LEAF_KOMA;
+    this.thinness = 0;
+    this.trim = 0;
+    this.bond = 0;
     vec3.set(this.velWorld, 0, 0, 0);
   }
 
@@ -118,8 +133,8 @@ export class GoldLeaf {
     for (let j = 0; j <= N; j++) {
       for (let i = 0; i <= N; i++) {
         const k = j * this.dim + i;
-        const x = (i / N - 0.5) * LEAF_SIZE;
-        const z = (j / N - 0.5) * LEAF_SIZE;
+        const x = (i / N - 0.5) * this.width;
+        const z = (j / N - 0.5) * this.width;
         const dx = x - lp[0], dz = z - lp[2];
         const d2 = dx * dx + dz * dz;
         const f = Math.exp(-d2 / r2);
@@ -147,8 +162,8 @@ export class GoldLeaf {
     for (let j = 0; j <= N; j++) {
       for (let i = 0; i <= N; i++) {
         const k = j * this.dim + i;
-        const x = (i / N - 0.5) * LEAF_SIZE;
-        const z = (j / N - 0.5) * LEAF_SIZE;
+        const x = (i / N - 0.5) * this.width;
+        const z = (j / N - 0.5) * this.width;
         const d2 = (x - lp[0]) * (x - lp[0]) + (z - lp[2]) * (z - lp[2]);
         const f = Math.exp(-d2 / r2);
         if (f < 0.01) continue;
@@ -170,8 +185,8 @@ export class GoldLeaf {
     for (let j = 0; j <= N; j++) {
       for (let i = 0; i <= N; i++) {
         const k = j * this.dim + i;
-        const x = (i / N - 0.5) * LEAF_SIZE;
-        const z = (j / N - 0.5) * LEAF_SIZE;
+        const x = (i / N - 0.5) * this.width;
+        const z = (j / N - 0.5) * this.width;
         let y = 0;
         if (c > 0.001) {
           const r = Math.hypot(x, z);
@@ -218,8 +233,13 @@ export class GoldLeaf {
       for (let i = 0; i <= N; i++) {
         const u = i / N - 0.5, v = j / N - 0.5;
         const rr = Math.max(Math.abs(u), Math.abs(v)) * 2;
+        // Leaf is never dead flat, even lying still on paper: it keeps broad,
+        // shallow undulations from the beating, and those are what break the
+        // window's reflection into bands instead of one pale sheet.
+        const swell = (Math.sin(u * 7.1 + 0.6) * Math.cos(v * 5.7 - 0.9)
+          + 0.55 * Math.sin(u * 12.3 - v * 9.4 + 2.1)) * 0.0016;
         rest[j * dim + i] = lift *
-          (Math.pow(rr, 6) * 0.0060 + Math.pow(Math.hypot(u, v) * 2, 8) * 0.0038);
+          (Math.pow(rr, 6) * 0.0060 + Math.pow(Math.hypot(u, v) * 2, 8) * 0.0038 + swell);
       }
     }
 
@@ -300,6 +320,36 @@ export class GoldLeaf {
         this.slack[k] = clamp(cr * 0.8 + Math.abs(this.h[k]) * 40, 0, 1.6);
       }
     }
+
+    // --- non-penetration -------------------------------------------------
+    // Nothing in the room is allowed to pass through anything else. Every
+    // vertex is pushed back above whatever solid is underneath it, in world
+    // space, after the simulation has had its say.
+    if (this.groundFn) {
+      const m = this.model;
+      const m0 = m[0], m4 = m[4], m8 = m[8], m12 = m[12];
+      const m1 = m[1], m5 = m[5], m9 = m[9], m13 = m[13];
+      const m2 = m[2], m6 = m[6], m10 = m[10], m14 = m[14];
+      const invScaleY = 1 / (Math.abs(m5) > 1e-4 ? m5 : 1);
+      for (let k = 0; k < this.count; k++) {
+        const lx = wx[k], ly = wy[k], lz = wz[k];
+        const worldX = m0 * lx + m4 * ly + m8 * lz + m12;
+        const worldY = m1 * lx + m5 * ly + m9 * lz + m13;
+        const worldZ = m2 * lx + m6 * ly + m10 * lz + m14;
+        const floor = this.groundFn(worldX, worldZ) + 0.00012;
+        if (worldY < floor) {
+          wy[k] += (floor - worldY) * invScaleY;
+          // it has landed on something: stop pushing into it
+          if (this.vel[k] < 0) this.vel[k] = 0;
+        } else if (this.ceilingFn) {
+          const roof = this.ceilingFn(worldX, worldZ);
+          if (roof !== null && worldY > roof - 0.00012) {
+            wy[k] -= (worldY - (roof - 0.00012)) * invScaleY;
+            if (this.vel[k] > 0) this.vel[k] = 0;
+          }
+        }
+      }
+    }
     let creaseSum = 0;
     for (let j = 0; j <= N; j++) {
       for (let i = 0; i <= N; i++) {
@@ -335,6 +385,12 @@ export class GoldLeaf {
     u.uSparkle = this.sparkle;
     u.uSweep = this.sweep;
     u.uOpacity = this.opacity;
+    u.uThinness = this.thinness;
+    u.uBond = this.bond;
+    // The visible boundary of the metal: ragged as it comes off the papers,
+    // then a clean 109 mm square once the bamboo 枠 has cut it.
+    u.uEdge = lerp(LEAF_RAW / this.width, LEAF_CUT / this.width, this.trim) * 0.5;
+    u.uRagged = 1 - this.trim;
     return n;
   }
 }

@@ -47,6 +47,8 @@ const state = () => page.evaluate(() => {
     phase: g.phase, hits: g.hits, fps: Math.round(g.fps || 0),
     peel: +(g.peelProgress ?? 0).toFixed(2),
     gusts: g.gusts, landed: !!g.landed,
+    w: +(g.leaf.width * 1000).toFixed(0), thin: +(g.leaf.thinness ?? 0).toFixed(2),
+    trim: +(g.leaf.trim ?? 0).toFixed(2),
     wrinkle: +(g.leaf.wrinkleAmountCached ?? 0).toFixed(3),
     adhesion: +g.leaf.adhesion.toFixed(2),
     conform: +g.leaf.conform.toFixed(2),
@@ -135,7 +137,14 @@ for (let i = 0; i < 8; i++) {
   await page.waitForTimeout(350);
   if (i === 0) await shot('3b-fuwa-ripple');
 }
-await waitPhase('peta');
+// --- 箔切り and 押し漆 play themselves; watch them go by -------------------
+await waitPhase('kiri');
+await page.waitForTimeout(2000);
+await shot('3c-kiri'); await note('kiri');
+await waitPhase('urushi', 30000);
+await page.waitForTimeout(1500);
+await shot('3d-urushi'); await note('urushi');
+await waitPhase('peta', 30000);
 await settle();
 await shot('4-peta-start'); await note('peta');
 

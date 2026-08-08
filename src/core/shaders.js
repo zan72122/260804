@@ -126,6 +126,8 @@ uniform float uFogDensity;
 uniform vec3 uFogColor;
 uniform float uEmissive;
 uniform float uTranslucency;   // >0 only for genuinely thin sheets
+uniform float uUnderGlow;      // gold spreading between the papers, 0..1
+uniform float uUnderRadius;    // how far it has spread, as a fraction of the sheet
 uniform float uAlpha;
 uniform float uTime;
 
@@ -245,6 +247,19 @@ void main(){
     color += s.albedo * envColor(-N) * 0.55 * uTranslucency;
   }
 
+  // The gold spreading between the sheets shows through the paper. Beaten
+  // washi is thin enough that you can see the metal grow while you work.
+  if (uUnderGlow > 0.001) {
+    vec2 c = vUV / 0.16 - 0.5;
+    float r = max(abs(c.x), abs(c.y)) * 2.0;
+    float g = smoothstep(uUnderRadius, uUnderRadius * 0.35, r);
+    float mottle = 0.75 + 0.5 * fbm(vUV * 60.0);
+    color += vec3(1.00, 0.58, 0.18) * g * uUnderGlow * mottle * 1.45;
+    // the boundary of the metal reads as a brighter line through the fibre
+    float rim = smoothstep(0.10, 0.0, abs(r - uUnderRadius));
+    color += vec3(1.00, 0.72, 0.34) * rim * uUnderGlow * 0.9;
+  }
+
   // aerial perspective: distant geometry loses contrast and picks up warm haze
   float dist = length(uCameraPos - vWorld);
   float fog = 1.0 - exp(-uFogDensity * dist * dist);
@@ -295,6 +310,10 @@ uniform vec3 uLightColor;
 uniform float uTime;
 uniform float uWrinkle;    // 0 = burnished flat, 1 = freshly laid and creased
 uniform float uAdhesion;   // 0 = free floating, 1 = pressed onto the base
+uniform float uThinness;   // 0 = 上澄 at 3/1000 mm, 1 = 箔 at 1/10000 mm
+uniform float uEdge;       // visible half-extent as a fraction of the mesh
+uniform float uRagged;     // 1 = as beaten, 0 = cut square by the 枠
+uniform float uBond;       // radius of the wetting front as it grabs the urushi
 uniform float uSparkle;    // キラッ sweep amount
 uniform float uSweep;      // 0..1 position of the reflection sweep across the sheet
 uniform float uFogDensity;
@@ -304,7 +323,8 @@ uniform float uOpacity;
 // Gold leaf beaten to ~0.1 micron transmits green-blue light. That transmission
 // is the single most recognisable "this is real leaf, not yellow paper" cue.
 const vec3 GOLD_F0 = vec3(1.000, 0.766, 0.336);
-const vec3 TRANSMIT = vec3(0.10, 0.52, 0.44);
+// Measured transmission through leaf is a dim blue-green, not a poster colour.
+const vec3 TRANSMIT = vec3(0.055, 0.225, 0.200);
 
 // The leaf is the hero, and what it reflects is what makes it metal. It sees a
 // broad shoji panel, a dark timber ceiling and a warm bounce off the bench —
@@ -319,6 +339,18 @@ vec3 envLeaf(vec3 d){
 }
 
 void main(){
+  // --- the outline of the metal ---------------------------------------
+  // Straight off the papers the leaf has no edge to speak of: it is torn,
+  // feathered and never square. The bamboo 枠 is what makes it a 109 mm
+  // square, so until then the boundary is noise.
+  vec2 qe = vUV - 0.5;
+  float edge = uEdge;
+  float along = abs(qe.x) > abs(qe.y) ? qe.y : qe.x;
+  float bite = (fbm(vec2(along * 26.0, 4.0)) - 0.42) * 0.22
+             + (vnoise(vec2(along * 95.0, 11.0)) - 0.5) * 0.06;
+  float bound = edge * (1.0 + bite * uRagged);
+  if (max(abs(qe.x), abs(qe.y)) > bound) discard;
+
   vec3 Ng = normalize(vNormal);
   bool front = gl_FrontFacing;
   vec3 N = front ? Ng : -Ng;
@@ -351,7 +383,11 @@ void main(){
   // grain left by the hammer. The direct term is widened to stand in for the
   // shoji's angular size; a delta highlight on a flat sheet would simply turn
   // the whole thing white.
+  // At three thousandths of a millimetre the metal is still a stiff little
+  // plate with a dull, scattered sheen; at one ten-thousandth it becomes the
+  // mirror-bright, translucent thing everyone recognises as gold leaf.
   float rough = mix(0.11, 0.32, uWrinkle * 0.7 + 0.12 * w1);
+  rough = mix(rough + 0.30, rough, uThinness);
   float aniso = 0.55;
   float ax = max(rough * rough * (1.0 + aniso), 0.006);
   float ay = max(rough * rough * (1.0 - aniso), 0.003);
@@ -382,12 +418,20 @@ void main(){
 
   // Backlit transmission — visible from the back face and at thin grazing edges.
   float backLit = max(-NoL, 0.0);
-  vec3 trans = TRANSMIT * uLightColor * pow(backLit, 0.7) * (front ? 0.22 : 1.0) * (1.0 - uAdhesion * 0.85);
+  vec3 trans = TRANSMIT * uLightColor * pow(backLit, 0.7) * (front ? 0.22 : 1.0)
+    * (1.0 - uAdhesion * 0.85) * uThinness;
   color += trans;
+  // thick metal simply reflects less and scatters more
+  color = mix(color * 0.72 + GOLD_F0 * 0.05 * envLeaf(N), color, uThinness);
 
   // Grazing edges: at 0.1 micron the rim goes translucent and glows.
   float rim = pow(1.0 - NoV, 3.0);
-  color += vec3(1.0, 0.72, 0.32) * rim * 0.40 * (1.0 - uAdhesion * 0.5);
+  color += vec3(1.0, 0.72, 0.32) * rim * 0.40 * (1.0 - uAdhesion * 0.5) * uThinness;
+  // A leaf laid on tacky urushi does not settle all at once: contact spreads
+  // outward from where it first touched, and the bonded part goes still.
+  float bonded = uBond <= 0.0 ? 0.0
+    : smoothstep(uBond + 0.10, uBond - 0.10, length(qe) * 2.0);
+  color = mix(color, color * 1.06, bonded);
 
   // キラッ: a bright reflection band travelling across the sheet.
   float band = exp(-pow((vUV.x + vUV.y * 0.35 - (uSweep * 2.2 - 0.6)) * 6.0, 2.0));
@@ -402,6 +446,7 @@ void main(){
   // Thinness as opacity: face-on it is nearly opaque, edge-on you see through it.
   float alpha = mix(0.74, 0.985, smoothstep(0.05, 0.55, NoV));
   alpha = mix(alpha, 1.0, uAdhesion * 0.9);
+  alpha = mix(1.0, alpha, uThinness);   // 上澄 is not see-through at all
   fragColor = vec4(color, alpha * uOpacity);
 }`;
 
@@ -497,14 +542,15 @@ layout(location=1) in vec3 aSeed;
 uniform mat4 uProj, uView;
 uniform float uTime;
 uniform float uPointScale;
+uniform float uAnimate;   // 1 = room dust drifting on its own, 0 = simulated flakes
 out float vFade;
 out vec3 vSeed;
 void main(){
   vec3 p = aPos;
   float t = uTime * 0.35 + aSeed.x * 10.0;
-  p.x += sin(t * 0.7 + aSeed.y * 6.0) * 0.035;
-  p.y += sin(t * 0.45 + aSeed.z * 6.0) * 0.030 + mod(uTime * 0.006 + aSeed.x, 0.22);
-  p.z += cos(t * 0.55 + aSeed.x * 6.0) * 0.035;
+  p.x += sin(t * 0.7 + aSeed.y * 6.0) * 0.035 * uAnimate;
+  p.y += (sin(t * 0.45 + aSeed.z * 6.0) * 0.030 + mod(uTime * 0.006 + aSeed.x, 0.22)) * uAnimate;
+  p.z += cos(t * 0.55 + aSeed.x * 6.0) * 0.035 * uAnimate;
   vec4 vp = uView * vec4(p, 1.0);
   gl_Position = uProj * vp;
   float dist = -vp.z;

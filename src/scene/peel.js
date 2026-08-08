@@ -34,6 +34,34 @@ export class PeelSheet {
 
   setTransform(t, r = [0, 0, 0]) {
     mat4.fromTRS(this.model, t, r, [1, 1, 1]);
+    this.origin = t;
+    this.yaw = r[1] || 0;
+  }
+
+  /**
+   * World height of the sheet above a point, or null if the point is not under
+   * it. The leaf lying between the papers uses this as a ceiling: at 0.1 micron
+   * it has no business poking through a sheet of 打紙.
+   */
+  heightAt(worldX, worldZ) {
+    if (!this.origin) return null;
+    const dx = worldX - this.origin[0], dz = worldZ - this.origin[2];
+    const c = Math.cos(-this.yaw), s = Math.sin(-this.yaw);
+    const lx = dx * c - dz * s;
+    const lz = dx * s + dz * c;
+    if (Math.abs(lx) > this.w / 2) return null;
+    const halfD = this.d / 2;
+    const zh = -halfD;
+    const phi = this.progress * Math.PI * 1.01;
+    const lag = 0.62 * Math.sin(phi);
+    // invert the hinge rotation: which point of the sheet is over lz?
+    // for small progress this is near-identity, which is the case that matters
+    const dRaw = clamp(lz - zh, 0, this.d);
+    const t = dRaw / this.d;
+    const p = phi - lag * Math.pow(t, 1.4);
+    const y = dRaw * Math.sin(p);
+    if (dRaw <= 0 || dRaw >= this.d) return null;
+    return this.origin[1] + Math.max(y, 0);
   }
 
   /**

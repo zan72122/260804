@@ -36,11 +36,16 @@ async function settle(maxMs = 40000) {
 
 const STAGES = [
   ['intro', () => { }],
-  ['uchi', (g) => { g.started = true; g.setPhase('uchi'); }],
-  ['peron', (g) => { g.setPhase('peron'); g.peelProgress = 0.45; }],
-  ['fuwa', (g) => { g.setPhase('fuwa'); g.peelProgress = 1; g.leaf.gust([0, 0.08, -0.05], [1, 0, 0], 0.08, 0.05); }],
-  ['peta', (g) => { g.setPhase('peta'); g.leaf.place(0, 0.06, 0.02); }],
-  ['kira', (g) => { g.setPhase('kira'); g.landed = true; g.landFrom = [0, 0.02, 0.185]; g.leaf.place(0, 0, 0.185); g.leaf.conform = 1; g.leaf.adhesion = 0.6; }],
+  ['uchi0', (g) => { g.started = true; g.setPhase('uchi'); }],
+  ['uchi1', (g) => { g.strike(); }],
+  ['uchi3', (g) => { g.hits = 2; g.strike(); }],
+  ['peron', (g) => { g.setPhase('peron'); g.peelProgress = 0.45; g.peelSnap = false; }],
+  ['fuwa', (g) => { g.setPhase('fuwa'); g.peelProgress = 1; g.leaf.gust([0, 0.08, -0.115], [1, 0, 0], 0.08, 0.05); }],
+  ['kiri', (g) => { g.setPhase('kiri'); }],
+  ['kiri-cut', (g) => { g.kiriT = 1.5; }],
+  ['urushi', (g) => { g.setPhase('urushi'); }],
+  ['peta', (g) => { g.setPhase('peta'); g.leaf.place(0, 0.08, 0.02); }],
+  ['kira', (g) => { g.setPhase('kira'); g.landed = true; g.landFrom = [0, 0.02, 0.185]; g.leaf.place(0, 0, 0.185); g.leaf.conform = 1; g.leaf.adhesion = 0.6; g.leaf.bond = 1.4; }],
   ['done', (g) => { g.finish(); }],
 ];
 

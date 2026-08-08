@@ -10,22 +10,36 @@ import { Renderer, Camera } from './core/renderer.js';
 import { Audio } from './core/audio.js';
 import { Input } from './core/input.js';
 import { buildAtelier, buildMotes, MAT } from './scene/atelier.js';
-import { buildProps, baseHeight, LAYOUT, BOARD_TOP } from './scene/props.js';
+import {
+  buildProps, baseHeight, baseClearance, LAYOUT, BOARD_TOP,
+  LEAF_KOMA, LEAF_RAW, LEAF_CUT, BASE_RADIUS,
+} from './scene/props.js';
 import { GoldLeaf } from './scene/leaf.js';
 import { PeelSheet } from './scene/peel.js';
+import { Flakes } from './scene/flakes.js';
 import { UI } from './ui.js';
 
 const PACKET_TOP = BOARD_TOP + 24 * 0.0021;   // top of the 24-sheet bundle
-const HAMMER_PIVOT = [0, 0.246, -0.055];
+const BOARD_HALF = 0.161;                     // 革盤 footprint, half width
+const PACKET_HALF = 0.079;                    // 打紙束 footprint, half width
+const HAMMER_PIVOT = [0, 0.246, LAYOUT.packet[2]];
 const HAMMER_ARM = 0.140;
+
+// How far the metal has spread after each blow. 上澄 is cut into a dozen
+// pieces; one of those — the 小間 — goes between the papers at about 55 mm and
+// three thousandths of a millimetre, and beating drives it out past the
+// finished size, thinning it to one ten-thousandth on the way.
+const BEAT_WIDTH = [LEAF_KOMA, 0.079, 0.103, LEAF_RAW];
 
 // Camera framing per phase. `span` is the world width that must fit on screen,
 // so the same code frames a tall phone and a wide tablet correctly.
 const SHOTS = {
   intro: { target: [0, 0.03, -0.03], yaw: 0.22, pitch: 0.40, span: 1.15 },
-  uchi: { target: [0, 0.055, -0.055], yaw: 0.16, pitch: 0.46, span: 0.46 },
-  peron: { target: [0, 0.055, -0.055], yaw: 0.04, pitch: 0.36, span: 0.36 },
-  fuwa: { target: [0, 0.066, -0.055], yaw: -0.12, pitch: 0.26, span: 0.25 },
+  uchi: { target: [0, 0.072, -0.115], yaw: 0.13, pitch: 0.42, span: 0.29 },
+  peron: { target: [0, 0.055, -0.115], yaw: 0.04, pitch: 0.36, span: 0.34 },
+  fuwa: { target: [0, 0.066, -0.115], yaw: -0.12, pitch: 0.26, span: 0.26 },
+  kiri: { target: [0, 0.032, 0.035], yaw: 0.03, pitch: 0.44, span: 0.30 },
+  urushi: { target: [0, 0.030, 0.185], yaw: 0.08, pitch: 0.40, span: 0.30 },
   peta: { target: [0, 0.035, 0.055], yaw: 0.04, pitch: 0.52, span: 0.50 },
   kira: { target: [0, 0.030, 0.185], yaw: 0.10, pitch: 0.34, span: 0.32 },
   done: { target: [0, 0.034, 0.185], yaw: 0.10, pitch: 0.32, span: 0.30 },
@@ -36,6 +50,8 @@ const WORDS = {
   uchi: ['トントン', 'tap', ''],
   peron: ['ぺろん', 'swipeUp', ''],
   fuwa: ['ふわっ', 'wave', ''],
+  kiri: ['', null, ''],
+  urushi: ['', null, ''],
   peta: ['ぺたっ', 'drag', ''],
   kira: ['キラッ', 'stroke', ''],
   done: ['できた！', null, ''],
@@ -86,6 +102,10 @@ class Game {
     };
     this.peelProgress = 0;
     this.motes = buildMotes(gl, 360);
+    this.flakes = new Flakes(gl);
+    // The lacquer base carries its own material instance so 押し漆 can make it
+    // visibly wet without touching the rest of the lacquerware in the room.
+    for (const b of this.props.bases) b.mat = { ...MAT.lacquer };
 
     this.scene = {
       nodes: [...this.atelier, ...props.nodes, this.peelNode],
@@ -99,8 +119,16 @@ class Game {
       fog: { density: 0.062, color: [0.052, 0.038, 0.028] },
       clearColor: [0.010, 0.008, 0.007],
       motes: this.motes,
+      flakes: this.flakes,
       time: 0,
     };
+
+    // Nothing may pass through anything else: this is the height of whatever
+    // solid stands under a given point of the bench.
+    this.leaf.groundFn = (x, z) => this.groundHeight(x, z);
+    // While the metal is still between the papers it also has a lid.
+    this.leaf.ceilingFn = (x, z) => (
+      (this.phase === 'peron' || this.phase === 'fuwa') ? this.peel.heightAt(x, z) : null);
 
     // Rest transforms we animate away from and back to.
     this.hammerAngle = 1.15;
@@ -112,6 +140,22 @@ class Game {
     this.chopT = vec3.create(0.30, 0.012, 0.03);
     this.chopR = vec3.create(0, -0.5, 0);
     this.setBaseKind(0);
+  }
+
+  /** Top of the solid under (x, z): bench, 革盤, 打紙束 or the piece itself. */
+  groundHeight(x, z) {
+    let y = 0;
+    const bx = x - LAYOUT.board[0], bz = z - LAYOUT.board[2];
+    if (Math.abs(bx) <= BOARD_HALF && Math.abs(bz) <= BOARD_HALF) y = BOARD_TOP;
+    if (this.props.packet.visible) {
+      const px = x - LAYOUT.packet[0], pz = z - LAYOUT.packet[2];
+      if (Math.abs(px) <= PACKET_HALF && Math.abs(pz) <= PACKET_HALF) {
+        y = Math.max(y, BOARD_TOP + (PACKET_TOP - BOARD_TOP) * this.packetSquash);
+      }
+    }
+    const dx = x - LAYOUT.base[0], dz = z - LAYOUT.base[2];
+    y = Math.max(y, baseClearance(this.baseKind, Math.hypot(dx, dz)));
+    return y;
   }
 
   setBaseKind(k) {
@@ -141,22 +185,26 @@ class Game {
       this.hits = 0;
       this.ui.setBeads(3, 0);
       this.hammerActive = 1;
-      this.peelNode.visible = false;
       this.leaf.visible = false;
       this.props.packet.visible = true;
+      // The 小間 is already lying between the papers, thick and dull.
+      this.leaf.reset();
+      this.leaf.width = BEAT_WIDTH[0];
+      this.leaf.thinness = 0;
+      this.leaf.trim = 0;
+      this.packetTurn = 0;
     }
     if (name === 'peron') {
       this.hammerActive = 0;
       this.peelProgress = 0;
       this.peelSounded = false;
       // The leaf lies between the papers: flat, barely lifted, half covered.
-      this.leaf.reset();
       this.leaf.visible = true;
       this.leaf.mode = 'flat';
       this.leaf.adhesion = 0.55;
-      this.leaf.liftAmp = 0.18;
+      this.leaf.liftAmp = 0.05;
       this.leaf.conform = 0;
-      this.leaf.place(LAYOUT.board[0], PACKET_TOP + 0.0004, LAYOUT.board[2]);
+      this.leaf.place(LAYOUT.packet[0], PACKET_TOP + 0.0004, LAYOUT.packet[2]);
     }
     if (name === 'fuwa') {
       this.gusts = 0;
@@ -164,9 +212,28 @@ class Game {
       this.leaf.liftAmp = 1;
       this.leaf.mode = 'flat';
     }
+    if (name === 'kiri') {
+      // 抜き仕事 then 箔切り: the leaf is lifted onto bare hide and the bamboo
+      // 枠 cuts it to 109 mm. Watched, not played — it is the craftsman's hand.
+      this.kiriT = 0;
+      this.kiriCut = false;
+      this.kiriFrom = null;
+      this.leaf.mode = 'free';
+      this.leaf.liftAmp = 0.35;
+      this.leaf.posTarget[0] = LAYOUT.cut[0];
+      this.leaf.posTarget[2] = LAYOUT.cut[2];
+      this.leaf.posTarget[1] = BOARD_TOP + 0.0006;
+    }
+    if (name === 'urushi') {
+      // 押し漆: a thin coat of lacquer, brushed on and left until it is just
+      // tacky enough to take the leaf.
+      this.urushiT = 0;
+      this.leaf.mode = 'flat';
+      this.leaf.liftAmp = 0.5;
+    }
     if (name === 'peta') {
       this.leaf.mode = 'free';
-      this.leaf.posTarget[1] = PACKET_TOP + 0.045;
+      this.leaf.posTarget[1] = BOARD_TOP + 0.055;
       this.landed = false;
     }
     if (name === 'kira') {
@@ -174,6 +241,7 @@ class Game {
       this.brushWork = 0;
       this.brushing = false;
       this.finished = false;
+      this.footSwept = 0;
       this.sweepT = -1;
     }
     if (name === 'done') {
@@ -236,6 +304,15 @@ class Game {
     this.peel.update(0);
     this.motes.color = [1.0, 0.86, 0.62];
     this.brushWork = 0;
+    this.footSwept = 0;
+    this.leafWidthTarget = null;
+    this.packetTurn = 0;
+    this.packetAngle = 0;
+    // a fresh piece: bare lacquer again, not the tacky coat from last round
+    for (const b of this.props.bases) {
+      b.mat.roughness = MAT.lacquer.roughness;
+      b.mat.baseColor = MAT.lacquer.baseColor;
+    }
     this.setPhase('uchi');
   }
 
@@ -255,15 +332,15 @@ class Game {
   updateStrike(dt) {
     const sw = this.hammerSwing;
     // hovering, breathing hammer when idle
-    let target = 1.15 + Math.sin(this.time * 1.6) * 0.05;
+    let target = 1.42 + Math.sin(this.time * 1.6) * 0.05;
     if (sw) {
       sw.t += dt;
       const down = 0.12, up = 0.34;
       if (sw.t < down) {
-        target = lerp(1.15, -0.03, smoothstep(0, 1, sw.t / down) ** 0.65);
+        target = lerp(1.42, -0.03, smoothstep(0, 1, sw.t / down) ** 0.65);
       } else if (sw.t < down + up) {
         const k = (sw.t - down) / up;
-        target = lerp(-0.03, 1.15, smoothstep(0, 1, k));
+        target = lerp(-0.03, 1.42, smoothstep(0, 1, k));
       } else {
         this.hammerSwing = null;
       }
@@ -290,8 +367,18 @@ class Game {
     this.renderer.flash = 0.10;
     this.motes.intensity = 1.5;
     this.ui.setBeads(3, this.hits);
+
+    // This is the whole craft in one line: the blow drives the metal outwards
+    // and takes thickness away from it. 55 mm of 上澄 at three thousandths of a
+    // millimetre becomes 128 mm of leaf at one ten-thousandth.
+    const step = clamp(this.hits, 0, BEAT_WIDTH.length - 1);
+    this.leafWidthTarget = BEAT_WIDTH[step];
+    this.leafThinTarget = step / (BEAT_WIDTH.length - 1);
+    // and the bundle is turned a little between blows, as it is in the shop
+    this.packetTurn = (this.packetTurn || 0) + 0.10 + Math.random() * 0.06;
+
     if (this.hits >= 3) {
-      setTimeout(() => { if (this.phase === 'uchi') this.setPhase('peron'); }, 620);
+      setTimeout(() => { if (this.phase === 'uchi') this.setPhase('peron'); }, 700);
     }
   }
 
@@ -314,7 +401,7 @@ class Game {
     // By the time the paper is out of the way the leaf is already breathing.
     const k = smoothstep(0.18, 0.9, this.peelProgress);
     this.leaf.adhesion = lerp(0.55, 0.04, k);
-    this.leaf.liftAmp = lerp(0.18, 1.0, k);
+    this.leaf.liftAmp = lerp(0.05, 1.0, k);
     if (k > 0.02 && contribution > 0.003) {
       this.leaf.gust(this.leaf.pos, vec3.create(0, 0, -1),
         clamp(contribution * 2.2, 0.004, 0.05), 0.075);
@@ -357,19 +444,21 @@ class Game {
       this.ui.fadeHint(clamp(1 - this.gusts * 0.4, 0, 1));
     }
     if (this.gusts >= 3 && this.phase === 'fuwa') {
-      this.setPhase('peta');
-      this.leaf.velWorld[1] += 0.05;
+      this.setPhase('kiri');
+      this.leaf.velWorld[1] += 0.03;
     }
   }
 
   // --------------------------------------------------------------- 4. ぺたっ
   onCarry(s) {
     if (!s.down || this.landed) return;
-    const p = this.camera.rayPlane(s.ndc[0], s.ndc[1], 0.06);
+    const p = this.camera.rayPlane(s.ndc[0], s.ndc[1], BOARD_TOP + 0.05);
     if (!p) return;
     this.leaf.posTarget[0] = clamp(p[0], -0.34, 0.34);
     this.leaf.posTarget[2] = clamp(p[2], -0.26, 0.30);
-    this.leaf.posTarget[1] = 0.055 + Math.sin(this.time * 2.1) * 0.004;
+    // carried clear of whatever it is passing over, never through it
+    this.leaf.posTarget[1] = this.groundHeight(this.leaf.posTarget[0], this.leaf.posTarget[2])
+      + 0.042 + Math.sin(this.time * 2.1) * 0.004;
     this.leaf.mode = 'free';
     // the sheet lags behind the tool and flutters as it travels
     const dx = this.leaf.posTarget[0] - this.leaf.pos[0];
@@ -404,7 +493,7 @@ class Game {
     if (d < 0.17) this.land();
     else {
       // never a failure: it just drifts back up and waits
-      this.leaf.posTarget[1] = 0.055;
+      this.leaf.posTarget[1] = this.groundHeight(this.leaf.pos[0], this.leaf.pos[2]) + 0.042;
     }
   }
 
@@ -424,6 +513,7 @@ class Game {
     // the shape of the piece it must be exactly on it, never hovering above.
     this.landFrom = [this.leaf.pos[0], this.leaf.pos[1], this.leaf.pos[2]];
     this.landT = 0;
+    this.leaf.bond = 0;
     this.ui.setAction('', null);
     setTimeout(() => this.audio.peta(), 620);
     setTimeout(() => { if (this.phase === 'peta') this.setPhase('kira'); }, 1150);
@@ -448,6 +538,16 @@ class Game {
     const moved = clamp(Math.hypot(s.dx, s.dy) / 30, 0.06, 1.2);
     const removed = this.leaf.burnish(p, moved * 0.95, 0.040);
     this.brushWork = (this.brushWork || 0) + removed;
+
+    // 箔足 — the leaf overhangs the piece, and the brush takes that overhang
+    // off in glinting scraps. It is the sound and the sparkle of finishing.
+    const rimR = BASE_RADIUS[this.baseKind];
+    const rp = Math.hypot(p[0] - LAYOUT.base[0], p[2] - LAYOUT.base[2]);
+    if (rp > rimR * 0.72 && this.footSwept < 1 && moved > 0.2) {
+      this.footSwept += moved * 0.09;
+      this.flakes.burstAt(p[0], baseHeight(this.baseKind, Math.min(rp, rimR)) + 0.004,
+        p[2], 3, 0.04);
+    }
     this.leaf.adhesion = clamp(0.45 + this.brushWork * 3.2, 0, 1);
     if (removed > 0.0002 && (!this._kiraCool || this.time - this._kiraCool > 0.75)) {
       this._kiraCool = this.time;
@@ -482,6 +582,10 @@ class Game {
     this.scene.time = this.time;
 
     if (this.phase === 'uchi' || this.phase === 'intro') this.updateStrike(dt);
+    this.updateMetal(dt);
+    if (this.phase === 'kiri') this.updateKiri(dt);
+    if (this.phase === 'urushi') this.updateUrushi(dt);
+    this.flakes.update(dt);
 
     // ---- props follow the phase -----------------------------------------
     this.updateHammer(dt);
@@ -517,6 +621,9 @@ class Game {
         lerp(f[2], LAYOUT.base[2], fall));
       vec3.set(this.leaf.posTarget, LAYOUT.base[0], 0, LAYOUT.base[2]);
       vec3.set(this.leaf.velWorld, 0, 0, 0);
+      // Urushi grabs on contact and the grip runs outward from where it
+      // touched first — the leaf is pulled down rather than dropped.
+      this.leaf.bond = clamp((k - 0.25) * 2.4, 0, 1.5);
     }
 
     // ---- キラッ sweep -----------------------------------------------------
@@ -545,6 +652,101 @@ class Game {
     }
   }
 
+  /**
+   * The metal itself, between blows: it keeps spreading for a moment after the
+   * hammer lands, and the paper over it glows more strongly the wider and
+   * thinner it gets, because beaten washi is thin enough to see through.
+   */
+  updateMetal(dt) {
+    if (this.leafWidthTarget) {
+      this.leaf.width = damp(this.leaf.width, this.leafWidthTarget, 7, dt);
+      this.leaf.thinness = damp(this.leaf.thinness, this.leafThinTarget, 6, dt);
+    }
+    const beating = this.phase === 'uchi' || this.phase === 'intro';
+    const m = this.peelNode.mat;
+    m.underGlow = beating ? lerp(0.35, 1.15, this.leaf.thinness) : 0;
+    m.underRadius = clamp(this.leaf.width / 0.158, 0.2, 1.05);
+  }
+
+  /**
+   * 抜き仕事 → 箔切り. The beaten leaf is lifted off the papers with bamboo
+   * chopsticks, laid on the bare deer hide, and cut square by the 枠 — a
+   * four-sided bamboo blade whose inside edge is the 109 mm standard. The
+   * ragged surplus comes away and drifts off. Watched, not played: this is
+   * the craftsman's hand, and it is over in three seconds.
+   */
+  updateKiri(dt) {
+    this.kiriT += dt;
+    const t = this.kiriT;
+    const from = this.kiriFrom || (this.kiriFrom = [
+      this.leaf.pos[0], this.leaf.pos[1], this.leaf.pos[2]]);
+
+    // 1. Carried across on the chopsticks. It is lifted clear of the bundle
+    //    first and only allowed down once its trailing edge is past it —
+    //    otherwise a sheet this wide would be dragged through the papers.
+    const carry = smoothstep(0, 1, clamp(t / 1.15, 0, 1));
+    const zNow = lerp(from[2], LAYOUT.cut[2], carry);
+    const cruise = PACKET_TOP + 0.032;
+    const rise = smoothstep(0, 1, clamp(t / 0.30, 0, 1));
+    const farEdge = zNow - this.leaf.width * 0.5;
+    const clear = smoothstep(-0.048, -0.012, farEdge);
+    const y = lerp(lerp(from[1], cruise, rise), BOARD_TOP + 0.0006, clear);
+    vec3.set(this.leaf.pos, lerp(from[0], LAYOUT.cut[0], carry), y, zNow);
+    vec3.set(this.leaf.posTarget, LAYOUT.cut[0], BOARD_TOP + 0.0006, LAYOUT.cut[2]);
+    vec3.set(this.leaf.velWorld, 0, 0, 0);
+    this.leaf.rotTarget[1] = damp(this.leaf.rotTarget[1], 0, 4, dt);
+    this.leaf.liftAmp = lerp(0.9, 0.25, carry);
+
+    // 2. the 枠 swings over and settles on the leaf
+    const swing = smoothstep(0, 1, clamp((t - 0.85) / 0.55, 0, 1));
+    const drop = smoothstep(0, 1, clamp((t - 1.40) / 0.30, 0, 1));
+    const away = smoothstep(0, 1, clamp((t - 2.35) / 0.5, 0, 1));
+    const rest = [-0.30, 0.005, -0.20];
+    const hover = [LAYOUT.cut[0], BOARD_TOP + 0.042, LAYOUT.cut[2]];
+    const seated = [LAYOUT.cut[0], BOARD_TOP + 0.0058, LAYOUT.cut[2]];
+    const pos = [0, 0, 0];
+    for (let i = 0; i < 3; i++) {
+      const down = lerp(hover[i], seated[i], drop);
+      pos[i] = lerp(lerp(rest[i], hover[i], swing), down, drop);
+      pos[i] = lerp(pos[i], hover[i], away);
+    }
+    mat4.fromTRS(this.props.frame.model, pos, [0, lerp(0.25, 0, swing), 0], [1, 1, 1]);
+
+    // 3. the cut itself
+    if (!this.kiriCut && t > 1.62) {
+      this.kiriCut = true;
+      this.flakes.burstRing(LAYOUT.cut[0], BOARD_TOP + 0.004, LAYOUT.cut[2],
+        LEAF_CUT * 0.66, 60, 0.055);
+      this.audio.peron(1.8);
+      this.audio.peta();
+      this.leaf.gust(this.leaf.pos, vec3.create(0, 0, 1), 0.035, 0.09);
+    }
+    // driven by the clock, not by frame rate: the cut is instantaneous work
+    this.leaf.trim = clamp((t - 1.62) / 0.30, 0, 1);
+
+    if (t > 3.0 && this.phase === 'kiri') {
+      this.kiriFrom = null;
+      this.setPhase('urushi');
+    }
+  }
+
+  /** 押し漆 — a thin coat of lacquer brushed onto the piece and left to tack. */
+  updateUrushi(dt) {
+    this.urushiT += dt;
+    const t = this.urushiT;
+    const sweep = clamp((t - 0.25) / 1.15, 0, 1);
+    const mat = this.props.bases[this.baseKind].mat;
+    // wet lacquer: glossier, a shade deeper, and it stays that way while tacky
+    mat.roughness = lerp(0.16, 0.055, smoothstep(0, 1, sweep));
+    mat.baseColor = [
+      lerp(0.0125, 0.0092, sweep),
+      lerp(0.0075, 0.0056, sweep),
+      lerp(0.0065, 0.0049, sweep),
+    ];
+    this.urushiSweep = sweep;
+    if (t > 2.1 && this.phase === 'urushi') this.setPhase('peta');
+  }
+
   updateHammer(dt) {
     const a = this.hammerAngle;
     const show = this.phase === 'uchi' || this.phase === 'intro';
@@ -570,10 +772,18 @@ class Game {
     // peeled open stays lying beside it, exactly as it would in a workshop.
     const p = this.props.packet;
     p.visible = true;
-    mat4.fromTRS(p.model, [LAYOUT.board[0], BOARD_TOP, LAYOUT.board[2]], [0, 0, 0],
-      [1, this.packetSquash, 1]);
+    // Between blows the bundle is turned, so the metal spreads evenly instead
+    // of running out one side.
+    this.packetAngle = damp(this.packetAngle || 0, this.packetTurn || 0, 8, 1 / 60);
+    // the metal is lying between those papers, so it turns with them
+    if (this.phase === 'uchi' || this.phase === 'peron' || this.phase === 'fuwa') {
+      this.leaf.rotTarget[1] = this.packetAngle;
+    }
+    mat4.fromTRS(p.model, [LAYOUT.packet[0], BOARD_TOP, LAYOUT.packet[2]],
+      [0, this.packetAngle, 0], [1, this.packetSquash, 1]);
     const top = BOARD_TOP + (PACKET_TOP - BOARD_TOP) * this.packetSquash;
-    this.peel.setTransform([LAYOUT.board[0], top + 0.0012, LAYOUT.board[2]]);
+    this.peel.setTransform([LAYOUT.packet[0], top + 0.0012, LAYOUT.packet[2]],
+      [0, this.packetAngle, 0]);
     this.peelNode.model = this.peel.model;
   }
 
@@ -592,18 +802,41 @@ class Game {
     }
     mat4.fromTRS(this.props.chopsticks.model, this.chopT, this.chopR, [1, 1, 1]);
 
-    // 毛棒 follows the stroking finger during キラッ
+    // 毛棒 lays the 押し漆, then follows the stroking finger during キラッ
     const brushing = this.phase === 'kira' && this.brushing && this.brushTarget && !this.finished;
-    const bt = brushing
-      ? [this.brushTarget[0], 0.058 + (this.baseKind === 2 ? 0.055 : 0.02), this.brushTarget[2] + 0.052]
-      : (this.phase === 'kira' || this.phase === 'done' ? [0.30, 0.006, 0.24] : [0.33, 0.006, 0.20]);
-    const br = brushing ? [-0.75, 0.0, 0] : [0, 0.7, 0];
+    const laying = this.phase === 'urushi';
+    let bt, br;
+    if (brushing) {
+      bt = [this.brushTarget[0], 0.058 + (this.baseKind === 2 ? 0.055 : 0.02), this.brushTarget[2] + 0.052];
+      br = [-0.75, 0.0, 0];
+    } else if (laying) {
+      const sw = this.urushiSweep || 0;
+      const x = lerp(-0.075, 0.075, sw < 0.5 ? sw * 2 : 2 - sw * 2);
+      bt = [LAYOUT.base[0] + x, baseHeight(this.baseKind, Math.abs(x)) + 0.036,
+        LAYOUT.base[2] + 0.050];
+      br = [-0.80, 0.0, 0];
+    } else {
+      bt = (this.phase === 'kira' || this.phase === 'done')
+        ? [0.30, 0.006, 0.24] : [0.33, 0.006, 0.20];
+      br = [0, 0.7, 0];
+    }
     for (let i = 0; i < 3; i++) {
       this.brushT[i] = damp(this.brushT[i], bt[i], 12, dt);
       this.brushR[i] = damp(this.brushR[i], br[i], 12, dt);
     }
     mat4.fromTRS(this.props.brushHandle.model, this.brushT, this.brushR, [1, 1, 1]);
     mat4.fromTRS(this.props.brushHair.model, this.brushT, this.brushR, [1, 1, 1]);
+
+    // 枠 sits out of the way except while it is cutting
+    if (this.phase !== 'kiri') {
+      this.frameT = this.frameT || vec3.create(-0.30, 0.005, -0.20);
+      for (let i = 0; i < 3; i++) {
+        this.frameT[i] = damp(this.frameT[i], [-0.30, 0.005, -0.20][i], 6, dt);
+      }
+      mat4.fromTRS(this.props.frame.model, this.frameT, [0, 0.25, 0], [1, 1, 1]);
+    } else if (this.frameT) {
+      this.frameT[0] = -0.30; this.frameT[1] = 0.005; this.frameT[2] = -0.20;
+    }
   }
 
   updateCamera(dt) {

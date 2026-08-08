@@ -148,6 +148,8 @@ export class Renderer {
         uWear: m.wear ?? 0.3,
         uEmissive: m.emissive ?? 0,
         uTranslucency: m.translucency ?? 0,
+        uUnderGlow: m.underGlow ?? 0,
+        uUnderRadius: m.underRadius ?? 0,
         uAlpha: 1,
       });
       GL.drawMesh(gl, n.mesh);
@@ -167,9 +169,31 @@ export class Renderer {
         uPointScale: 26 * this.pixelRatio * (this.height / 900),
         uColor: scene.motes.color,
         uIntensity: scene.motes.intensity,
+        uAnimate: 1,
       });
       gl.bindVertexArray(scene.motes.vao);
       gl.drawArrays(gl.POINTS, 0, scene.motes.count);
+      gl.disable(gl.BLEND);
+      gl.depthMask(true);
+    }
+
+    // Gold offcuts, drawn brighter and larger than room dust.
+    if (scene.flakes && scene.flakes.intensity > 0.001) {
+      gl.depthMask(false);
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+      GL.useProgram(gl, this.progMote);
+      GL.setUniforms(gl, this.progMote, {
+        uProj: camera.proj,
+        uView: camera.view,
+        uTime: 0,
+        uPointScale: 46 * this.pixelRatio * (this.height / 900),
+        uColor: scene.flakes.color,
+        uIntensity: Math.min(scene.flakes.intensity, 1.4),
+        uAnimate: 0,
+      });
+      gl.bindVertexArray(scene.flakes.vao);
+      gl.drawArrays(gl.POINTS, 0, scene.flakes.count);
       gl.disable(gl.BLEND);
       gl.depthMask(true);
     }
