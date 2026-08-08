@@ -8,7 +8,8 @@
   /* ===================== 配置定数 ===================== */
   const STOP_Z = -9.5;      /* 停止時の機首Z */
   const BRIDGE_X = -44;     /* ロタンダX */
-  const PUSH_MAX = 22;      /* プッシュバック距離 */
+  const PUSH_MAX = 14;      /* プッシュバック距離 */
+  const IDLE_HELP = 6.5;    /* これだけ触らなければ、ゲーム側が手伝う（秒） */
 
   /* ===================== DOM ===================== */
   const D = {};
@@ -18,6 +19,7 @@
     D.ghost = $('ghost'); D.ghand = $('ghand');
     D.menu = $('menu'); D.toast = $('toast'); D.action = $('action');
     D.steps = $('steps'); D.gauge = $('gauge'); D.gaugeArc = $('gaugeArc'); D.gaugeIcon = $('gaugeIcon');
+    D.aim = $('aim');
   }
 
   let hintTimer = 0;
@@ -30,13 +32,34 @@
 
   /* 操作ゴースト: type = h | v | tap | hold | drag */
   function ghost(type, xPct, yPct) {
-    if (!type) { D.ghost.classList.remove('on'); return; }
+    if (!type) { D.ghost.classList.remove('on'); ghostAnim.mode = null; return; }
+    ghostAnim.mode = null;
+    D.ghand.style.opacity = '';
     D.ghand.className = 'gm-' + type;
     D.ghand.style.left = xPct + '%';
     D.ghand.style.top = yPct + '%';
     D.ghost.classList.add('on');
   }
-  function ghostOff() { D.ghost.classList.remove('on'); }
+  function ghostOff() { D.ghost.classList.remove('on'); ghostAnim.mode = null; }
+
+  /* 画面上の目標マーカー。3Dの物陰に隠れても常に見える */
+  function aimAt(px, py) {
+    D.aim.style.transform = 'translate(' + Math.round(px) + 'px,' + Math.round(py) + 'px)';
+    D.aim.classList.add('on');
+  }
+  function aimOff() { D.aim.classList.remove('on'); }
+
+  /* 「ここからここへ」を指でなぞって見せるゴースト */
+  const ghostAnim = { mode: null, t: 0 };
+  function ghostPath(dt, ax, ay, bx, by) {
+    if (ghostAnim.mode !== 'path') { ghostAnim.mode = 'path'; ghostAnim.t = 0; D.ghand.className = ''; }
+    ghostAnim.t = (ghostAnim.t + dt * 0.45) % 1;
+    const u = M.smooth(clamp(ghostAnim.t * 1.35, 0, 1));
+    D.ghand.style.left = (ax + (bx - ax) * u) + 'px';
+    D.ghand.style.top = (ay + (by - ay) * u) + 'px';
+    D.ghand.style.opacity = ghostAnim.t > 0.86 ? (1 - ghostAnim.t) / 0.14 : 1;
+    D.ghost.classList.add('on');
+  }
 
   function toast(txt) {
     D.toast.textContent = txt;
@@ -106,7 +129,7 @@
       return [e.clientX - r.left, e.clientY - r.top];
     };
     canvas.addEventListener('pointerdown', (e) => {
-      if (In.id !== null) return;
+      /* 先に触れていた指があっても、新しい指を優先する（手のひら誤接触対策） */
       Au.unlock();
       In.id = e.pointerId;
       const p = pos(e);
@@ -181,7 +204,7 @@
   const st = {
     phase: '', t: 0, sub: 0,
     plane: { x: 0, z: -95, yaw: 0, v: 0, pitch: 0, pitchV: 0, wheel: 0, stopped: false, sink: 0 },
-    steer: 0, steerTarget: 0, stopHold: 0, stopSignal: false, autoStopT: 0,
+    steer: 0, steerTarget: 0, stopHold: 0, stopSignal: false, autoStopT: 0, idle: 0,
     bridgeExt: 0, bridgeV: 0, bridgeDocked: false,
     push: 0, pushV: 0, pushTarget: 0,
     fuel: 0, boom: -0.12, cargoDone: 0,
@@ -466,52 +489,80 @@
     R.updateMesh(mesh, cableGeo(a, b, r));
   }
 
-  /* ===================== ドラッグ課題 ===================== */
-  const drag = { items: [], active: null, off: [0, 0, 0], done: 0 };
+  /* ===================== ドラッグ課題 =====================
+     指の位置を「掴んだ地点→目標」の画面上の線分へ射影して進める。
+     水平面へ投影する方式だと画面上方で発散して物が飛ぶため、この方式にした。 */
+  const drag = { items: [], active: null, done: 0, t: 0, tOff: 0 };
   function setDrag(items) {
-    drag.items = items; drag.active = null; drag.done = 0;
-    for (const it of items) it.done = false;
+    drag.items = items; drag.active = null; drag.done = 0; drag.t = 0;
+    for (const it of items) { it.done = false; it.from = it.obj.p.slice(); }
+  }
+  /* 指の画面位置 → 経路上の進み具合 t */
+  function dragParam(it, px, py) {
+    R.project(it.from, sp);
+    R.project(it.to, sp2);
+    const ax = sp2[0] - sp[0], ay = sp2[1] - sp[1];
+    const L2 = ax * ax + ay * ay;
+    if (L2 < 900) {
+      /* 画面上でほぼ重なっている場合は、目標までの画面距離で判定 */
+      const r = Math.min(R.canvas.clientWidth, R.canvas.clientHeight) * 0.30;
+      return 1 - clamp(Math.hypot(px - sp2[0], py - sp2[1]) / r, 0, 1);
+    }
+    return ((px - sp[0]) * ax + (py - sp[1]) * ay) / L2;
   }
   function updateDrag(dt) {
     if (!drag.items.length) return;
-    const pickR = Math.min(R.canvas.clientWidth, R.canvas.clientHeight) * 0.30;
+    const pickR = Math.min(R.canvas.clientWidth, R.canvas.clientHeight) * 0.36;
     if (In.justDown) {
-      /* 指を置いた瞬間の位置で選ぶ（低フレームレートでも意図どおりに掴める） */
+      /* 物そのものでも、目標でも、近い方を掴んだとみなす */
       let best = null, bd = pickR;
       for (const it of drag.items) {
         if (it.done) continue;
-        worldOf(it.obj, tmp);
-        R.project(tmp, sp);
-        if (sp[2] <= 0) continue;
-        const d = Math.hypot(sp[0] - In.sx, sp[1] - In.sy);
+        R.project(worldOf(it.obj, tmp), sp);
+        const d1 = sp[2] > 0 ? Math.hypot(sp[0] - In.sx, sp[1] - In.sy) : 1e9;
+        R.project(it.to, sp2);
+        const d2 = sp2[2] > 0 ? Math.hypot(sp2[0] - In.sx, sp2[1] - In.sy) * 1.4 : 1e9;
+        const d = Math.min(d1, d2);
         if (d < bd) { bd = d; best = it; }
       }
+      /* 残りがひとつなら、画面のどこを触っても掴めたことにする */
+      if (!best) {
+        const left = drag.items.filter((x) => !x.done);
+        if (left.length === 1) best = left[0];
+      }
       if (best) {
+        best.from = best.obj.p.slice();
         drag.active = best;
-        R.rayToPlane(In.sx, In.sy, best.obj.p[1], tmp);
-        /* つかみ位置のずれは半分だけ残す（大きな物でも扱いやすく） */
-        drag.off[0] = (best.obj.p[0] - tmp[0]) * 0.5;
-        drag.off[2] = (best.obj.p[2] - tmp[2]) * 0.5;
+        drag.t = 0;
+        drag.tOff = dragParam(best, In.sx, In.sy);
         Au.blip(true);
       }
     }
-    if (drag.active && In.down) {
-      const it = drag.active;
-      R.rayToPlane(In.x, In.y, it.obj.p[1], tmp);
-      it.obj.p[0] = damp(it.obj.p[0], tmp[0] + drag.off[0], 26, dt);
-      it.obj.p[2] = damp(it.obj.p[2], tmp[2] + drag.off[2], 26, dt);
-      /* 吸着判定 */
-      const d = Math.hypot(it.obj.p[0] - it.to[0], it.obj.p[2] - it.to[2]);
-      if (d < (it.snap || 0.9)) snapItem(it);
+    const it = drag.active;
+    if (it && In.down) {
+      const t = clamp(dragParam(it, In.x, In.y) - drag.tOff, -0.05, 1.15);
+      drag.t = damp(drag.t, t, 18, dt);
+      const u = clamp(drag.t, 0, 1);
+      for (let k = 0; k < 3; k++) it.obj.p[k] = it.from[k] + (it.to[k] - it.from[k]) * u;
+      if (it.rot) for (let k = 0; k < 3; k++) it.obj.r[k] = damp(it.obj.r[k], it.rot[k], 6, dt);
+      if (drag.t > 0.80) snapItem(it);
     }
-    if (drag.active && In.justUp) {
-      const it = drag.active;
-      const d = Math.hypot(it.obj.p[0] - it.to[0], it.obj.p[2] - it.to[2]);
-      if (!it.done && d < (it.snap || 0.9) * 2.6) snapItem(it);   /* 指がずれても意図を汲む */
+    if (it && In.justUp) {
+      if (!it.done && drag.t > 0.45) snapItem(it);   /* 途中で離しても意図を汲む */
       drag.active = null;
     }
-    /* 未完了のものにガイドを出す */
   }
+  /* 放置されたときに自動で完了させる（4歳児が手を止めても詰まらないように） */
+  function autoFinishDrag(dt, speed) {
+    const it = drag.items.find((x) => !x.done);
+    if (!it) return false;
+    it.from = it.from || it.obj.p.slice();
+    drag.t = Math.min(1, drag.t + dt * (speed || 0.55));
+    for (let k = 0; k < 3; k++) it.obj.p[k] = it.from[k] + (it.to[k] - it.from[k]) * drag.t;
+    if (drag.t >= 1) { drag.t = 0; snapItem(it); }
+    return true;
+  }
+
   function snapItem(it) {
     if (it.done) return;
     it.done = true; drag.done++;
@@ -658,7 +709,7 @@
     /* 目標位置を機体のワールド行列から取るので、先に最新化しておく */
     applyPlane();
     world.updateWorld(null);
-    st.phase = phase; st.t = 0; st.sub = 0;
+    st.phase = phase; st.t = 0; st.sub = 0; st.idle = 0;
     hintOff(); ghostOff(); hideAction(); gauge(-1);
     drag.items = []; drag.active = null;
     for (const k in guides) if (guides[k] && guides[k].visible !== undefined) guides[k].visible = false;
@@ -696,10 +747,10 @@
   function resetScene() {
     const p = st.plane;
     p.x = (Math.random() < 0.5 ? -1 : 1) * (2.6 + Math.random() * 2.2);
-    p.z = -95; p.yaw = 0; p.v = 0; p.pitch = 0; p.pitchV = 0; p.wheel = 0; p.stopped = false; p.sink = 0;
+    p.z = -76; p.yaw = 0; p.v = 0; p.pitch = 0; p.pitchV = 0; p.wheel = 0; p.stopped = false; p.sink = 0;
     st.steer = 0; st.steerTarget = 0; st.stopHold = 0; st.stopSignal = false; st.autoStopT = 0;
-    st.bridgeExt = 0; st.bridgeV = 0; st.bridgeDocked = false;
-    st.push = 0; st.pushV = 0; st.fuel = 0; st.boom = -0.12; st.cargoDone = 0;
+    st.bridgeExt = 0; st.bridgeV = 0; st.bridgeGoal = 0; st.bridgeDocked = false;
+    st.push = 0; st.pushV = 0; st.pushGoal = 0; st.fuel = 0; st.boom = -0.12; st.cargoDone = 0;
     st.engineSpin = 0; st.lightsOn = false; st.beaconOn = true; st.taxiLights = true;
     bridge.userData.ext = 0;
     for (const c of chocks) c.visible = false;
@@ -720,7 +771,7 @@
     enter() {
       setSteps(0);
       const p = st.plane;
-      if (p.z > -40) { p.z = -95; p.x = (Math.random() < 0.5 ? -1 : 1) * (2.6 + Math.random() * 2.2); }
+      if (p.z > -40) { p.z = -76; p.x = (Math.random() < 0.5 ? -1 : 1) * (2.6 + Math.random() * 2.0); }
       p.yaw = 0; p.stopped = false; p.pitch = 0; p.sink = 0;
       st.beaconOn = true; st.taxiLights = true; st.lightsOn = false;
       st.stopSignal = false; st.stopHold = 0; st.autoStopT = 0; st.steer = 0; st.steerTarget = 0;
@@ -751,9 +802,9 @@
 
       if (!p.stopped) {
         /* 速度: 遠いほど速く、近づくほどゆっくり */
-        let target = clamp(1.5 + dist * 0.125, 1.1, 8.0);
+        let target = clamp(2.1 + dist * 0.145, 1.7, 10.0);
         if (st.slowSignal) target = Math.min(target, 1.15);
-        p.v = damp(p.v, target, 1.6, dt);
+        p.v = damp(p.v, target, 2.4, dt);
 
         /* 操縦: 指の位置に即応 + 自動センタリング補正 */
         /* 近づくほど自動整列を強め、何もしなくても大きくは外れないようにする */
@@ -854,7 +905,7 @@
           hint('👏', 'ぴったり とまった！');
           ghostOff();
         }
-        if (el > 3.0) {
+        if (el > 2.2) {
           if (st.freeMode) { freeMarshalEnd(); }
           else enter('chocks');
         }
@@ -885,7 +936,7 @@
 
   function freeMarshalEnd() {
     toast('もう いちど！');
-    st.plane.z = -95;
+    st.plane.z = -76;
     st.plane.x = (Math.random() < 0.5 ? -1 : 1) * (2.6 + Math.random() * 2.2);
     st.plane.stopped = false; st.plane.v = 0; st.plane.yaw = 0;
     st.stopSignal = false; st.stopHold = 0; st.autoStopT = 0;
@@ -933,6 +984,7 @@
     },
     update(dt) {
       updateDrag(dt);
+      if (st.idle > IDLE_HELP) autoFinishDrag(dt, 0.5);
       guides.ringA.visible = !drag.items[0].done;
       guides.ringB.visible = !drag.items[1].done;
       pulseMat(guides.ringA, 0.55, 5.5);
@@ -945,7 +997,7 @@
         st.sub += dt;
         ghostOff();
         hint('👏', 'これで ひこうきは うごかない！');
-        if (st.sub > 2.0) enter('bridge');
+        if (st.sub > 1.3) enter('bridge');
       }
       updateMarshal(dt, 'idle', 0, false);
       applyPlane();
@@ -977,7 +1029,7 @@
       setCam([-28.5, 8.0, 9.0], [-12.5, 4.3, -12.5], false, 1.6);
       hint('🌉', 'ゆびを よこに うごかして ブリッジを のばそう');
       ghost('h', 48, 72);
-      st.bridgeExt = 0; st.bridgeV = 0; st.bridgeDocked = false;
+      st.bridgeExt = 0; st.bridgeV = 0; st.bridgeGoal = 0; st.bridgeDocked = false;
       applyBridge(0);
     },
     update(dt) {
@@ -989,20 +1041,25 @@
       const dir = screenDir(bumperW, [1, 0, 0]);
 
       if (!st.bridgeDocked) {
-        let input = 0;
-        if (In.down) input = (In.dx * dir[0] + In.dy * dir[1]);
-        /* 画面幅で正規化 */
+        /* 一振りで大きく動かし、離しても慣性で伸び続ける（断続的な入力でも積み上がる） */
+        /* 一振りごとに「ここまで伸ばす」量を積み、機械はゆっくり追いかける。
+           断続的な入力でも必ず積み上がり、動きは常にゆっくりのまま。 */
         const w = R.canvas.clientWidth;
-        st.bridgeV = damp(st.bridgeV, clamp(input / (w * 0.006), -1.6, 2.4), 12, dt);
-        let spd = st.bridgeV * 0.85;
+        if (In.down) {
+          const along = In.dx * dir[0] + In.dy * dir[1];
+          if (along > 0) st.bridgeGoal = Math.min(1, (st.bridgeGoal || 0) + along / (w * 0.75));
+        }
+        if (st.idle > IDLE_HELP) st.bridgeGoal = Math.min(1, (st.bridgeGoal || 0) + dt * 0.13);
+        let spd = Math.min(0.34, Math.max(0, (st.bridgeGoal || 0) - st.bridgeExt) * 3.2);
+        st.bridgeV = spd;
         /* ドアに近づくと自動減速 */
         const gap = U.bumperWorldX - (doorX - 0.06);
         if (gap < 2.2 && spd > 0) spd *= clamp(gap / 2.2, 0.22, 1);
-        st.bridgeExt = clamp(st.bridgeExt + spd * dt * 0.11, 0, 1);
+        st.bridgeExt = clamp(st.bridgeExt + spd * dt, 0, 1);
         applyBridge(st.bridgeExt);
 
         const mv = Math.abs(spd);
-        Au.bridge(clamp(mv * 0.9, 0, 1), 0.75 + clamp(mv, 0, 1.6) * 0.35);
+        Au.bridge(clamp(mv * 4.0, 0, 1), 0.78 + clamp(mv * 2.4, 0, 1.4) * 0.30);
 
         const gap2 = U.bumperWorldX - (doorX - 0.06);
         if (gap2 < 0.28 && st.bridgeExt > 0.80) dock();
@@ -1012,7 +1069,7 @@
       } else {
         Au.bridge(0, 1);
         st.sub += dt;
-        if (st.sub > 2.6) enter('ground');
+        if (st.sub > 1.7) enter('ground');
       }
 
       /* 目標リング */
@@ -1125,8 +1182,8 @@
       st.cargoDoor = door;
       /* ブーム先端がドアに届く停車位置 */
       st.loaderGoal = door[0] + 0.45 - 1.6 + 6.6;
-      loader.setPos(st.loaderGoal + 13, 0, door[2]); loader.setRot(0, PI, 0);
-      st.loaderX = st.loaderGoal + 13;
+      loader.setPos(st.loaderGoal + 9, 0, door[2]); loader.setRot(0, PI, 0);
+      st.loaderX = st.loaderGoal + 9;
       st.boom = -0.12; st.cargoDone = 0;
       dolly.setPos(door[0] + 9.0, 0, door[2] + 3.0);
       dolly.setRot(0, PI / 2, 0);
@@ -1141,13 +1198,14 @@
   /* 地上電源 */
   GT[0] = function (dt) {
     updateDrag(dt);
+    if (st.idle > IDLE_HELP) autoFinishDrag(dt, 0.5);
     const reel = st.reel;
     worldOf(plug, tmp);
     updateCable(cable, cableMesh, reel, [tmp[0], tmp[1] + 0.05, tmp[2] + 0.1], 0.075);
     if (drag.items[0] && drag.items[0].done) {
       st.sub += dt;
       guides.target.visible = false;
-      if (st.sub > 2.4) groundTask(1);
+      if (st.sub > 1.5) groundTask(1);
     } else {
       const to = drag.items[0].to;
       guides.target.visible = true;
@@ -1161,6 +1219,7 @@
   /* 給油 */
   GT[1] = function (dt) {
     updateDrag(dt);
+    if (st.idle > IDLE_HELP) autoFinishDrag(dt, 0.5);
     const reel = st.reel;
     worldOf(nozzle, tmp);
     updateCable(hose, hoseMesh, reel, [tmp[0], tmp[1], tmp[2] - 0.2], 0.085);
@@ -1183,6 +1242,9 @@
         if (Math.random() < dt * 8) {
           R.addSprite([st.fuelPort[0] + 0.4, st.fuelPort[1] + 0.1, st.fuelPort[2]], 0.3, [1.4, 1.3, 0.7], 0.3);
         }
+      } else if (st.idle > IDLE_HELP) {
+        st.fuel = sat(st.fuel + dt * 0.30);
+        Au.pump(1);
       } else {
         Au.pump(0);
       }
@@ -1195,7 +1257,7 @@
       }
     } else {
       st.sub += dt;
-      if (st.sub > 2.2) groundTask(2);
+      if (st.sub > 1.4) groundTask(2);
     }
   };
   /* 貨物 */
@@ -1207,7 +1269,7 @@
 
     if (st.cargoDone === 0) {
       /* ローダーが自動で所定位置へ */
-      st.loaderX = damp(st.loaderX, st.loaderGoal, 1.5, dt);
+      st.loaderX = damp(st.loaderX, st.loaderGoal, 3.0, dt);
       loader.p[0] = st.loaderX;
       for (const w of U.wheels) w.r[0] -= dt * 2.2;
       Au.diesel(clamp((st.loaderX - st.loaderGoal) * 0.4, 0, 1), 0.85);
@@ -1227,11 +1289,17 @@
       let input = 0;
       if (In.down) input = (In.dx * dir[0] + In.dy * dir[1]);
       const h = R.canvas.clientHeight;
-      st.boom = clamp(st.boom + (input / (h * 0.30)) * 0.55, -0.14, 0.16);
+      st.boom = clamp(st.boom + (input / (h * 2.2)) * 0.55, -0.14, 0.16);
       U.boom.r[2] = st.boom;
       Au.bridge(In.down && Math.abs(input) > 0.6 ? 0.5 : 0, 0.6);
 
       const goalY = door[1] - 0.10;
+      /* 放置されたら自動で高さを合わせる */
+      if (st.idle > IDLE_HELP) {
+        const want = Math.asin(clamp((goalY - 1.30) / U.boomLen, -1, 1));
+        st.boom = M.moveTo(st.boom, want, dt * 0.10);
+        U.boom.r[2] = st.boom;
+      }
       guides.target.visible = true;
       guides.target.setPos(door[0] + 0.75, goalY, door[2]);
       guides.target.setRot(0, 0, PI / 2);
@@ -1239,7 +1307,7 @@
       pulseMat(guides.target, 0.5, 5.5);
       const tip = tipPos();
       R.addSprite(tip, 0.35, [1.6, 1.5, 0.6], 0.35);
-      if (Math.abs(tip[1] - goalY) < 0.20) {
+      if (Math.abs(tip[1] - goalY) < 0.45) {
         st.cargoDone = 2; st.sub = 0;
         Au.bridge(0, 1); Au.latch();
         toast('ぴったり！');
@@ -1248,7 +1316,7 @@
         hint('🧳', 'にもつを ベルトに のせよう');
         ghost('drag', 70, 62);
         const items = [];
-        for (let i = 0; i < 3; i++) {
+        for (let i = 0; i < 2; i++) {
           const b = bags[i];
           b.visible = true;
           b.setPos(door[0] + 9.0, 0.98, door[2] + 3.9 - i * 0.95);
@@ -1259,7 +1327,7 @@
               Au.thunk();
               it.ride = 0;
               toast('どうぞ！');
-              if (drag.done >= 3) setTimeout(() => Au.chime(), 400);
+              if (drag.done >= 2) setTimeout(() => Au.chime(), 400);
             },
           });
         }
@@ -1270,6 +1338,7 @@
 
     /* 荷物をベルトへ */
     updateDrag(dt);
+    if (st.idle > IDLE_HELP) autoFinishDrag(dt, 0.6);
     let riding = 0;
     for (const it of drag.items) {
       if (!it.done) continue;
@@ -1284,12 +1353,12 @@
       if (t > 0.97) it.obj.visible = false;
     }
     U.beltMat.uvOff[1] = (U.beltMat.uvOff[1] - dt * 0.55) % 1;
-    Au.belt(riding > 0 || (drag.done >= 3 && st.sub < 2.5) ? 1 : 0, 1);
-    if (drag.done >= 3) {
+    Au.belt(riding > 0 || (drag.done >= 2 && st.sub < 2.5) ? 1 : 0, 1);
+    if (drag.done >= 2) {
       st.sub += dt;
       hint('👏', 'にもつ ぜんぶ のせた！');
       ghostOff();
-      if (st.sub > 3.4) { Au.belt(0, 1); enter('pushback'); }
+      if (st.sub > 2.0) { Au.belt(0, 1); enter('pushback'); }
     }
   };
 
@@ -1298,7 +1367,7 @@
     enter() {
       setSteps(4);
       setCam([9.6, 3.1, 10.5], [-0.6, 3.9, -17.0], false, 1.5);
-      st.push = 0; st.pushV = 0; st.pushStage = 0;
+      st.push = 0; st.pushV = 0; st.pushGoal = 0; st.pushStage = 0;
       st.lightsOn = true; st.beaconOn = true;
       st.bridgeRetract = st.bridgeExt;   /* ブリッジを引き離す */
       /* トラクターを機首前方へ */
@@ -1346,6 +1415,7 @@
       if (st.pushStage === 0) {
         tractor.r[1] = damp(tractor.r[1], PI / 2, 3, dt);
         updateDrag(dt);
+        if (st.idle > IDLE_HELP) autoFinishDrag(dt, 0.45);
         for (const w of tractor.userData.wheels) w.r[0] -= dt * 1.2;
         Au.diesel(0.55, 0.8);
         guides.target.visible = true;
@@ -1363,17 +1433,15 @@
         const back = [-Math.sin(p.yaw), 0, -Math.cos(p.yaw)];
         localToWorld(ac, [0, 3, -18], tmp);
         const dir = screenDir(tmp, back);
-        let input = 0;
+        const h = R.canvas.clientHeight;
         if (In.down) {
           /* 機体が下がる向きへのスワイプ、または単純な上方向スワイプのどちらでも押せる */
-          const along = In.dx * dir[0] + In.dy * dir[1];
-          input = Math.max(along, -In.dy * 0.8);
+          const along = Math.max(In.dx * dir[0] + In.dy * dir[1], -In.dy * 0.8);
+          if (along > 0) st.pushGoal = Math.min(PUSH_MAX, (st.pushGoal || 0) + (along / (h * 0.22)) * 2.4);
         }
-        const h = R.canvas.clientHeight;
-        /* 巨大な質量: 加速も減速もゆっくり */
-        st.pushTarget = clamp(input / (h * 0.010), 0, 2.2);
-        st.pushV = damp(st.pushV, st.pushTarget * 0.85, 1.35, dt);
-        if (!In.down) st.pushV = damp(st.pushV, 0, 1.1, dt);
+        if (st.idle > IDLE_HELP) st.pushGoal = Math.min(PUSH_MAX, (st.pushGoal || 0) + dt * 1.6);
+        /* 巨大な質量: 目標まで 1.1m/s 上限でゆっくり動き続ける */
+        st.pushV = damp(st.pushV, Math.min(1.1, Math.max(0, (st.pushGoal || 0) - st.push) * 1.6), 3.0, dt);
         const step = st.pushV * dt;
         if (step > 0.0002) {
           st.push += step;
@@ -1420,7 +1488,8 @@
           Au.diesel(0.25, 0.6);
           hint('🔓', 'トーバーを はずそう');
           ghostOff();
-          showAction('🔓', 'きりはなす', () => {
+          st.disconnectCb = () => {
+            st.disconnectCb = null;
             st.pushStage = 3; st.sub = 0;
             Au.latch();
             toast('はずれた！');
@@ -1430,10 +1499,12 @@
             marshal.setPos(tmp[0], 0, tmp[2]);
             marshal.r[1] = st.plane.yaw - PI / 2;
             hint('👋', 'マーシャラーが おみおくり');
-          });
+          };
+          showAction('🔓', 'きりはなす', st.disconnectCb);
         }
       } else if (st.pushStage === 2) {
         Au.diesel(0.25, 0.6);
+        if (st.idle > IDLE_HELP + 2 && st.disconnectCb) { const cb = st.disconnectCb; st.disconnectCb = null; hideAction(); cb(); }
       } else if (st.pushStage === 3) {
         /* トラクター退出 */
         st.sub += dt;
@@ -1442,7 +1513,7 @@
         tractor.r[1] = damp(tractor.r[1], PI * 0.12, 1.5, dt);
         for (const w of tractor.userData.wheels) w.r[0] -= dt * 7;
         Au.diesel(clamp(0.6 - st.sub * 0.1, 0, 1), 0.9);
-        if (st.sub > 3.0) { enter('depart'); }
+        if (st.sub > 2.0) { enter('depart'); }
       }
       /* 回転灯 */
       worldOf(tractor.userData.beacon, tmp);
@@ -1472,7 +1543,7 @@
     update(dt) {
       const p = st.plane;
       st.sub += dt;
-      st.departV = damp(st.departV, st.sub > 1.2 ? 9.5 : 0, 0.55, dt);
+      st.departV = damp(st.departV, st.sub > 0.8 ? 10.5 : 0, 0.8, dt);
       planeMove(st.departV * dt);
       st.engineSpin += dt * (6 + st.departV * 2.5);
       Au.engine(clamp(0.5 + st.departV * 0.09, 0, 1.4), 0.85 + clamp(st.departV * 0.04, 0, 0.5));
@@ -1488,8 +1559,8 @@
       camGoalT[0] = damp(camGoalT[0], tmp2[0], 0.7, dt);
       camGoalT[2] = damp(camGoalT[2], tmp2[2], 0.7, dt);
       camGoalP[1] = 5.6;
-      if (st.sub > 3.0 && !st.departMsg) { st.departMsg = true; toast('いってらっしゃい！'); Au.fanfare(); }
-      if (st.sub > 9.5) enter('end');
+      if (st.sub > 2.2 && !st.departMsg) { st.departMsg = true; toast('いってらっしゃい！'); Au.fanfare(); }
+      if (st.sub > 6.2) enter('end');
     },
   };
 
@@ -1522,6 +1593,22 @@
     }
   }
 
+  /* 目標マーカーと「なぞる指」を、実際の目標の画面位置に合わせる */
+  function updateAim(dt) {
+    R.updateCamera();          /* 1フレーム前の行列で投影しないよう最新化 */
+    const it = drag.items.find((x) => !x.done);
+    if (!it || st.phase === 'title' || st.phase === 'end') { aimOff(); return; }
+    R.project(it.to, sp2);
+    if (sp2[2] <= 0) { aimOff(); return; }
+    aimAt(sp2[0], sp2[1]);
+    if (!drag.active) {
+      R.project(worldOf(it.obj, tmp), sp);
+      if (sp[2] > 0) ghostPath(dt, sp[0], sp[1], sp2[0], sp2[1]);
+    } else {
+      D.ghost.classList.remove('on');
+    }
+  }
+
   /* ===================== メインループ ===================== */
   let last = 0, acc = 0;
   function frame(now) {
@@ -1532,6 +1619,7 @@
     if (dt > 0.06) dt = 0.06;
 
     inputFrame(dt);
+    if (In.down) st.idle = 0; else st.idle += dt;
     world.updateWorld(null);
 
     const ph = PH[st.phase];
@@ -1540,6 +1628,7 @@
     if (st.freeMode && st.phase === 'marshal') freeBackButton();
 
     updateCam(dt);
+    updateAim(dt);
     planeLights(dt);
     updateParts(dt, R);
 

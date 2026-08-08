@@ -89,6 +89,23 @@
   @keyframes mvTap{ 0%,100%{transform:scale(1)} 50%{transform:scale(.68)} }
   @keyframes mvDrag{ 0%{transform:translate(0,0)} 45%,55%{transform:translate(14vmin,-7vmin)} 100%{transform:translate(0,0)} }
 
+  /* ---- 目標マーカー（3Dの陰に隠れても必ず見える） ---- */
+  #aim{ position:absolute; left:0; top:0; width:0; height:0; opacity:0; transition:opacity .25s; }
+  #aim.on{ opacity:1; }
+  #aim .ring{
+    position:absolute; width:calc(var(--ui)*2.9); height:calc(var(--ui)*2.9);
+    margin:calc(var(--ui)*-1.45) 0 0 calc(var(--ui)*-1.45);
+    border-radius:50%; border:calc(var(--ui)*.17) solid #6bff9e;
+    box-shadow:0 0 14px rgba(60,255,150,.85), inset 0 0 10px rgba(60,255,150,.55);
+    animation:aimPulse 1.25s ease-out infinite;
+  }
+  #aim .dot{
+    position:absolute; width:calc(var(--ui)*.5); height:calc(var(--ui)*.5);
+    margin:calc(var(--ui)*-.25) 0 0 calc(var(--ui)*-.25);
+    border-radius:50%; background:#eaffef; box-shadow:0 0 10px rgba(120,255,180,.95);
+  }
+  @keyframes aimPulse{ 0%{transform:scale(.72);opacity:1} 100%{transform:scale(1.35);opacity:0} }
+
   /* ---- 大きなボタン ---- */
   #menu{
     position:absolute; inset:0; display:none; flex-direction:column;
@@ -171,6 +188,7 @@
 <div id="ui">
   <div id="hint"><span id="hintIcon">✈️</span><span id="hintText"></span></div>
   <div id="ghost"><div id="ghand"></div></div>
+  <div id="aim"><div class="ring"></div><div class="dot"></div></div>
   <div id="steps"></div>
   <div id="toast"></div>
   <div id="gauge">
