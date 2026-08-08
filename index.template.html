@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#8fb8dd">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>きらきら まどそうじ</title>
+<style>
+  :root{
+    --safe-t: env(safe-area-inset-top, 0px);
+    --safe-b: env(safe-area-inset-bottom, 0px);
+    --safe-l: env(safe-area-inset-left, 0px);
+    --safe-r: env(safe-area-inset-right, 0px);
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{
+    margin:0; padding:0; width:100%; height:100%; overflow:hidden;
+    background:#0e1620; touch-action:none; overscroll-behavior:none;
+    -webkit-user-select:none; user-select:none;
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
+  }
+  #view{ position:fixed; inset:0; width:100%; height:100%; display:block; touch-action:none; }
+
+  /* ------------------------------------------------------------------ HUD */
+  #hud{ position:fixed; inset:0; pointer-events:none; z-index:5; }
+  #hud > *{ position:absolute; }
+
+  /* progress + stars */
+  #stars{
+    top: calc(var(--safe-t) + 10px); right: calc(var(--safe-r) + 12px);
+    display:flex; gap:7px;
+  }
+  #stars .pip{
+    width:26px; height:26px; opacity:.28; transform:scale(.8);
+    transition:opacity .35s ease, transform .45s cubic-bezier(.2,1.7,.4,1);
+    filter:drop-shadow(0 1px 3px rgba(0,0,0,.35));
+  }
+  #stars .pip.on{ opacity:1; transform:scale(1.12); }
+  @media (max-width:420px){ #stars .pip{ width:21px; height:21px; } }
+
+  #prog{
+    left:50%; transform:translateX(-50%);
+    bottom: calc(var(--safe-b) + 132px);
+    width:min(58vw, 300px); height:14px; border-radius:99px;
+    background:rgba(255,255,255,.22); box-shadow:0 2px 10px rgba(0,0,0,.25) inset, 0 1px 0 rgba(255,255,255,.35);
+    overflow:hidden; opacity:0; transition:opacity .3s ease;
+    backdrop-filter: blur(2px);
+  }
+  #prog.on{ opacity:1; }
+  #prog-fill{
+    width:100%; height:100%; transform:scaleX(0); transform-origin:left center;
+    background:linear-gradient(90deg,#8ff0ff,#7ad7ff 40%,#ffe680 100%);
+    transition:transform .12s linear;
+    border-radius:99px;
+  }
+
+  /* gesture hints */
+  #hint{
+    left:50%; transform:translateX(-50%);
+    bottom: calc(var(--safe-b) + 22px);
+    width:150px; height:110px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  #hint > svg{ position:absolute; width:100%; height:100%; opacity:0; transition:opacity .3s ease; }
+  #hud[data-hint="tap"]   #h-tap,
+  #hud[data-hint="drag"]  #h-drag,
+  #hud[data-hint="swipe"] #h-swipe,
+  #hud[data-hint="spray"] #h-spray,
+  #hud[data-hint="wipe"]  #h-wipe { opacity:.95; }
+
+  .hand{ fill:#fff8ec; stroke:#5a4632; stroke-width:3.2; stroke-linejoin:round; }
+  .glow{ filter:drop-shadow(0 2px 6px rgba(0,0,0,.4)); }
+
+  @keyframes tapPulse{ 0%{transform:translateY(0) scale(1)} 45%{transform:translateY(7px) scale(.94)} 100%{transform:translateY(0) scale(1)} }
+  @keyframes ringOut{ 0%{r:8; opacity:.9} 100%{r:34; opacity:0} }
+  @keyframes swipeDown{ 0%{transform:translateY(-16px); opacity:0} 20%{opacity:1} 80%{opacity:1} 100%{transform:translateY(26px); opacity:0} }
+  @keyframes wipeLR{ 0%{transform:translateX(-26px)} 50%{transform:translateX(26px)} 100%{transform:translateX(-26px)} }
+  @keyframes dropFall{ 0%{transform:translate(0,0); opacity:0} 20%{opacity:1} 100%{transform:translate(-6px,26px); opacity:0} }
+  @keyframes floaty{ 0%,100%{transform:translateY(0)} 50%{transform:translateY(-5px)} }
+
+  #h-tap .g{ animation:tapPulse 1.5s ease-in-out infinite; transform-origin:50% 60%; }
+  #h-tap circle.ring{ animation:ringOut 1.5s ease-out infinite; }
+  #h-swipe .g{ animation:swipeDown 1.5s ease-in-out infinite; }
+  #h-swipe .chev{ animation:swipeDown 1.5s ease-in-out infinite; }
+  #h-swipe .chev:nth-of-type(2){ animation-delay:.18s }
+  #h-swipe .chev:nth-of-type(3){ animation-delay:.36s }
+  #h-drag .g{ animation:floaty 1.4s ease-in-out infinite; }
+  #h-wipe .g{ animation:wipeLR 1.9s ease-in-out infinite; }
+  #h-spray .g{ animation:tapPulse 1.3s ease-in-out infinite; transform-origin:50% 60%; }
+  #h-spray .drop{ animation:dropFall 1.1s ease-in infinite; }
+  #h-spray .drop:nth-of-type(2){ animation-delay:.3s }
+  #h-spray .drop:nth-of-type(3){ animation-delay:.6s }
+
+  /* buttons */
+  .btn{
+    pointer-events:auto; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    border-radius:50%;
+    background:rgba(255,255,255,.30);
+    box-shadow:0 3px 12px rgba(0,0,0,.28), 0 1px 0 rgba(255,255,255,.5) inset;
+    backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+  }
+  #sound{ top:calc(var(--safe-t) + 10px); left:calc(var(--safe-l) + 12px); width:42px; height:42px; }
+  #sound .off-slash{ opacity:0; }
+  #sound.off .off-slash{ opacity:1; }
+  #sound.off .waves{ opacity:.25; }
+
+  #replay{
+    left:50%; bottom:calc(var(--safe-b) + 30px); transform:translateX(-50%) scale(.4);
+    width:104px; height:104px; opacity:0; pointer-events:none;
+    transition:opacity .5s ease, transform .6s cubic-bezier(.2,1.6,.4,1);
+    background:rgba(255,255,255,.42);
+  }
+  #replay.on{ opacity:1; transform:translateX(-50%) scale(1); pointer-events:auto; animation:floaty 2.4s ease-in-out infinite; }
+
+  /* title + loading */
+  #title, #loading{
+    position:fixed; inset:0; z-index:9;
+    display:flex; align-items:center; justify-content:center; flex-direction:column;
+    background:radial-gradient(120% 90% at 50% 20%, rgba(255,231,190,.30), rgba(18,36,58,.62));
+  }
+  #title{ opacity:0; pointer-events:none; transition:opacity .6s ease; }
+  #title.on{ opacity:1; pointer-events:auto; }
+  #title .go{
+    width:min(46vw,190px); height:min(46vw,190px);
+    animation:floaty 2.6s ease-in-out infinite;
+    filter:drop-shadow(0 10px 26px rgba(0,0,0,.35));
+  }
+  #loading{ transition:opacity .5s ease; background:#12243a; }
+  #loading.gone{ opacity:0; pointer-events:none; }
+  #loading .spin{ width:96px; height:96px; animation:spin 1.5s linear infinite; }
+  @keyframes spin{ to{ transform:rotate(360deg) } }
+  #loading .sad{ font-size:64px; }
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+
+<div id="hud" data-hint="none">
+
+  <div id="stars">
+    <svg class="pip" viewBox="0 0 24 24"><path d="M12 2.6l2.9 5.9 6.5.95-4.7 4.6 1.1 6.5L12 17.5l-5.8 3.05 1.1-6.5-4.7-4.6 6.5-.95z" fill="#ffe27a" stroke="#c98f22" stroke-width="1.3" stroke-linejoin="round"/></svg>
+    <svg class="pip" viewBox="0 0 24 24"><path d="M12 2.6l2.9 5.9 6.5.95-4.7 4.6 1.1 6.5L12 17.5l-5.8 3.05 1.1-6.5-4.7-4.6 6.5-.95z" fill="#ffe27a" stroke="#c98f22" stroke-width="1.3" stroke-linejoin="round"/></svg>
+    <svg class="pip" viewBox="0 0 24 24"><path d="M12 2.6l2.9 5.9 6.5.95-4.7 4.6 1.1 6.5L12 17.5l-5.8 3.05 1.1-6.5-4.7-4.6 6.5-.95z" fill="#ffe27a" stroke="#c98f22" stroke-width="1.3" stroke-linejoin="round"/></svg>
+    <svg class="pip" viewBox="0 0 24 24"><path d="M12 2.6l2.9 5.9 6.5.95-4.7 4.6 1.1 6.5L12 17.5l-5.8 3.05 1.1-6.5-4.7-4.6 6.5-.95z" fill="#ffe27a" stroke="#c98f22" stroke-width="1.3" stroke-linejoin="round"/></svg>
+    <svg class="pip" viewBox="0 0 24 24"><path d="M12 2.6l2.9 5.9 6.5.95-4.7 4.6 1.1 6.5L12 17.5l-5.8 3.05 1.1-6.5-4.7-4.6 6.5-.95z" fill="#ffe27a" stroke="#c98f22" stroke-width="1.3" stroke-linejoin="round"/></svg>
+  </div>
+
+  <div id="prog"><div id="prog-fill"></div></div>
+
+  <div id="hint">
+    <!-- tap -->
+    <svg id="h-tap" class="glow" viewBox="0 0 120 100">
+      <circle class="ring" cx="60" cy="40" r="8" fill="none" stroke="#fff2b8" stroke-width="4"/>
+      <g class="g">
+        <path class="hand" d="M52 74 V44a6 6 0 0 1 12 0v14V38a6 6 0 0 1 12 0v20V44a6 6 0 0 1 12 0v30c0 12-9 20-21 20h-8c-9 0-13-4-17-11l-9-15a6 6 0 0 1 9-7l6 7z"/>
+      </g>
+    </svg>
+    <!-- drag -->
+    <svg id="h-drag" class="glow" viewBox="0 0 120 100">
+      <g class="g">
+        <path d="M26 30 q22 -16 44 0" fill="none" stroke="#fff2b8" stroke-width="5" stroke-linecap="round" stroke-dasharray="7 8"/>
+        <path d="M68 22 l10 8 -11 7z" fill="#fff2b8"/>
+        <path class="hand" d="M52 78 V48a6 6 0 0 1 12 0v14V42a6 6 0 0 1 12 0v20V48a6 6 0 0 1 12 0v30c0 12-9 20-21 20h-8c-9 0-13-4-17-11l-9-15a6 6 0 0 1 9-7l6 7z"/>
+      </g>
+    </svg>
+    <!-- swipe down -->
+    <svg id="h-swipe" class="glow" viewBox="0 0 120 100">
+      <path class="chev" d="M44 16 l16 13 16-13" fill="none" stroke="#ffe9a8" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+      <path class="chev" d="M44 30 l16 13 16-13" fill="none" stroke="#ffe9a8" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+      <g class="g">
+        <path class="hand" d="M52 86 V56a6 6 0 0 1 12 0v14V50a6 6 0 0 1 12 0v20V56a6 6 0 0 1 12 0v26c0 12-9 20-21 20h-8c-9 0-13-4-17-11l-9-15a6 6 0 0 1 9-7l6 7z"/>
+      </g>
+    </svg>
+    <!-- spray -->
+    <svg id="h-spray" class="glow" viewBox="0 0 120 100">
+      <g class="g">
+        <path d="M62 34 h18 a5 5 0 0 1 5 5 v42 a7 7 0 0 1 -7 7 h-14 a7 7 0 0 1 -7 -7 v-42 a5 5 0 0 1 5 -5z" fill="#9ee2f5" stroke="#3d6f86" stroke-width="3.4"/>
+        <path d="M64 34 v-8 h12 v8" fill="#4a7d93" stroke="#3d6f86" stroke-width="3"/>
+        <path d="M64 26 h-16 l-4 -7" fill="none" stroke="#3d6f86" stroke-width="4" stroke-linecap="round"/>
+        <circle class="drop" cx="40" cy="20" r="4.5" fill="#bfeeff"/>
+        <circle class="drop" cx="34" cy="24" r="3.6" fill="#bfeeff"/>
+        <circle class="drop" cx="45" cy="26" r="3" fill="#bfeeff"/>
+      </g>
+    </svg>
+    <!-- squeegee -->
+    <svg id="h-wipe" class="glow" viewBox="0 0 120 100">
+      <g class="g">
+        <rect x="30" y="52" width="60" height="10" rx="4" fill="#d8dde2" stroke="#5f6a72" stroke-width="3"/>
+        <rect x="32" y="61" width="56" height="7" rx="3" fill="#2b3138"/>
+        <rect x="55" y="26" width="10" height="27" rx="5" fill="#f3d84a" stroke="#8a7318" stroke-width="3"/>
+        <path d="M22 74 q10 8 22 4 M96 74 q-10 8 -22 4" fill="none" stroke="#bfeeff" stroke-width="4" stroke-linecap="round"/>
+      </g>
+    </svg>
+  </div>
+
+  <div id="sound" class="btn">
+    <svg viewBox="0 0 32 32" width="26" height="26">
+      <path d="M7 12h5l7-6v20l-7-6H7z" fill="#fffaf0" stroke="#3d4a55" stroke-width="1.6" stroke-linejoin="round"/>
+      <g class="waves" fill="none" stroke="#fffaf0" stroke-width="2.4" stroke-linecap="round">
+        <path d="M22 12a6 6 0 0 1 0 8"/><path d="M25.5 9a11 11 0 0 1 0 14"/>
+      </g>
+      <path class="off-slash" d="M6 6 L27 27" stroke="#ff6b6b" stroke-width="3" stroke-linecap="round"/>
+    </svg>
+  </div>
+
+  <div id="replay" class="btn">
+    <svg viewBox="0 0 48 48" width="62" height="62">
+      <path d="M24 9a15 15 0 1 0 14.2 10.2" fill="none" stroke="#fffaf0" stroke-width="5.2" stroke-linecap="round"/>
+      <path d="M25 3 l9 7 -9 7z" fill="#fffaf0"/>
+      <path d="M24 2.5 l2.2 4.5 5 .7-3.6 3.5.85 5L24 13.9l-4.45 2.3.85-5-3.6-3.5 5-.7z" fill="#ffe27a" opacity="0"/>
+    </svg>
+  </div>
+</div>
+
+<div id="loading">
+  <svg class="spin" viewBox="0 0 48 48">
+    <circle cx="24" cy="24" r="18" fill="none" stroke="rgba(255,255,255,.18)" stroke-width="5"/>
+    <path d="M24 6a18 18 0 0 1 18 18" fill="none" stroke="#8fe3ff" stroke-width="5" stroke-linecap="round"/>
+  </svg>
+</div>
+
+<div id="title">
+  <svg class="go" viewBox="0 0 200 200">
+    <defs>
+      <radialGradient id="bub" cx="38%" cy="30%">
+        <stop offset="0%" stop-color="#ffffff" stop-opacity=".95"/>
+        <stop offset="45%" stop-color="#bfeaff" stop-opacity=".55"/>
+        <stop offset="100%" stop-color="#6fb6e8" stop-opacity=".65"/>
+      </radialGradient>
+    </defs>
+    <circle cx="100" cy="100" r="86" fill="url(#bub)" stroke="#ffffff" stroke-width="4" stroke-opacity=".8"/>
+    <ellipse cx="72" cy="66" rx="20" ry="13" fill="#fff" opacity=".75" transform="rotate(-28 72 66)"/>
+    <g transform="translate(0,4)">
+      <rect x="62" y="96" width="76" height="13" rx="6" fill="#eef3f7" stroke="#5f6a72" stroke-width="3.5"/>
+      <rect x="64" y="108" width="72" height="9" rx="4" fill="#2b3138"/>
+      <rect x="93" y="60" width="14" height="37" rx="7" fill="#f3d84a" stroke="#8a7318" stroke-width="3.5"/>
+      <path d="M46 126 q14 12 30 6 M154 126 q-14 12 -30 6" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round"/>
+      <path d="M100 138 l3.4 7 7.6 1.1-5.5 5.4 1.3 7.6-6.8-3.6-6.8 3.6 1.3-7.6-5.5-5.4 7.6-1.1z" fill="#ffe27a" stroke="#c98f22" stroke-width="2"/>
+    </g>
+  </svg>
+</div>
+
+<!--BUNDLE-->
+</body>
+</html>
