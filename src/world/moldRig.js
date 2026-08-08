@@ -211,6 +211,7 @@ export class MoldRig {
       hoop.rotation.x = Math.PI / 2;
       hoop.position.y = u * H;
       hoop.visible = false;
+      hoop.userData.landed = false;
       this.group.add(hoop);
       this.hoops.push(hoop);
     }

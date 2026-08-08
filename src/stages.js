@@ -15,8 +15,10 @@ import {
 import { METALS, METAL_KEYS, moltenMaterial, makeDotTexture } from './world/materials.js';
 import { DECOR_KEYS, decorSvg } from './world/decorations.js';
 import {
-  makeSweepBoard, makeBrush, makeIngot, Stream, makeClapper, makeHeadstock, Rope,
+  makeSweepBoard, makeSweepCarriage, makeBrush, makeIngot, Stream, makeClapper,
+  makeHeadstock, Rope,
 } from './world/props.js';
+import { founderWalkTo, founderLook, founderReach } from './world/workshop.js';
 import {
   clamp, clamp01, lerp, smoothstep, damp, TAU, angDelta, sampleCurve,
 } from './core/util.js';
@@ -169,14 +171,27 @@ const pick = {
  * ================================================================== */
 function makeSweepStage({
   icon, hintDelay, profileFn, colsOf, progressOf, refresh, boardColor, sparkFx,
-  onDone, topOf, intro, rate = 0.235,
+  onDone, topOf, intro, rate = 0.235, excess = 0.20,
 }) {
   return {
     enter(g) {
       const S = SHAPES[g.state.shapeKey];
       this.S = S;
+      // The board hangs off a pivot so it can also ride OUT along its own
+      // radius.  On the first pass the clay still stands proud of the finished
+      // profile, and a rigid steel edge parked at the finished radius simply
+      // buried itself in the lump -- a tool passing through solid material.
+      // Riding out by the remaining excess makes it take successive cuts, the
+      // way a turner actually works down to a line.
+      this.boardPivot = new THREE.Group();
       this.board = makeSweepBoard((t) => profileFn(S, t) + 0.006, S.height, { color: boardColor });
-      g.rigMold.group.add(this.board);
+      this.boardPivot.add(this.board);
+      this.boardPivot.add(makeSweepCarriage(S.height, this.board.userData.rMax + excess));
+      g.rigMold.group.add(this.boardPivot);
+      // how far the raw lump stands proud of the finished profile
+      this.excess = excess;
+      this.boardOut = excess;
+
       this.angle = 0;
       this.prevAngle = 0;
       this.spark = 0;
@@ -190,7 +205,7 @@ function makeSweepStage({
       if (intro) intro(g, S);
     },
     exit(g) {
-      if (this.board) g.rigMold.group.remove(this.board);
+      if (this.boardPivot) g.rigMold.group.remove(this.boardPivot);
       audio.setLoop('scrape', 0);
     },
     resize(g) { frameAxis(g, { top: topOf(this.S), widthScale: 1.35 }); },
@@ -244,9 +259,14 @@ function makeSweepStage({
         }
       }
       // the board rides the finger, and leans into the clay as it cuts
-      this.board.rotation.y = -this.angle;
+      this.boardPivot.rotation.y = -this.angle;
       const push = clamp01(speed * 0.35);
-      this.board.position.set(0, 0, 0);
+      // depth of cut: sit on the clay that is actually there right now
+      const cols0 = colsOf(g.rigMold);
+      const col = ((Math.round((this.angle / TAU) * cols0.length) % cols0.length) + cols0.length) % cols0.length;
+      const want = this.excess * (1 - smoothstep(0, 1, cols0[col])) * 0.9;
+      this.boardOut = damp(this.boardOut, want, 9, dt);
+      this.board.position.x = this.boardOut;
       this.board.rotation.z = Math.sin(g.clock * 22) * 0.006 * push;
 
       this.sound = damp(this.sound, input.active ? clamp01(speed * 0.7) : 0, 9, dt);
@@ -268,8 +288,8 @@ function makeSweepStage({
       if (this.done) {
         this.finishT += dt;
         // the board lifts away and the finished form is left standing
-        this.board.position.x = this.finishT * 1.6;
-        this.board.rotation.y -= dt * 0.7;
+        this.board.position.x = this.boardOut + this.finishT * 1.6;
+        this.boardPivot.rotation.y -= dt * 0.7;
         if (this.finishT > 0.75) onDone(g);
       }
     },
@@ -301,6 +321,7 @@ const core = makeSweepStage({
   refresh: (r) => r.refreshCore(),
   boardColor: 0x6b4a30,
   sparkFx: FX.claySpeck,
+  excess: 0.21,
   onDone: (g) => g.setStage('falsebell'),
 });
 
@@ -316,6 +337,7 @@ const falsebell = makeSweepStage({
   boardColor: 0x7a4630,
   sparkFx: FX.redSpeck,
   rate: 0.32,
+  excess: 0.17,
   onDone: (g) => g.setStage('decor'),
   intro: (g, S) => {
     // a fresh skin of clay is thrown over the finished core
@@ -474,6 +496,8 @@ const mold = {
     this.brush.visible = false;
     g.scene.add(this.brush);
     this.autofill = 0;
+    this.fitting = 0;
+    this.cupLanded = false;
     this.done = false;
     this.painted = 0;
     this.sound = 0;
@@ -567,11 +591,31 @@ const mold = {
       this.autofill += dt;
       if (rm.fillMold(dt * 1.6)) rm.refreshMold();
       else if (this.autofill > 0.6) {
+        // The banding hoops and the pouring cup used to blink into existence.
+        // Things do not appear in a workshop; somebody puts them there.  So
+        // they drop down over the flask, lowest first, and each one lands.
         rm.hideInnards();
-        for (const h of rm.hoops) h.visible = true;
-        rm.sprueCup.visible = true;
-        audio.clank(0.8);
-        g.setStage('bake');
+        if (!this.fitting) {
+          this.fitting = 0;
+          rm.sprueCup.visible = true;
+          for (const h of rm.hoops) { h.visible = true; h.userData.restY = h.position.y; }
+          this.cupRestY = rm.sprueCup.position.y;
+        }
+        this.fitting += dt;
+        const F = this.fitting;
+        let allDown = true;
+        rm.hoops.forEach((h, i) => {
+          const k = clamp01((F - i * 0.26) / 0.34);
+          h.position.y = h.userData.restY + (1 - k * k) * 1.9;
+          h.visible = k > 0;
+          if (k < 1) allDown = false;
+          if (k >= 1 && !h.userData.landed) { h.userData.landed = true; audio.clank(0.55 + i * 0.12); }
+        });
+        const ck = clamp01((F - 0.85) / 0.35);
+        rm.sprueCup.position.y = this.cupRestY + (1 - ck * ck) * 1.4;
+        if (ck < 1) allDown = false;
+        else if (!this.cupLanded) { this.cupLanded = true; audio.clayPat(0.7); }
+        if (allDown) g.setStage('bake');
       }
     }
   },
@@ -689,17 +733,20 @@ const furnace = {
     this.step = 'gear';     // gear -> metal -> door -> ignite -> melt
     this.gearIdx = 0;
     this.doorK = 0;
+    this.doorV = 0;
     this.meltT = 0;
     this.ingots = [];
+    this._walking2 = false;
+    this._backAtPost = false;
     this.fire = 0;
     g.hud.setProgress(0, STEP_ICONS.fire);
     this._shot(g);
 
-    // the founder walks over to the furnace to work
-    // beside the hearth, not in front of it -- he must never hide the mouth,
-    // the ingots or the safety door
-    W.founder.position.set(-2.30, 0, 1.55);
-    W.founder.rotation.y = -1.05;
+    // He walks to his post rather than appearing at it, and stands beside the
+    // hearth, never in front of it -- he must not hide the mouth, the ingots
+    // or the safety door.
+    founderWalkTo(W, -4.95, 1.05, -3.85, -1.0);
+    founderLook(W, -3.4, 1.9, -1.0);
 
     if (!W.igniteLever) {
       const grp = new THREE.Group();
@@ -727,9 +774,12 @@ const furnace = {
 
   _shot(g) {
     g.rig.setShot(
-      // stand square to the furnace mouth -- it is rotated 0.42 rad in the room
-      { target: V(-3.55, 1.80, -0.35), w: 3.6, h: 4.6, yaw: 0.34, pitch: 0.07 },
-      { target: V(-2.4, 2.10, -0.8), w: 10.0, h: 5.4, yaw: 0.26, pitch: 0.10 }
+      // Straight down the room at the hearth.  Standing square to the mouth
+      // (yaw 0.34, matching the furnace's own rotation) puts the ladle jib's
+      // mast exactly between the camera and the fire, and a post through the
+      // middle of the shot costs more than a slightly glancing angle does.
+      { target: V(-3.55, 1.80, -0.35), w: 3.6, h: 4.6, yaw: 0.06, pitch: 0.07 },
+      { target: V(-2.4, 2.10, -0.8), w: 10.0, h: 5.4, yaw: 0.14, pitch: 0.10 }
     );
   },
 
@@ -777,6 +827,9 @@ const furnace = {
       const order = ['apron', 'gloves', 'helmet'];
       const k = order[this.gearIdx];
       for (const m of W.gear[k]) m.visible = true;
+      // he pulls it on: arms up for the helmet, down for the apron and gloves
+      founderReach(W, k === 'helmet' ? 1.0 : 0.45);
+      setTimeout(() => { if (g.stageName === 'furnace') founderReach(W, 0); }, 620);
       audio.clayPat(0.6); audio.blip(0.8 + this.gearIdx * 0.15);
       this.gearIdx++;
       g.hud.poke();
@@ -828,21 +881,11 @@ const furnace = {
 
   move(g, i) {
     if (this.step !== 'door') return;
-    const W = g.world;
-    // any rightward travel closes the door; precision is not the point
-    if (i.dx > 0) {
-      this.doorK = clamp01(this.doorK + i.dx / 260);
-      W.door.position.x = lerp(W.doorOpenX, W.doorShutX, this.doorK);
-      if (!this._slideSnd || g.clock - this._slideSnd > 0.9) {
-        this._slideSnd = g.clock;
-        audio.doorSlide();
-      }
-      if (this.doorK >= 0.995) {
-        this.step = 'ignite';
-        audio.clank(1.3);
-        this._aim(g);
-      }
-    }
+    // The hand pushes the door; it does not teleport it.  A steel shutter on
+    // rails takes a moment to get going and keeps rolling when you stop, so
+    // the drag adds VELOCITY and the door carries it.  Precision is still not
+    // required: any rightward travel at all counts.
+    if (i.dx > 0) this.doorV += i.dx * 0.0075;
   },
 
   update(g, dt) {
@@ -861,19 +904,54 @@ const furnace = {
     }
 
     if (this.step === 'carry') {
+      // Somebody has to carry the metal.  It used to fly to the furnace on its
+      // own, spinning, which is the sort of thing that quietly tells a player
+      // that nothing in the room has weight or an owner.
       this.carryT += dt;
-      const k = clamp01(this.carryT / 1.1);
+      const T = this.carryT;
       const from = this.chosen.userData.home;
-      W.crucible.getWorldPosition(_v); _v.y += 0.5;
-      this.chosen.position.lerpVectors(from, _v, smoothstep(0, 1, k));
-      this.chosen.position.y += Math.sin(k * Math.PI) * 0.9;
-      this.chosen.rotation.y += dt * 4;
-      if (k >= 1) {
-        g.scene.remove(this.chosen);
-        this.ingots = this.ingots.filter((i) => i !== this.chosen);
-        audio.clank(0.6);
-        this.step = 'door';
-        this._aim(g);
+      W.crucible.getWorldPosition(this._crucible ??= new THREE.Vector3());
+      const drop = this._crucible.clone(); drop.y += 0.55;
+
+      if (T < 1.05) {                         // walking over, bending down
+        founderReach(W, smoothstep(0.55, 1.05, T) * 0.75);
+      } else if (T < 1.5) {                   // lifting it
+        founderReach(W, 0.75);
+        const k = smoothstep(0, 1, (T - 1.05) / 0.45);
+        W.rig.arms[1].hand.getWorldPosition(_v);
+        this.chosen.position.lerpVectors(from, _v, k);
+      } else if (T < 2.9) {                   // carrying it to the hearth
+        if (!this._walking2) {
+          this._walking2 = true;
+          founderWalkTo(W, -4.75, 0.35, W.furnace.position.x, W.furnace.position.z, 0.95);
+          founderLook(W, this._crucible.x, this._crucible.y + 0.4, this._crucible.z);
+        }
+        founderReach(W, 0.62);
+        W.rig.arms[1].hand.getWorldPosition(this.chosen.position);
+        this.chosen.position.y += 0.05;
+      } else if (T < 3.5) {                   // reaching in and letting go
+        founderReach(W, 0.95);
+        const k = smoothstep(0, 1, (T - 2.9) / 0.6);
+        W.rig.arms[1].hand.getWorldPosition(_v);
+        this.chosen.position.lerpVectors(_v, drop, k);
+        if (k >= 1 && this.chosen.visible) {
+          this.chosen.visible = false;
+          audio.clank(0.9);
+          W.crucibleMelt.visible = false;
+        }
+      } else {
+        founderReach(W, 0);
+        if (!this._backAtPost) {
+          this._backAtPost = true;
+          founderWalkTo(W, -4.95, 1.05, -3.85, -1.0);
+        }
+        if (T > 4.4) {
+          g.scene.remove(this.chosen);
+          this.ingots = this.ingots.filter((i) => i !== this.chosen);
+          this.step = 'door';
+          founderLook(W, W.door.getWorldPosition(_v).x, _v.y, _v.z);
+          this._aim(g);
+        }
       }
     }
 
@@ -914,6 +992,26 @@ const furnace = {
       const steps = { gear: 0, metal: 1, carry: 1.5, door: 2, ignite: 2.7 };
       g.hud.setProgress((steps[this.step] ?? 0) / 4 + (this.step === 'gear' ? this.gearIdx / 12 : 0), STEP_ICONS.fire);
       if (this.step === 'door') {
+        // The shutter rolls: rail friction bleeds the speed the hand gave it,
+        // and it clunks home against the jamb rather than arriving silently.
+        this.doorV = Math.max(0, this.doorV - dt * (0.55 + this.doorV * 1.6));
+        if (this.doorV > 0) {
+          this.doorK = clamp01(this.doorK + this.doorV * dt);
+          W.door.position.x = lerp(W.doorOpenX, W.doorShutX, this.doorK);
+          if (!this._slideSnd || g.clock - this._slideSnd > 0.5) {
+            this._slideSnd = g.clock;
+            audio.doorSlide(clamp01(this.doorV));
+          }
+          if (this.doorK >= 0.999) {
+            audio.clank(1.2);
+            g.shake(0.12);
+            this.doorV = 0;
+            this.step = 'ignite';
+            W.igniteLever.userData.knob.getWorldPosition(_v2);
+            founderLook(W, _v2.x, _v2.y, _v2.z);
+            this._aim(g);
+          }
+        }
         W.door.getWorldPosition(_v);
         getBeacon(g).show(_v, 1.15);
       }
@@ -967,6 +1065,10 @@ const pour = {
     g.rigMold.setMoldFill(-1, 0);
     g.rigMold.sprueMelt.material.color.setHex(METALS[g.state.metal].molten);
 
+    // he stands clear of the stream and watches the cup, as anyone would
+    founderWalkTo(W, -2.6, 2.15, 0, 0);
+    founderLook(W, 0, this.cupY, 0);
+
     this._shot(g);
     g.hud.setProgress(0, STEP_ICONS.pour);
     W.leverKnob.getWorldPosition(_v);
@@ -1018,7 +1120,10 @@ const pour = {
       this.pull = damp(this.pull, 0, 4.2, dt);
     }
     W.lever.rotation.z = -this.pull * 1.05;
-    this.tilt = damp(this.tilt, this.pull * 1.30, 7, dt);
+    // the ladle is heavy and the linkage is geared: it follows the lever, but
+    // it takes its time, and it comes back slower than it goes over
+    const tiltTarget = this.pull * 1.30;
+    this.tilt = damp(this.tilt, tiltTarget, tiltTarget > this.tilt ? 4.2 : 2.6, dt);
     W.ladle.rotation.z = -this.tilt;
 
     // Molten metal stays level however far the ladle is tipped: cancel the
@@ -1178,6 +1283,7 @@ const breakup = {
     g.world.ladle.rotation.z = 0;
     g.world.ladleMelt.visible = false;
     this.chunks = rm.buildChunks(26);
+    founderLook(g.world, 0, this.H * 0.55, 0);
     this.cracks = new CrackField(rm.group, S);
     this.cracks.setHeat(0.55);
 

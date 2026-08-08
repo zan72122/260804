@@ -56,6 +56,37 @@ export function makeSweepBoard(profileFn, height, { color = 0x6b4a30, samples = 
   return grp;
 }
 
+/**
+ * The carriage the strickle board runs on.
+ *
+ * The board was floating in space, held up by nothing, which quietly asks the
+ * player "what is turning this?".  A real sweep is a jig: it turns on the same
+ * spindle as the work, on a collar top and bottom, and the board slides in and
+ * out along its arms as successive cuts are taken.  Building that makes the
+ * tool belong to the machine instead of hovering beside it.
+ */
+export function makeSweepCarriage(height, reach) {
+  const g = new THREE.Group();
+  const iron = new THREE.MeshStandardMaterial({ color: 0x3a352e, roughness: 0.55, metalness: 0.85 });
+  const wood = new THREE.MeshStandardMaterial({ color: 0x4e351f, roughness: 0.9 });
+
+  for (const y of [0.06, height + 0.24]) {
+    const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.16, 14), iron);
+    collar.position.y = y; collar.castShadow = true; g.add(collar);
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(reach, 0.075, 0.075), wood);
+    arm.position.set(reach * 0.5, y, 0); arm.castShadow = true; g.add(arm);
+    // the clamp that fixes the board at the current depth of cut
+    const clamp = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.13, 0.15), iron);
+    clamp.position.set(reach * 0.82, y, 0); g.add(clamp);
+  }
+  // diagonal stay so the arms are not two floating sticks
+  const stay = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, height + 0.3, 6), wood);
+  stay.position.set(reach * 0.62, (height + 0.3) * 0.5, 0);
+  stay.rotation.z = 0.16;
+  g.add(stay);
+  return g;
+}
+
 /** wide daubing brush for the outer mould */
 export function makeBrush() {
   const g = new THREE.Group();

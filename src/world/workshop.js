@@ -67,8 +67,10 @@ export function buildWorkshop(scene, renderer) {
     wood: new THREE.MeshStandardMaterial({ color: 0x6b4a30, roughness: 0.88, metalness: 0 }),
     woodDark: new THREE.MeshStandardMaterial({ color: 0x3a2819, roughness: 0.92, metalness: 0 }),
     silhouette: new THREE.MeshStandardMaterial({ color: 0x120d0a, roughness: 1, metalness: 0 }),
-    cloth: new THREE.MeshStandardMaterial({ color: 0x7a5136, roughness: 0.98, metalness: 0, envMapIntensity: 0.4 }),
-    skin: new THREE.MeshStandardMaterial({ color: 0xb98a63, roughness: 0.85, metalness: 0, envMapIntensity: 0.4 }),
+    cloth: new THREE.MeshStandardMaterial({ color: 0x4b3a2a, roughness: 1.0, metalness: 0, envMapIntensity: 0.2 }),
+    shirt: new THREE.MeshStandardMaterial({ color: 0x54565e, roughness: 1.0, metalness: 0, envMapIntensity: 0.2 }),
+    hair: new THREE.MeshStandardMaterial({ color: 0x2b2119, roughness: 1.0, metalness: 0, envMapIntensity: 0.15 }),
+    skin: new THREE.MeshStandardMaterial({ color: 0x9a7150, roughness: 0.9, metalness: 0, envMapIntensity: 0.2 }),
     leather: new THREE.MeshStandardMaterial({ color: 0x5b3a24, roughness: 0.78, metalness: 0.05 }),
     glass: new THREE.MeshStandardMaterial({ color: 0x2a3a30, roughness: 0.25, metalness: 0.2, transparent: true, opacity: 0.55 }),
   };
@@ -142,7 +144,34 @@ export function buildWorkshop(scene, renderer) {
   W.group.add(furnace); W.furnace = furnace;
 
   const fBase = box(2.9, 1.15, 2.5, M.brick); at(fBase, 0, 0.575, 0); fBase.castShadow = true; furnace.add(fBase);
-  const fBody = box(2.55, 1.9, 2.25, M.brick); at(fBody, 0, 2.06, 0); fBody.castShadow = true; furnace.add(fBody);
+  // A chamber, not a solid block.  The arched mouth used to open straight onto
+  // the brick of the body behind it -- a furnace you cannot put anything into.
+  // Four walls and a crown leave a real cavity with a hearth floor, a back
+  // wall and somewhere for the crucible to actually stand.
+  const CH_W = 1.34, CH_BACK = -0.62;
+  for (const sgn of [-1, 1]) {
+    const side = box((2.55 - CH_W) / 2, 1.9, 2.25, M.brick);
+    at(side, sgn * (CH_W + (2.55 - CH_W) / 2) / 2, 2.06, 0);
+    side.castShadow = true; furnace.add(side);
+  }
+  const fBack = box(CH_W, 1.9, 2.25 * 0.5 + CH_BACK, M.brick);
+  at(fBack, 0, 2.06, -(2.25 * 0.25 - CH_BACK / 2) - 0.56); furnace.add(fBack);
+  const fCrown = box(2.55, 0.46, 2.25, M.brick);
+  at(fCrown, 0, 2.78, 0); fCrown.castShadow = true; furnace.add(fCrown);
+  // the inside of the chamber: soot-blackened, and it must never catch the
+  // daylight, or the mouth reads as a painted-on hole
+  const sootMat = new THREE.MeshStandardMaterial({ color: 0x1a1512, roughness: 1.0, metalness: 0 });
+  const chFloor = box(CH_W, 0.06, 2.0, sootMat); at(chFloor, 0, 1.16, 0.06); furnace.add(chFloor);
+  for (const sgn of [-1, 1]) {
+    const w = box(0.05, 1.5, 1.9, sootMat); at(w, sgn * CH_W / 2, 1.9, 0.1); furnace.add(w);
+  }
+  const chRoof = box(CH_W, 0.05, 1.9, sootMat); at(chRoof, 0, 2.62, 0.1); furnace.add(chRoof);
+  // charcoal bed
+  const coke = box(CH_W - 0.16, 0.16, 1.4, new THREE.MeshStandardMaterial({
+    color: 0x161210, roughness: 1.0, metalness: 0,
+  }));
+  at(coke, 0, 1.27, 0.1); furnace.add(coke);
+  W.coke = coke;
   const fCap = box(2.75, 0.22, 2.45, M.brickDark); at(fCap, 0, 3.12, 0); furnace.add(fCap);
   const chim = cyl(0.30, 0.36, 3.2, 14, M.brickDark); at(chim, 0, 4.7, -0.7); chim.castShadow = true; furnace.add(chim);
   const chimCap = cyl(0.42, 0.36, 0.18, 14, M.ironDark); at(chimCap, 0, 6.35, -0.7); furnace.add(chimCap);
@@ -165,8 +194,8 @@ export function buildWorkshop(scene, renderer) {
   }
   // hot interior
   const hearthMat = new THREE.MeshBasicMaterial({ color: 0x120806, fog: false });
-  const hearth = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 2.1), hearthMat);
-  at(hearth, 0, 2.06, 0.55); furnace.add(hearth);
+  const hearth = new THREE.Mesh(new THREE.PlaneGeometry(CH_W, 1.5), hearthMat);
+  at(hearth, 0, 1.95, CH_BACK - 0.005); furnace.add(hearth);
   W.hearthMat = hearthMat;
 
   const glowMat = new THREE.MeshBasicMaterial({
@@ -178,13 +207,13 @@ export function buildWorkshop(scene, renderer) {
   W.furnaceGlow = fGlow; W.furnaceGlowMat = glowMat;
 
   // crucible sitting in the hearth
-  const cruc = cyl(0.44, 0.36, 0.78, 18, M.ironDark);
-  at(cruc, 0, 1.62, 0.42); furnace.add(cruc);
+  const cruc = cyl(0.42, 0.34, 0.72, 18, M.ironDark);
+  at(cruc, 0, 1.71, 0.14); cruc.castShadow = true; furnace.add(cruc);
   W.crucible = cruc;
   const crucMelt = new THREE.Mesh(new THREE.CircleGeometry(0.4, 20),
     new THREE.MeshBasicMaterial({ color: 0xff9a3c, fog: false }));
   crucMelt.rotation.x = -Math.PI / 2;
-  at(crucMelt, 0, 1.94, 0.42); crucMelt.visible = false; furnace.add(crucMelt);
+  at(crucMelt, 0, 2.03, 0.14); crucMelt.visible = false; furnace.add(crucMelt);
   W.crucibleMelt = crucMelt;
 
   // sliding safety door -- its own material so it can glow when the furnace
@@ -327,7 +356,8 @@ export function buildWorkshop(scene, renderer) {
     b.rotation.y = rn() * 0.2; near.add(b);
   }
   // barrels
-  for (const [x, z, r] of [[-3.5, 3.4, 0.42], [-2.6, 3.9, 0.38], [4.4, 2.4, 0.4]]) {
+  // kept out of the sight-line between the camera and the hearth
+  for (const [x, z, r] of [[3.6, 3.5, 0.42], [4.5, 3.9, 0.38], [-5.6, 3.2, 0.4]]) {
     const b = cyl(r, r * 0.95, 1.0, 14, M.silhouette); at(b, x, 0.5, z); near.add(b);
     const t = new THREE.Mesh(new THREE.TorusGeometry(r + 0.02, 0.035, 6, 14), M.silhouette);
     at(t, x, 0.72, z); t.rotation.x = Math.PI / 2; near.add(t);
@@ -434,46 +464,85 @@ export function buildWorkshop(scene, renderer) {
   }
 
   /* ================= the founder (adult) ================= */
+  /*
+   * Rigged rather than assembled.  A human figure standing perfectly still is
+   * one of the strongest uncanny signals a scene can give -- the eye is tuned
+   * for human motion above everything else -- so the body hangs off hip, torso,
+   * neck and shoulder pivots and is always doing something: breathing, shifting
+   * its weight, and looking at whatever it is working on.
+   */
   const man = new THREE.Group();
   at(man, -2.25, 0, 1.35); man.rotation.y = 0.85;
   W.group.add(man); W.founder = man;
   {
-    const legL = cyl(0.13, 0.11, 0.9, 10, M.cloth); at(legL, -0.14, 0.45, 0); man.add(legL);
-    const legR = cyl(0.13, 0.11, 0.9, 10, M.cloth); at(legR, 0.14, 0.45, 0); man.add(legR);
-    const bootL = box(0.22, 0.14, 0.34, M.leather); at(bootL, -0.14, 0.07, 0.05); man.add(bootL);
-    const bootR = box(0.22, 0.14, 0.34, M.leather); at(bootR, 0.14, 0.07, 0.05); man.add(bootR);
-    const torso = cyl(0.27, 0.32, 0.78, 12, M.cloth); at(torso, 0, 1.28, 0); torso.castShadow = true; man.add(torso);
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.19, 14, 12), M.skin); at(head, 0, 1.86, 0); man.add(head);
-    const armL = new THREE.Group(); at(armL, -0.34, 1.55, 0); man.add(armL);
-    const armR = new THREE.Group(); at(armR, 0.34, 1.55, 0); man.add(armR);
-    for (const [g, s] of [[armL, -1], [armR, 1]]) {
-      const up = cyl(0.09, 0.08, 0.6, 8, M.cloth); at(up, 0, -0.3, 0); g.add(up);
-      const lo = cyl(0.08, 0.07, 0.55, 8, M.cloth); at(lo, 0, -0.85, 0); g.add(lo);
-      g.rotation.z = s * 0.16;
+    // Proportions checked against a 1.78 m adult: hip 0.92, shoulder 1.40,
+    // crown 1.76, wrist 0.82.  The first pass had him 2.04 m tall with his
+    // hands hanging at knee height, which is uncanny long before it is
+    // consciously noticed.
+    const hips = new THREE.Group(); at(hips, 0, 0.92, 0); man.add(hips);
+    const legs = [];
+    for (const sgn of [-1, 1]) {
+      const hip = new THREE.Group(); at(hip, sgn * 0.125, 0, 0); hips.add(hip);
+      const thigh = cyl(0.115, 0.10, 0.50, 10, M.cloth); at(thigh, 0, -0.25, 0); thigh.castShadow = true; hip.add(thigh);
+      const knee = new THREE.Group(); at(knee, 0, -0.50, 0); hip.add(knee);
+      const shin = cyl(0.10, 0.085, 0.40, 10, M.cloth); at(shin, 0, -0.20, 0); knee.add(shin);
+      const boot = box(0.19, 0.14, 0.30, M.leather); at(boot, 0, -0.45, 0.05); boot.castShadow = true; knee.add(boot);
+      legs.push({ hip, knee });
     }
-    W.founderArms = [armL, armR];
+
+    const torso = new THREE.Group(); at(torso, 0, 0.02, 0); hips.add(torso);
+    const chest = cyl(0.27, 0.32, 0.78, 12, M.cloth); at(chest, 0, 0.38, 0); chest.castShadow = true; torso.add(chest);
+    const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.13, 0.10, 10), M.skin);
+    at(collar, 0, 0.58, 0); torso.add(collar);
+    const neck = new THREE.Group(); at(neck, 0, 0.56, 0); torso.add(neck);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.115, 16, 12), M.skin);
+    head.scale.set(1.0, 1.22, 1.05);
+    at(head, 0, 0.20, 0); head.castShadow = true; neck.add(head);
+    // hair and a short beard: a featureless egg reads as a mannequin even at
+    // this distance, and this is the cheapest way to make it read as a person
+    const hair = new THREE.Mesh(new THREE.SphereGeometry(0.122, 14, 10, 0, TAU, 0, Math.PI * 0.62), M.hair);
+    hair.scale.set(1.0, 1.22, 1.05); at(hair, 0, 0.205, -0.006); neck.add(hair);
+    const beard = new THREE.Mesh(new THREE.SphereGeometry(0.105, 12, 10, 0, TAU, Math.PI * 0.55, Math.PI * 0.45), M.hair);
+    beard.scale.set(1.0, 1.2, 1.0); at(beard, 0, 0.20, 0.022); neck.add(beard);
+
+    const arms = [];
+    for (const sgn of [-1, 1]) {
+      const sh = new THREE.Group(); at(sh, sgn * 0.235, 0.48, 0); torso.add(sh);
+      const up = cyl(0.075, 0.065, 0.30, 8, M.shirt); at(up, 0, -0.15, 0); up.castShadow = true; sh.add(up);
+      const el = new THREE.Group(); at(el, 0, -0.30, 0); sh.add(el);
+      const lo = cyl(0.062, 0.052, 0.28, 8, M.skin); at(lo, 0, -0.14, 0); el.add(lo);
+      const hand = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 8), M.skin);
+      at(hand, 0, -0.30, 0); el.add(hand);
+      sh.rotation.z = sgn * 0.14;
+      arms.push({ sh, el, hand });
+    }
     man.add(contactShadow(0.7, 0.5));
 
     // protective gear -- hidden until the player has him kit up
-    const apron = new THREE.Mesh(new THREE.BoxGeometry(0.62, 1.15, 0.16), M.leather);
-    at(apron, 0, 1.15, 0.24); apron.visible = false; man.add(apron);
-    const strapL = box(0.07, 0.5, 0.07, M.leather); at(strapL, -0.19, 1.62, 0.16); strapL.rotation.x = -0.2; strapL.visible = false; man.add(strapL);
-    const strapR = strapL.clone(); at(strapR, 0.19, 1.62, 0.16); man.add(strapR);
-    const gloveL = new THREE.Mesh(new THREE.CapsuleGeometry(0.11, 0.3, 4, 8), M.leather);
-    at(gloveL, -0.34, 0.75, 0); gloveL.visible = false; man.add(gloveL);
-    const gloveR = gloveL.clone(); at(gloveR, 0.34, 0.75, 0); man.add(gloveR);
-    const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.235, 16, 10, 0, TAU, 0, Math.PI * 0.55), M.leather);
-    at(helmet, 0, 1.88, 0); helmet.visible = false; man.add(helmet);
-    const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.03, 18), M.leather);
-    at(brim, 0, 1.83, 0); brim.visible = false; man.add(brim);
-    const visor = new THREE.Mesh(new THREE.SphereGeometry(0.215, 14, 10, -0.9, 1.8, 0.55, 1.0), M.glass);
-    at(visor, 0, 1.86, 0.02); visor.visible = false; man.add(visor);
+    const apron = new THREE.Mesh(new THREE.BoxGeometry(0.50, 0.92, 0.14), M.leather);
+    at(apron, 0, 0.13, 0.19); apron.visible = false; torso.add(apron);
+    const strapL = box(0.055, 0.34, 0.055, M.leather); at(strapL, -0.14, 0.50, 0.12); strapL.rotation.x = -0.22; strapL.visible = false; torso.add(strapL);
+    const strapR = strapL.clone(); at(strapR, 0.14, 0.50, 0.12); torso.add(strapR);
+    const gloveL = new THREE.Mesh(new THREE.CapsuleGeometry(0.072, 0.20, 4, 8), M.leather);
+    at(gloveL, 0, -0.26, 0); gloveL.visible = false; arms[0].el.add(gloveL);
+    const gloveR = gloveL.clone(); arms[1].el.add(gloveR);
+    const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.145, 16, 10, 0, TAU, 0, Math.PI * 0.58), M.leather);
+    helmet.scale.set(1.0, 1.15, 1.05);
+    at(helmet, 0, 0.205, 0); helmet.visible = false; neck.add(helmet);
+    const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.235, 0.235, 0.028, 18), M.leather);
+    at(brim, 0, 0.185, 0); brim.visible = false; neck.add(brim);
+    const visor = new THREE.Mesh(new THREE.SphereGeometry(0.135, 14, 10, -0.9, 1.8, 0.5, 1.05), M.glass);
+    visor.scale.set(1.0, 1.2, 1.06);
+    at(visor, 0, 0.20, 0.012); visor.visible = false; neck.add(visor);
 
-    W.gear = {
-      apron: [apron, strapL, strapR],
-      gloves: [gloveL, gloveR],
-      helmet: [helmet, brim, visor],
+    W.gear = { apron: [apron, strapL, strapR], gloves: [gloveL, gloveR], helmet: [helmet, brim, visor] };
+    W.rig = {
+      hips, torso, chest, neck, head, legs, arms,
+      home: man.position.clone(), homeYaw: man.rotation.y,
+      look: new THREE.Vector3(0, 1.6, 2),      // what he is attending to
+      walk: null, phase: Math.random() * TAU, reach: 0,
     };
+    W.founderArms = [arms[0].sh, arms[1].sh];
   }
 
   /* ================= lighting ================= */
@@ -533,10 +602,107 @@ export function buildWorkshop(scene, renderer) {
 }
 
 /* ------------------------------------------------------------------ *
+ *  the founder                                                        *
+ * ------------------------------------------------------------------ */
+
+const _fwd = new THREE.Vector3(), _to = new THREE.Vector3();
+
+/** send him somewhere; he walks there and turns to face `faceX,faceZ` */
+export function founderWalkTo(W, x, z, faceX, faceZ, speed = 1.15) {
+  const r = W.rig;
+  const from = W.founder.position.clone();
+  const to = new THREE.Vector3(x, 0, z);
+  const dist = from.distanceTo(to);
+  r.walk = {
+    from, to, t: 0,
+    dur: Math.max(0.35, dist / speed),
+    yaw0: W.founder.rotation.y,
+    yaw1: Math.atan2(faceX - x, faceZ - z),
+    dist,
+  };
+}
+
+/** what he should be looking at */
+export function founderLook(W, x, y, z) { W.rig.look.set(x, y, z); }
+
+/** 0 = arms down, 1 = reaching forward at chest height */
+export function founderReach(W, k) { W.rig.reachTarget = k; }
+
+function updateFounder(W, dt, t) {
+  const r = W.rig;
+  if (!r) return;
+  const man = W.founder;
+
+  /* ---- locomotion ---- */
+  let stride = 0, moving = 0;
+  if (r.walk) {
+    const wk = r.walk;
+    wk.t = Math.min(1, wk.t + dt / wk.dur);
+    // ease in and out: nobody starts or stops at full walking speed
+    const k = wk.t * wk.t * (3 - 2 * wk.t);
+    man.position.lerpVectors(wk.from, wk.to, k);
+    let dy = wk.yaw1 - wk.yaw0;
+    while (dy > Math.PI) dy -= TAU;
+    while (dy < -Math.PI) dy += TAU;
+    man.rotation.y = wk.yaw0 + dy * Math.min(1, k * 1.6);
+    moving = Math.sin(wk.t * Math.PI);            // speed profile
+    r.phase += dt * 7.5 * moving * (wk.dist > 0.4 ? 1 : 0);
+    stride = moving * Math.min(1, wk.dist / 0.7);
+    if (wk.t >= 1) r.walk = null;
+  }
+
+  /* ---- breathing and weight shift ---- */
+  const breath = Math.sin(t * 1.15) * 0.5 + 0.5;
+  r.chest.scale.set(1 + breath * 0.022, 1 + breath * 0.010, 1 + breath * 0.026);
+  const sway = Math.sin(t * 0.38) * (1 - moving);
+  r.hips.position.x = sway * 0.022;
+  r.hips.position.y = 0.92 - Math.abs(Math.sin(r.phase)) * 0.022 * stride;
+  r.hips.rotation.z = -sway * 0.045;
+  r.torso.rotation.z = sway * 0.03;
+  r.torso.rotation.x = 0.03 + moving * 0.06;
+
+  /* ---- legs ---- */
+  for (let i = 0; i < 2; i++) {
+    const sgn = i === 0 ? 1 : -1;
+    const ph = r.phase + (i ? Math.PI : 0);
+    const swing = Math.sin(ph) * 0.62 * stride;
+    r.legs[i].hip.rotation.x = swing + (1 - stride) * sgn * sway * 0.03;
+    // the knee only bends on the way through, never backwards
+    r.legs[i].knee.rotation.x = Math.max(0, -Math.sin(ph - 0.6)) * 0.85 * stride;
+  }
+
+  /* ---- head follows the work ---- */
+  man.getWorldPosition(_fwd);
+  _to.copy(r.look).sub(_fwd);
+  const wantYaw = Math.atan2(_to.x, _to.z) - man.rotation.y;
+  let dy = wantYaw;
+  while (dy > Math.PI) dy -= TAU;
+  while (dy < -Math.PI) dy += TAU;
+  // a neck has a limit; past it he would have to turn his whole body
+  const yaw = Math.max(-0.85, Math.min(0.85, dy));
+  const pitch = Math.max(-0.5, Math.min(0.45, -Math.atan2(r.look.y - 1.66, Math.hypot(_to.x, _to.z))));
+  r.neck.rotation.y += (yaw - r.neck.rotation.y) * Math.min(1, dt * 4.5);
+  r.neck.rotation.x += (pitch - r.neck.rotation.x) * Math.min(1, dt * 4.0);
+
+  /* ---- arms: swing when walking, reach when working ---- */
+  r.reach = r.reach + ((r.reachTarget ?? 0) - r.reach) * Math.min(1, dt * 3.4);
+  for (let i = 0; i < 2; i++) {
+    const sgn = i === 0 ? -1 : 1;
+    const ph = r.phase + (i ? 0 : Math.PI);
+    const swing = Math.sin(ph) * 0.45 * stride;
+    const idle = Math.sin(t * 0.9 + i * 2.1) * 0.02;
+    r.arms[i].sh.rotation.x = swing + idle - r.reach * 1.45;
+    r.arms[i].sh.rotation.z = sgn * (0.14 - r.reach * 0.06);
+    r.arms[i].el.rotation.x = -Math.abs(swing) * 0.5 - 0.12 - r.reach * 0.55;
+  }
+}
+
+/* ------------------------------------------------------------------ *
  *  per-frame life: flame flicker, sway, birds, water                   *
  * ------------------------------------------------------------------ */
 export function updateWorkshop(W, dt, t) {
   W.time = t;
+  updateFounder(W, dt, t);
 
   // lantern flicker
   if (W.lanternFlame) {

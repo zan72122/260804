@@ -312,10 +312,10 @@ export class AudioEngine {
     this._tone({ freq: 420 * p, to: 190 * p, dur: 0.3, gain: 0.14, type: 'square' });
   }
 
-  /** the safety door rolling shut */
-  doorSlide() {
-    this._burst({ freq: 500, q: 0.8, dur: 0.55, gain: 0.24, sweep: 0.4 });
-    setTimeout(() => this.clank(0.7), 520);
+  /** the safety door rolling on its rails -- pitch and level follow its speed */
+  doorSlide(speed = 0.5) {
+    const v = clamp(speed, 0.1, 1);
+    this._burst({ freq: 340 + v * 520, q: 0.9, dur: 0.22 + v * 0.3, gain: 0.10 + v * 0.20, sweep: 0.55 });
   }
 
   /** lever / crank tick */

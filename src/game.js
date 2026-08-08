@@ -215,6 +215,13 @@ export class Game {
     // the founder waits out of the way until there is grown-up work to do
     this.world.founder.position.set(-5.0, 0, 1.9);
     this.world.founder.rotation.y = 1.05;
+    if (this.world.rig) {
+      const r = this.world.rig;
+      r.walk = null; r.reach = 0; r.reachTarget = 0;
+      r.neck.rotation.set(0, 0, 0);
+      r.look.set(0, 1.5, 0);
+      for (const l of r.legs) { l.hip.rotation.set(0, 0, 0); l.knee.rotation.set(0, 0, 0); }
+    }
     audio.setLoop('furnace', 0); audio.setLoop('pour', 0);
     audio.setLoop('scrape', 0); audio.setLoop('brush', 0); audio.setLoop('chain', 0);
 

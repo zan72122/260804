@@ -118,8 +118,8 @@ export function buildTextures() {
 
   // grey-green core clay
   TEX.clayCore = makeTexture(256, 5, 3, (n, x, y, rng) => {
-    const g = 0.68 + n * 0.56 + (rng() - 0.5) * 0.10;
-    return [163 * g, 154 * g, 138 * g];
+    const g = 0.60 + n * 0.52 + (rng() - 0.5) * 0.12;
+    return [122 * g, 113 * g, 99 * g];
   }, { repeat: 9 });
 
   // red-brown false-bell clay
@@ -292,14 +292,14 @@ export function buildEnvMap(renderer) {
 export function clayCoreMaterial() {
   return new THREE.MeshStandardMaterial({
     map: TEX.clayCore, normalMap: TEX.clayCoreN, normalScale: new THREE.Vector2(0.75, 0.75),
-    color: 0xffffff, roughness: 0.99, metalness: 0.0, envMapIntensity: 0.30,
+    color: 0xffffff, roughness: 1.0, metalness: 0.0, envMapIntensity: 0.14,
   });
 }
 
 export function clayFalseMaterial() {
   return new THREE.MeshStandardMaterial({
     map: TEX.clayFalse, normalMap: TEX.clayFalseN, normalScale: new THREE.Vector2(0.65, 0.65),
-    color: 0xffffff, roughness: 0.96, metalness: 0.0, envMapIntensity: 0.30,
+    color: 0xffffff, roughness: 0.97, metalness: 0.0, envMapIntensity: 0.16,
   });
 }
 
