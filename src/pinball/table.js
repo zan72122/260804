@@ -73,10 +73,44 @@ export function layout() {
     // wall and pivot boss is narrower than the ball, and a ball that rolls
     // into it wedges there for good. Ending on the pivot leaves a continuous
     // surface — down the wall, over the boss, onto the bat.
+    //
+    // The lower half of each is the slingshot: same wall, but it kicks. That
+    // avoids the classic outlane gap, which on a table this small would be a
+    // coin-flip drain rather than a skill test.
     inlanes: [
-      { pts: [[-H, 0.34], [-0.30, 0.175], [-F.pivotU, F.pivotV]], tag: 'inlane' },
-      { pts: [[laneIn, 0.34], [0.30, 0.175], [F.pivotU, F.pivotV]], tag: 'inlane' },
+      { pts: [[-H, 0.36], [-0.34, 0.20]], tag: 'inlane' },
+      { pts: [[laneIn, 0.36], [0.34, 0.20]], tag: 'inlane' },
     ],
+    slings: [
+      { pts: [[-0.34, 0.20], [-F.pivotU, F.pivotV]], tag: 'sling' },
+      { pts: [[0.34, 0.20], [F.pivotU, F.pivotV]], tag: 'sling' },
+    ],
+
+    // Pots hanging over the fire: pop bumpers that also put heat into
+    // whatever hits them. They sit right where a launched ball arrives.
+    bumpers: [
+      { u: -0.30, v: 0.60, r: 0.056 },
+      { u: -0.09, v: 0.71, r: 0.056 },
+      { u: 0.12, v: 0.60, r: 0.056 },
+    ],
+
+    // Preserve jars standing in a row on the left. Knock all five down and
+    // the oven roars: every ball on the table gets hot at once.
+    targets: [
+      { u: -0.615, v: 0.36, r: 0.026 },
+      { u: -0.615, v: 0.44, r: 0.026 },
+      { u: -0.615, v: 0.52, r: 0.026 },
+      { u: -0.615, v: 0.60, r: 0.026 },
+      { u: -0.615, v: 0.68, r: 0.026 },
+    ],
+
+    // Sensors. The whisk spins as a ball passes — it sits out in the open
+    // field rather than up against the arc, where a ball would rattle in the
+    // pocket and ring it over and over. The stew pot swallows a ball and gives
+    // it back cooked; the chute at the top is where dishes leave the table.
+    spinner: { u: -0.42, v: 0.46, r: 0.05 },
+    pot: { u: 0.33, v: 0.72, r: 0.052 },
+    chute: { u: 0.0, v: 0.845, r: 0.055 },
   };
 }
 
@@ -145,12 +179,122 @@ export class Table {
     addWalls(L.rails, { restitution: 0.45, friction: 1.2 }, rail);
     addWalls(L.lane, { restitution: 0.3, friction: 2.5 }, rail);
     addWalls(L.inlanes, { restitution: 0.35, friction: 2.0 }, M.crateWood(1));
+    // Slingshots: the same funnel wall, but sprung. kickMin is the switch — a
+    // ball rolling along the rubber must not get a free shove every pass.
+    addWalls(L.slings, { restitution: 0.5, friction: 1.5, kick: 1.15, kickMin: 0.45 },
+      M.paintedWood(0xc4452f, 4));
 
     // One-way gate: the ball leaves the lane through it and can never fall back in.
     world.addSegment(L.gate.p0[0], L.gate.p0[1], L.gate.p1[0], L.gate.p1[1], {
       restitution: 0.2, friction: 3, tag: 'gate', oneWay: 1,
     });
     this._rail(L.gate.p0, L.gate.p1, brass, 0.03);
+
+    // ---- pop bumpers ----------------------------------------------------
+    this.bumpers = [];
+    for (const b of L.bumpers) {
+      const post = world.addPost(b.u, b.v, b.r, {
+        restitution: 0.45, kick: 1.5, kickMin: 0.35, tag: 'bumper',
+      });
+      const g = new THREE.Group();
+      g.position.set(b.u, 0, -b.v);
+      // A copper pot on a ring stand: the ball hits the belly and is thrown off.
+      G.mesh(G.torus(b.r, 0.008, 20, 6), M.iron(), { pos: [0, 0.004, 0], rot: [Math.PI / 2, 0, 0], parent: g });
+      G.mesh(G.lathe([
+        [0.001, 0.006], [b.r * 0.72, 0.008], [b.r * 0.95, 0.03], [b.r, 0.055],
+        [b.r * 1.02, 0.062], [b.r * 0.96, 0.062], [b.r * 0.94, 0.03], [b.r * 0.68, 0.012], [0.001, 0.012],
+      ], 22), M.brass(), { pos: [0, 0, 0], parent: g });
+      G.mesh(G.cyl(b.r * 0.9, b.r * 0.9, 0.006, 20), M.food(0xb8341f, { rough: 0.4, clearcoat: 0.5 }),
+        { pos: [0, 0.05, 0], parent: g, cast: false });
+      // Glow under the pot: the fire it sits on, and the hit flash. Cloned per
+      // bumper, since the flash writes opacity and the library copy is shared.
+      const glow = new THREE.Sprite(M.halo(0xff9a3c, 0.7).clone());
+      glow.scale.setScalar(b.r * 3);
+      glow.position.set(0, 0.03, 0);
+      g.add(glow);
+      this.group.add(g);
+      this.bumpers.push({ post, g, glow, flash: 0, baseY: 0 });
+    }
+
+    // ---- drop targets ---------------------------------------------------
+    this.targets = [];
+    L.targets.forEach((t, i) => {
+      const post = world.addPost(t.u, t.v, t.r, { restitution: 0.3, tag: 'target', index: i });
+      const g = new THREE.Group();
+      g.position.set(t.u, 0, -t.v);
+      const h = 0.075;
+      G.mesh(G.lathe([
+        [0.001, 0], [t.r * 0.9, 0], [t.r, 0.008], [t.r, h - 0.016], [t.r * 0.72, h - 0.004],
+        [t.r * 0.72, h], [t.r * 0.62, h], [t.r * 0.62, h - 0.006], [t.r * 0.9, h - 0.018],
+        [t.r * 0.9, 0.008], [0.001, 0.006],
+      ], 16), M.glass(0xdfe8dd), { parent: g });
+      G.mesh(G.cyl(t.r * 0.78, t.r * 0.78, 0.008, 14), M.brass(true), { pos: [0, h + 0.002, 0], parent: g });
+      G.mesh(G.cyl(t.r * 0.86, t.r * 0.86, h * 0.6, 14),
+        M.food([0xc4552f, 0x8a6b2f, 0x4f6b3a, 0x7a3f5c, 0xb2603c][i % 5], { rough: 0.6 }),
+        { pos: [0, h * 0.32, 0], parent: g });
+      this.group.add(g);
+      this.targets.push({ post, g, down: 0 });
+    });
+
+    // ---- spinner --------------------------------------------------------
+    world.addSensor(L.spinner.u, L.spinner.v, L.spinner.r, { tag: 'spinner' });
+    this.spinnerAt = L.spinner;
+    const wh = new THREE.Group();
+    wh.position.set(L.spinner.u, 0.03, -L.spinner.v);
+    G.mesh(G.cyl(0.006, 0.006, 0.05, 8), M.steel(0.3), { pos: [0, 0.03, 0], parent: wh });
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      const wire = G.mesh(G.torus(0.02, 0.0018, 12, 4, Math.PI), M.steel(0.35), {
+        pos: [0, 0.005, 0], rot: [0, a, 0], parent: wh,
+      });
+      wire.rotation.z = Math.PI / 2;
+    }
+    this.group.add(wh);
+    this.spinnerMesh = wh;
+    this.spinnerSpin = 0;
+
+    // ---- stew pot (swallows a ball, gives it back cooked) ---------------
+    world.addSensor(L.pot.u, L.pot.v, L.pot.r, { tag: 'pot' });
+    const pot = new THREE.Group();
+    pot.position.set(L.pot.u, 0, -L.pot.v);
+    G.mesh(G.lathe([
+      [0.001, 0], [L.pot.r * 0.9, 0], [L.pot.r, 0.012], [L.pot.r * 1.04, 0.05],
+      [L.pot.r * 1.08, 0.056], [L.pot.r * 0.98, 0.056], [L.pot.r * 0.94, 0.012], [0.001, 0.01],
+    ], 22), M.iron(), { parent: pot });
+    G.mesh(G.cyl(L.pot.r * 0.9, L.pot.r * 0.9, 0.004, 20),
+      M.food(0x6b3a1c, { rough: 0.35, clearcoat: 0.5 }), { pos: [0, 0.02, 0], parent: pot, cast: false });
+    const potGlow = new THREE.Sprite(M.halo(0xff8a2c, 0.5));
+    potGlow.scale.setScalar(0.16);
+    potGlow.position.set(0, 0.05, 0);
+    pot.add(potGlow);
+    this.group.add(pot);
+    this.potMesh = pot;
+
+    // ---- delivery chute -------------------------------------------------
+    world.addSensor(L.chute.u, L.chute.v, L.chute.r, { tag: 'chute' });
+    const chute = new THREE.Group();
+    chute.position.set(L.chute.u, 0, -L.chute.v);
+    for (const sx of [-1, 1]) {
+      const w = G.mesh(G.box(0.02, 0.05, 0.13, 0.004), M.crateWood(2), {
+        pos: [sx * (L.chute.r + 0.012), 0.025, 0.02], parent: chute,
+      });
+      w.rotation.y = sx * 0.16;
+    }
+    G.mesh(G.box(0.14, 0.006, 0.1, 0.002), M.crateWood(1), { pos: [0, 0.002, 0.01], parent: chute });
+    const sign = TEX.label({
+      w: 256, h: 96, bg: '#2b3230',
+      lines: [{ text: '納品口', size: 46, color: '#f0e2bd', y: 48 }],
+      border: '#8a6a3a', grain: 0.1,
+    });
+    G.mesh(G.plane(0.13, 0.048), new THREE.MeshStandardMaterial({ map: sign, roughness: 0.9 }),
+      { pos: [0, 0.055, -0.03], rot: [-0.5, 0, 0], parent: chute, cast: false });
+    const chuteGlow = new THREE.Sprite(M.halo(0xffd9a0, 0.35));
+    chuteGlow.scale.setScalar(0.2);
+    chuteGlow.position.set(0, 0.04, 0);
+    chute.add(chuteGlow);
+    this.group.add(chute);
+    this.chuteMesh = chute;
+    this.chuteGlow = chuteGlow;
 
     // ---- flippers -------------------------------------------------------
     const F = TABLE.flipper;
@@ -257,6 +401,48 @@ export class Table {
     for (const { f, g } of this.flipperMeshes) g.rotation.y = f.angle;
     if (this.plungerMesh) this.plungerMesh.position.z = -plungerV;
   }
+
+  /** Animate the furniture: bumper flashes, sinking targets, the whisk. */
+  update(dt) {
+    for (const b of this.bumpers || []) {
+      if (b.flash > 0) {
+        b.flash = Math.max(0, b.flash - dt * 4);
+        const k = b.flash;
+        b.g.scale.setScalar(1 + k * 0.12);
+        b.glow.scale.setScalar(b.post.r * 3 * (1 + k * 1.4));
+        b.glow.material.opacity = 0.5 + k * 0.5;
+      }
+    }
+    for (const t of this.targets || []) {
+      // Knocked-down jars sink through the playfield and come back up when the
+      // bank resets — the same motion a real drop target makes.
+      const want = t.post.enabled ? 0 : -0.09;
+      t.g.position.y += (want - t.g.position.y) * Math.min(1, dt * 12);
+    }
+    if (this.spinnerSpin > 0.001) {
+      this.spinnerMesh.rotation.y += this.spinnerSpin * dt;
+      this.spinnerSpin *= Math.exp(-2.2 * dt);
+    }
+    if (this.chuteGlow) {
+      this.chuteGlow.material.opacity = 0.5 + Math.sin(performance.now() / 400) * 0.15;
+    }
+  }
+
+  hitBumper(post) {
+    const b = (this.bumpers || []).find((x) => x.post === post);
+    if (b) b.flash = 1;
+  }
+
+  dropTarget(post) {
+    post.enabled = false;
+    return (this.targets || []).every((t) => !t.post.enabled);
+  }
+
+  resetTargets() {
+    for (const t of this.targets || []) t.post.enabled = true;
+  }
+
+  spinWhisk(speed) { this.spinnerSpin = Math.max(this.spinnerSpin, speed); }
 
   setVisible(on) { this.group.visible = on; }
 }

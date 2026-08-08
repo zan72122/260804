@@ -208,6 +208,20 @@ html, body {
 }
 .pinbar-rules b { color: var(--gold); font-weight: 700; }
 .pinbar-made { display: flex; gap: 6px; min-height: 20px; }
+.pinbar-score {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: var(--ink-dim);
+}
+.pinbar-score b {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--gold);
+  text-shadow: 0 0 12px rgba(243,196,106,.35);
+}
 .made-chip {
   font-size: 11px;
   font-weight: 700;

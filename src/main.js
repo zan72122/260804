@@ -169,6 +169,10 @@ class Game {
     this.input.setPinball(this.pinball);
     this.hud.setupPinball(LOADABLE, (id) => this.loadPinballBall(id));
     this.pinball.onMake = ({ def }) => this.hud.addMade(def);
+    this.pinball.onDeliver = ({ def, quality, score }) => {
+      this.hud.addMade(def);
+      this.hud.toast(`${def.name} 納品！ ${quality > 1.5 ? '熱々 ' : ''}+${score}`, 'gold');
+    };
 
     this.orders.onChange = () => {
       this.hud.setOrders(this.orders.list());
@@ -436,6 +440,7 @@ class Game {
     if (this.pinball.active) {
       this.pinball.update(dt, this.elapsed);
       this.hud.setLoadersBusy(!!this.pinball.waitingBall || this.pinball.balls.length >= 6);
+      this.hud.setPinScore(this.pinball.score, this.pinball.delivered.length);
     } else {
       this.board.update(dt, this.elapsed);
     }

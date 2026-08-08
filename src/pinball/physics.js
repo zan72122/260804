@@ -40,6 +40,7 @@ class Segment {
     this.tag = o.tag ?? 'wall';
     this.oneWay = o.oneWay ?? 0;   // 0 none, ±1: only blocks from one side
     this.kick = o.kick ?? 0;       // extra impulse along the normal (slingshots)
+    this.kickMin = o.kickMin ?? 0; // …but only once the ball presses the switch
     const dx = x1 - x0, dy = y1 - y0;
     this.len = Math.hypot(dx, dy) || 1e-6;
     this.dx = dx / this.len; this.dy = dy / this.len;
@@ -60,8 +61,24 @@ class Post {
     this.x = x; this.y = y; this.r = r;
     this.restitution = o.restitution ?? 0.5;
     this.kick = o.kick ?? 0;       // pop bumpers push the ball away
+    this.kickMin = o.kickMin ?? 0; // …but only once the ball presses the switch
     this.tag = o.tag ?? 'post';
+    this.index = o.index ?? 0;
+    this.enabled = true;           // drop targets switch this off when knocked down
     this.cooldown = 0;
+  }
+}
+
+/**
+ * A region that notices balls without touching them: the delivery chute, the
+ * stew pot's mouth, the spinner lane. Sensors report every frame a ball is
+ * inside, and it is the caller's job to debounce.
+ */
+class Sensor {
+  constructor(x, y, r, o = {}) {
+    this.x = x; this.y = y; this.r = r;
+    this.tag = o.tag ?? 'sensor';
+    this.enabled = true;
   }
 }
 
@@ -112,6 +129,7 @@ export class PinballWorld {
     this.drainV = o.drainV ?? -0.02;
     this.segments = [];
     this.posts = [];
+    this.sensors = [];
     this.flippers = [];
     this.balls = [];
     this.events = [];
@@ -132,6 +150,7 @@ export class PinballWorld {
   }
 
   addPost(x, y, r, o) { const p = new Post(x, y, r, o); this.posts.push(p); return p; }
+  addSensor(x, y, r, o) { const s = new Sensor(x, y, r, o); this.sensors.push(s); return s; }
   addFlipper(o) { const f = new Flipper(o); this.flippers.push(f); return f; }
   addBall(b) { this.balls.push(b); return b; }
   removeBall(b) {
@@ -178,6 +197,7 @@ export class PinballWorld {
       this._collideSegments(b);
       this._collidePosts(b);
       this._collideFlippers(b, h);
+      this._checkSensors(b);
       if (b.v < this.drainV) {
         b.alive = false;
         this.events.push({ type: 'drain', ball: b });
@@ -213,6 +233,21 @@ export class PinballWorld {
     return -vn;
   }
 
+  /**
+   * How much kick a slingshot or bumper actually delivers to this contact.
+   *
+   * A real slingshot fires off a switch: the ball has to press the rubber in
+   * hard enough to close it. Kicking on *any* touch instead makes the table a
+   * perpetual-motion machine — a ball merely rolling along the sling wall gets
+   * a free 1.15 m/s every pass, which is more than the bottom of the table can
+   * bleed off, so it orbits forever and never drains.
+   */
+  _armed(b, nx, ny, o) {
+    if (!o.kick) return 0;
+    const closing = -(b.vu * nx + b.vv * ny);
+    return closing >= o.kickMin ? o.kick : 0;
+  }
+
   _collideSegments(b) {
     const p = this._p;
     for (const s of this.segments) {
@@ -228,20 +263,22 @@ export class PinballWorld {
         const side = nx * s.nx + ny * s.ny;
         if (side * s.oneWay < 0) continue;
       }
-      const impact = this._resolve(b, nx, ny, b.r - dist, s.restitution, s.friction, s.kick);
+      const impact = this._resolve(b, nx, ny, b.r - dist, s.restitution, s.friction,
+        this._armed(b, nx, ny, s));
       if (impact > 0.12) this.events.push({ type: 'hit', tag: s.tag, ball: b, impact, u: p.x, v: p.y, target: s });
     }
   }
 
   _collidePosts(b) {
     for (const o of this.posts) {
+      if (!o.enabled) continue;
       const dx = b.u - o.x, dy = b.v - o.y;
       const rr = b.r + o.r;
       const dist = Math.hypot(dx, dy);
       if (dist >= rr) continue;
       const nx = dist < 1e-6 ? 0 : dx / dist;
       const ny = dist < 1e-6 ? 1 : dy / dist;
-      const kick = o.cooldown > 0 ? 0 : o.kick;
+      const kick = o.cooldown > 0 ? 0 : this._armed(b, nx, ny, o);
       const impact = this._resolve(b, nx, ny, rr - dist, o.restitution, 1.5, kick);
       if (impact > 0.1 || kick > 0) {
         if (o.kick > 0) o.cooldown = 0.08;
@@ -275,6 +312,16 @@ export class PinballWorld {
       if (impact > 0.05 || Math.abs(f.omega) > 1) {
         this.events.push({ type: 'flipper', ball: b, flipper: f, impact, u: p.x, v: p.y });
       }
+    }
+  }
+
+  _checkSensors(b) {
+    for (const s of this.sensors) {
+      if (!s.enabled) continue;
+      // Centre inside the region, not merely touching: a graze past the mouth
+      // of the chute should not count as going in.
+      if (Math.hypot(b.u - s.x, b.v - s.y) > s.r) continue;
+      this.events.push({ type: 'sensor', tag: s.tag, ball: b, u: s.x, v: s.y, target: s });
     }
   }
 
@@ -329,6 +376,7 @@ export class PinballWorld {
   clearStatics() {
     this.segments.length = 0;
     this.posts.length = 0;
+    this.sensors.length = 0;
     this.flippers.length = 0;
   }
 }

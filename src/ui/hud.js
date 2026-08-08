@@ -22,6 +22,7 @@ export class Hud {
       btnTravel: $('btn-travel'), btnCam: $('btn-cam'), btnQuality: $('btn-quality'),
       btnPinball: $('btn-pinball'),
       pinbar: $('pinbar'), pinLoad: $('pinbar-load'), made: $('pinbar-made'),
+      pinScore: $('pin-score'), pinDeliv: $('pin-deliv'),
       btnSound: $('btn-sound'), btnReset: $('btn-reset'), travelClose: $('travel-close'),
     };
     this.orderNodes = new Map();
@@ -109,6 +110,12 @@ export class Hud {
   showPinball(on) {
     this.el.pinbar.classList.toggle('hidden', !on);
     if (on) this.el.made.innerHTML = '';
+  }
+
+  /** Running total for the current session at the table. */
+  setPinScore(score, delivered) {
+    this.el.pinScore.textContent = fmt(score);
+    this.el.pinDeliv.textContent = delivered ? `納品 ${delivered}` : '';
   }
 
   /** Grey the loaders out while the lane is occupied. */
