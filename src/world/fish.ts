@@ -23,8 +23,22 @@ interface Spec {
  */
 const SPECS: Record<FishKind, Spec> = {
   ayu: { body: 0x4d6247, belly: 0xd9dfe0, mark: 0xe8c24a, fin: 0x8f9a7c, len: 0.23, girth: 0.043 },
-  oikawa: { body: 0x38607a, belly: 0xdfe4e6, mark: 0xc9607a, fin: 0x7a8fa0, len: 0.18, girth: 0.04 },
-  amago: { body: 0x5a5240, belly: 0xdcd6c8, mark: 0xd0512e, fin: 0x8d8266, len: 0.21, girth: 0.045 },
+  oikawa: {
+    body: 0x38607a,
+    belly: 0xdfe4e6,
+    mark: 0xc9607a,
+    fin: 0x7a8fa0,
+    len: 0.18,
+    girth: 0.04,
+  },
+  amago: {
+    body: 0x5a5240,
+    belly: 0xdcd6c8,
+    mark: 0xd0512e,
+    fin: 0x8d8266,
+    len: 0.21,
+    girth: 0.045,
+  },
   zako: { body: 0x8b93a0, belly: 0xe6ecf0, mark: 0xb9c4cf, fin: 0x9aa4b0, len: 0.15, girth: 0.033 },
 };
 

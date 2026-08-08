@@ -228,7 +228,7 @@ ${WAVE_GLSL}
           // ---- moonlight ----------------------------------------------
           vec3 Hm = normalize(uMoonDir + V);
           float mspec = pow(max(dot(N, Hm), 0.0), 520.0);
-          col += uMoonCol * mspec * F * 1.1 * (0.2 + 0.8 * uNight);
+          col += uMoonCol * mspec * F * 0.42 * (0.2 + 0.8 * uNight);
 
           // ---- the boat sits in its own dark ---------------------------
           float bd = length((vWorld.xz - uBoat) / vec2(1.6, 3.6));
@@ -252,7 +252,6 @@ ${WAVE_GLSL}
     this.mesh.renderOrder = 6;
     this.mesh.frustumCulled = false;
     this.mesh.name = 'river';
-
   }
 
   /** Spawn an expanding ring. `strength` ~0.3 for a rope dipping, ~1.3 for a dive. */
@@ -276,8 +275,15 @@ ${WAVE_GLSL}
     this.mat.uniforms.uFirePos.value.copy(pos);
   }
 
+  private duskHaze = new Color(0x4a3038);
+  private nightHaze = new Color(0x070d1d);
+
   setNight(n: number): void {
-    this.mat.uniforms.uNight.value = clamp01(n);
+    const v = clamp01(n);
+    this.mat.uniforms.uNight.value = v;
+    // Water and sky have to meet in the same haze, or the horizon becomes a
+    // cut line between an orange sky and a blue river.
+    (this.mat.uniforms.uFogCol.value as Color).copy(this.duskHaze).lerp(this.nightHaze, v);
   }
 
   setBoat(x: number, z: number): void {

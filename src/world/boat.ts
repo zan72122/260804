@@ -1,13 +1,12 @@
 import {
   BufferGeometry,
-  CylinderGeometry,
+  DoubleSide,
   Float32BufferAttribute,
   Group,
   Mesh,
   MeshPhysicalMaterial,
   MeshStandardMaterial,
   Object3D,
-  PointLight,
   TorusGeometry,
   Vector3,
 } from 'three';
@@ -50,9 +49,6 @@ export class Boat {
   readonly basket = new Group();
   readonly basketMouth = new Vector3();
 
-  private lantern: PointLight;
-  private lanternMesh: Mesh;
-
   constructor() {
     const lacquer = new MeshPhysicalMaterial({
       color: PAL.hullLacquer,
@@ -70,8 +66,10 @@ export class Boat {
       color: PAL.hullWoodLight,
       roughness: 0.62,
       metalness: 0.03,
+      side: DoubleSide,
     });
     const iron = new MeshStandardMaterial({ color: PAL.iron, roughness: 0.52, metalness: 0.72 });
+    // Lathed shells are open at the back; show both faces.
     const straw = new MeshStandardMaterial({ color: PAL.basketStraw, roughness: 0.92 });
 
     // ---- shell ------------------------------------------------------------
@@ -80,18 +78,12 @@ export class Boat {
     outer.receiveShadow = true;
     this.group.add(outer);
 
-    const inner = new Mesh(
-      hullSkin({ ...HULL, inset: 0.9, topTrim: 0.94, flip: true }),
-      innerWood,
-    );
+    const inner = new Mesh(hullSkin({ ...HULL, inset: 0.9, topTrim: 0.94, flip: true }), innerWood);
     inner.receiveShadow = true;
     this.group.add(inner);
 
     // ---- rail (the bevel that carries the firelight) ----------------------
-    const railPts = [
-      ...sheerLine(HULL, -1, 30, 0.95),
-      ...sheerLine(HULL, 1, 30, 0.95).reverse(),
-    ];
+    const railPts = [...sheerLine(HULL, -1, 30, 0.95), ...sheerLine(HULL, 1, 30, 0.95).reverse()];
     const rail = new Mesh(tubeThrough(railPts, 0.062, 7, true), railWood);
     rail.castShadow = true;
     this.group.add(rail);
@@ -99,7 +91,9 @@ export class Boat {
     // A second, thinner beading just below the rail: layered geometry.
     const beadPts = [
       ...sheerLine(HULL, -1, 26, 0.99).map((p) => p.clone().setY(p.y - 0.13)),
-      ...sheerLine(HULL, 1, 26, 0.99).map((p) => p.clone().setY(p.y - 0.13)).reverse(),
+      ...sheerLine(HULL, 1, 26, 0.99)
+        .map((p) => p.clone().setY(p.y - 0.13))
+        .reverse(),
     ];
     this.group.add(new Mesh(tubeThrough(beadPts, 0.026, 6, true), railWood));
 
@@ -110,7 +104,7 @@ export class Boat {
     for (const z of [-1.35, 0.55, 2.35]) {
       const t = 0.5 - z / HULL.length;
       const sec = hullSection(t, HULL);
-      const plank = new Mesh(roundedBox(sec.halfW * 1.92, 0.09, 0.36, 0.035), railWood);
+      const plank = new Mesh(roundedBox(sec.halfW * 1.92, 0.09, 0.36, 0.035), innerWood);
       plank.position.set(0, sec.sheer - 0.2, z);
       plank.castShadow = true;
       plank.receiveShadow = true;
@@ -143,7 +137,7 @@ export class Boat {
     this.group.add(mergeAll(ribs, railWood));
 
     // ---- perches for the birds -------------------------------------------
-    const perchZ = [-2.45, -1.75, -1.05, -0.35, 0.35, 1.05];
+    const perchZ = [-3.0, -2.62, -2.24, -1.86, -1.48, -1.1];
     for (let i = 0; i < perchZ.length; i++) {
       const z = perchZ[i];
       const t = 0.5 - z / HULL.length;
@@ -158,9 +152,6 @@ export class Boat {
     // ---- deck clutter, all of it period-plausible --------------------------
     this.buildRopeCoil();
     this.buildBucket(railWood, iron);
-    const { light, mesh } = this.buildLantern();
-    this.lantern = light;
-    this.lanternMesh = mesh;
 
     this.group.name = 'ubune';
   }
@@ -214,9 +205,9 @@ export class Boat {
         ],
         24,
       ),
-      straw.clone(),
+      straw,
     );
-    (body.material as MeshStandardMaterial).side = 2;
+    straw.side = DoubleSide;
     body.receiveShadow = true;
     body.castShadow = true;
     g.add(body);
@@ -256,7 +247,7 @@ export class Boat {
     rim.position.y = H + 0.01;
     g.add(rim);
 
-    const z = 1.5;
+    const z = 0.85;
     const t = 0.5 - z / HULL.length;
     const sec = hullSection(t, HULL);
     g.position.set(0, -sec.draft * 0.34 + 0.03, z);
@@ -277,9 +268,9 @@ export class Boat {
       pts.push(new Vector3(Math.cos(a) * r, 0.02 + t * 0.07, Math.sin(a) * r * 0.9));
     }
     const coil = new Mesh(tubeThrough(pts, 0.026, 5), ropeMat);
-    const z = 2.55;
+    const z = -0.25;
     const sec = hullSection(0.5 - z / HULL.length, HULL);
-    coil.position.set(-0.22, -sec.draft * 0.34 + 0.03, z);
+    coil.position.set(-0.26, -sec.draft * 0.34 + 0.03, z);
     coil.castShadow = true;
     this.group.add(coil);
   }
@@ -299,7 +290,6 @@ export class Boat {
       ),
       wood,
     );
-    (body.material as MeshStandardMaterial).side = 2;
     g.add(body);
     const bands: Mesh[] = [];
     for (const y of [0.06, 0.26]) {
@@ -309,69 +299,11 @@ export class Boat {
       bands.push(band);
     }
     g.add(mergeAll(bands, iron));
-    const z = 2.35;
+    const z = 0.15;
     const sec = hullSection(0.5 - z / HULL.length, HULL);
-    g.position.set(0.3, -sec.draft * 0.34 + 0.03, z);
+    g.position.set(0.32, -sec.draft * 0.34 + 0.03, z);
     g.castShadow = true;
     this.group.add(g);
-  }
-
-  /** A small paper lantern: warm secondary light so the stern isn't dead black. */
-  private buildLantern(): { light: PointLight; mesh: Mesh } {
-    const g = new Group();
-    const mat = new MeshStandardMaterial({
-      color: 0xf0d09a,
-      emissive: 0xff9a44,
-      emissiveIntensity: 0.55,
-      roughness: 0.85,
-    });
-    const body = new Mesh(
-      lathe(
-        [
-          [0.001, 0],
-          [0.07, 0.005],
-          [0.115, 0.07],
-          [0.125, 0.16],
-          [0.1, 0.25],
-          [0.06, 0.29],
-          [0.001, 0.295],
-        ],
-        16,
-      ),
-      mat,
-    );
-    g.add(body);
-    const ribMat = new MeshStandardMaterial({ color: 0x3a2a18, roughness: 0.9 });
-    const frame: Mesh[] = [];
-    for (let i = 0; i < 4; i++) {
-      const y = 0.06 + i * 0.06;
-      const r = 0.098 + Math.sin((y / 0.3) * Math.PI) * 0.028;
-      const hoop = new Mesh(new TorusGeometry(r, 0.006, 4, 14), ribMat);
-      hoop.rotation.x = Math.PI / 2;
-      hoop.position.y = y;
-      frame.push(hoop);
-    }
-    const hook = new Mesh(new CylinderGeometry(0.012, 0.012, 0.42, 5), ribMat);
-    hook.position.y = 0.5;
-    frame.push(hook);
-    g.add(mergeAll(frame, ribMat));
-
-    const z = 3.3;
-    const sec = hullSection(0.5 - z / HULL.length, HULL);
-    g.position.set(-0.16, sec.sheer + 0.02, z);
-    g.scale.setScalar(0.72);
-    this.group.add(g);
-
-    const light = new PointLight(0xffa04a, 0.75, 3.6, 2);
-    light.position.set(-0.16, sec.sheer + 0.14, z);
-    this.group.add(light);
-    return { light, mesh: body };
-  }
-
-  update(t: number): void {
-    const flick = 0.86 + 0.14 * Math.sin(t * 3.1) * Math.sin(t * 1.37 + 1.2);
-    this.lantern.intensity = 0.7 * flick;
-    (this.lanternMesh.material as MeshStandardMaterial).emissiveIntensity = 0.5 * flick;
   }
 
   /** World-space helper for anchors that live in boat-local space. */
@@ -384,7 +316,11 @@ export class Boat {
     const layer = Math.floor(index / 5);
     const a = randRange(rng, 0, TAU);
     const r = randRange(rng, 0.03, 0.3) * (1 - layer * 0.12);
-    o.position.set(Math.cos(a) * r, 0.07 + layer * 0.055 + randRange(rng, 0, 0.02), Math.sin(a) * r);
+    o.position.set(
+      Math.cos(a) * r,
+      0.07 + layer * 0.055 + randRange(rng, 0, 0.02),
+      Math.sin(a) * r,
+    );
     o.rotation.set(randRange(rng, -0.4, 0.4), randRange(rng, 0, TAU), randRange(rng, -0.5, 0.5));
     this.basket.add(o);
   }

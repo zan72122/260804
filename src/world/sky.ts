@@ -55,14 +55,24 @@ export class Sky {
           float y = clamp(vDir.y * 0.5 + 0.5, 0.0, 1.0);
           float band = pow(1.0 - abs(vDir.y), 3.0);
 
-          vec3 dusk = mix(uLowDusk, uTopDusk, smoothstep(0.46, 0.86, y));
+          vec3 dusk = mix(uLowDusk, uTopDusk, smoothstep(0.5, 0.8, y));
           // Sunset burning out low behind the far ridge, downstream-ish.
           float sun = pow(max(dot(normalize(vDir * vec3(1.0, 0.35, 1.0)),
                                   normalize(vec3(-0.35, 0.06, -0.94))), 0.0), 5.0);
           dusk += uGlowDusk * sun * band * 1.25;
 
+          // Long flat cloud bars, the kind that stripe a river valley at dusk.
+          float a = atan(vDir.z, vDir.x);
+          float cl = sin(vDir.y * 26.0 + sin(a * 2.1) * 1.6) * 0.5 + 0.5;
+          cl *= sin(vDir.y * 11.0 + sin(a * 1.3 + 2.0) * 2.2) * 0.5 + 0.5;
+          cl *= smoothstep(0.5, 0.6, y) * smoothstep(0.99, 0.74, y);
+          dusk = mix(dusk, dusk * vec3(0.48, 0.42, 0.55) + uGlowDusk * 0.10, cl * 0.9);
+
           vec3 night = mix(uLowNight, uTopNight, smoothstep(0.44, 0.95, y));
           night += vec3(0.02, 0.03, 0.062) * band * 0.5;
+          // The valley keeps a thread of warmth on the horizon all evening.
+          night += vec3(0.030, 0.017, 0.010) * pow(band, 1.6);
+          night = mix(night, night * vec3(0.78, 0.8, 0.92), cl * 0.35 * smoothstep(0.5, 0.8, y));
 
           vec3 col = mix(dusk, night, uNight);
           gl_FragColor = vec4(col, 1.0);

@@ -38,10 +38,10 @@ const NECK_LEN = 8;
  */
 const HEAD_MAT = new MeshPhysicalMaterial({
   vertexColors: true,
-  roughness: 0.55,
-  metalness: 0.1,
-  clearcoat: 0.45,
-  clearcoatRoughness: 0.3,
+  roughness: 0.82,
+  metalness: 0.02,
+  clearcoat: 0.1,
+  clearcoatRoughness: 0.55,
 });
 
 function pose(p1: number[], p2: number[], p3: number[]): NeckPose {
@@ -135,12 +135,12 @@ export class Cormorant {
 
     this.feather = new MeshPhysicalMaterial({
       color: PAL.featherBase,
-      roughness: 0.62,
-      metalness: 0.18,
-      clearcoat: 0.5,
-      clearcoatRoughness: 0.3,
-      iridescence: 0.24,
-      iridescenceIOR: 1.34,
+      roughness: 0.88,
+      metalness: 0.02,
+      clearcoat: 0.1,
+      clearcoatRoughness: 0.6,
+      iridescence: 0.12,
+      iridescenceIOR: 1.32,
       iridescenceThicknessRange: [140, 460],
     });
     const beakMat = new MeshStandardMaterial({ color: PAL.beak, roughness: 0.42, metalness: 0.12 });
@@ -330,7 +330,10 @@ export class Cormorant {
   haul(amount: number): boolean {
     if (this.state !== 'under' && this.state !== 'rising') return false;
     this.haulProgress = clamp01(this.haulProgress + amount);
-    if (this.state === 'under' && this.haulProgress > 0.34) {
+    // Taking up slack is free, but the bird does not start coming up until it
+    // actually has something — otherwise an eager player lands an empty bird.
+    if (!this.waitingToHaul) this.haulProgress = Math.min(this.haulProgress, 0.33);
+    if (this.state === 'under' && this.waitingToHaul && this.haulProgress > 0.34) {
       this.state = 'rising';
       this.from.copy(this.pos);
     }
@@ -615,14 +618,16 @@ export class Cormorant {
     // --- wet sheen ---------------------------------------------------------
     this.wet = Math.max(0, this.wet - dt * 0.16);
     const wetness = Math.max(this.submerged ? 1 : 0, this.wet);
-    this.feather.clearcoat = 0.38 + wetness * 0.5;
-    this.feather.clearcoatRoughness = 0.34 - wetness * 0.22;
-    this.feather.roughness = 0.66 - wetness * 0.26;
+    // Dry, a cormorant is matte soot; the moment it comes out of the river it
+    // is lacquer. That contrast is most of what sells the dive.
+    this.feather.clearcoat = 0.08 + wetness * 0.62;
+    this.feather.clearcoatRoughness = 0.6 - wetness * 0.42;
+    this.feather.roughness = 0.9 - wetness * 0.42;
     // A diving cormorant carries a skin of trapped air; under the surface that
     // reads as a faint silver shape rather than as nothing at all, which is
     // exactly what the player needs to be able to see.
     this.under = damp(this.under, this.pos.y < -0.08 ? 1 : 0, 4, dt);
-    this.feather.emissive.setRGB(0.10 * this.under, 0.16 * this.under, 0.22 * this.under);
+    this.feather.emissive.setRGB(0.1 * this.under, 0.16 * this.under, 0.22 * this.under);
     this.feather.emissiveIntensity = 1;
   }
 }

@@ -7,9 +7,9 @@ import { Color } from 'three';
 export const PAL = {
   nightSkyTop: new Color('#02030a'),
   nightSkyLow: new Color('#080e20'),
-  duskSkyTop: new Color('#1b2350'),
-  duskSkyLow: new Color('#8a5a52'),
-  duskSkyGlow: new Color('#e08a4a'),
+  duskSkyTop: new Color('#171c48'),
+  duskSkyLow: new Color('#b2603e'),
+  duskSkyGlow: new Color('#f0994a'),
 
   waterDeep: new Color('#02040d'),
   waterShallow: new Color('#081227'),
@@ -24,18 +24,18 @@ export const PAL = {
   mist: new Color('#243a5c'),
 
   hullLacquer: new Color('#14161c'),
-  hullWood: new Color('#1e150d'),
-  hullWoodLight: new Color('#3d2a1a'),
+  hullWood: new Color('#1b160f'),
+  hullWoodLight: new Color('#3a2d20'),
   bamboo: new Color('#8a7b48'),
   basketStraw: new Color('#7d5c30'),
   rope: new Color('#8a7046'),
   ropeWet: new Color('#4b3a22'),
   iron: new Color('#2b2a2c'),
 
-  featherBase: new Color('#0d0f14'),
+  featherBase: new Color('#121319'),
   featherSheen: new Color('#1f3b3a'),
-  featherThroat: new Color('#c9b795'),
-  beak: new Color('#c8a468'),
+  featherThroat: new Color('#9a8c70'),
+  beak: new Color('#a58656'),
   eye: new Color('#ffb43a'),
 
   robe: new Color('#171c2c'),

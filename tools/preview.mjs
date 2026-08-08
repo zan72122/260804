@@ -83,7 +83,12 @@ const WAITS = {
 
 async function run(vp, beat) {
   const browser = await chromium.launch({
-    args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--disable-dev-shm-usage'],
+    args: [
+      '--use-gl=angle',
+      '--use-angle=swiftshader',
+      '--enable-unsafe-swiftshader',
+      '--disable-dev-shm-usage',
+    ],
   });
   const ctx = await browser.newContext({
     viewport: { width: vp.width, height: vp.height },
@@ -110,7 +115,10 @@ async function run(vp, beat) {
     await page.evaluate((names) => {
       const g = window.__ukai.game;
       for (const n of names.split('+')) {
-        const o = n === 'banks' ? g.env.group.children.filter((c) => c.type === 'Group') : [g[n]?.group ?? g[n]];
+        const o =
+          n === 'banks'
+            ? g.env.group.children.filter((c) => c.type === 'Group')
+            : [g[n]?.group ?? g[n]];
         for (const x of o) if (x) x.visible = false;
       }
     }, hide);
@@ -149,5 +157,7 @@ for (const key of wanted) {
   const vp = VPS[key.trim()];
   if (!vp) continue;
   const errs = await run(vp, BEAT);
-  console.log(`${BEAT}/${vp.name}${errs.length ? ' ERRORS: ' + errs.slice(0, 4).join(' | ') : ' ok'}`);
+  console.log(
+    `${BEAT}/${vp.name}${errs.length ? ' ERRORS: ' + errs.slice(0, 4).join(' | ') : ' ok'}`,
+  );
 }

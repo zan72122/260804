@@ -32,10 +32,10 @@ const LAYOUTS: Record<Orientation, CamLayout> = {
     spread: 1.0,
   },
   landscape: {
-    fov: 50,
-    pos: new Vector3(3.9, 2.5, 3.9),
-    look: new Vector3(-0.7, 0.25, -5.8),
-    spread: 1.35,
+    fov: 42,
+    pos: new Vector3(3.5, 2.15, 2.5),
+    look: new Vector3(-0.9, 0.45, -5.4),
+    spread: 1.28,
   },
 };
 
@@ -126,10 +126,14 @@ export class Stage {
       this.camera.fov = LAYOUTS.portrait.fov + stubby * 9;
       this.basePos.multiplyScalar(1 + stubby * 0.06);
     } else {
-      const wide = Math.max(0, aspect - 1.9) * 0.7;
-      this.camera.fov = LAYOUTS.landscape.fov - wide * 3.0;
-      this.basePos.z += Math.max(0, 1.55 - aspect) * 2.6; // iPad landscape (4:3)
-      this.spread = LAYOUTS.landscape.spread - Math.max(0, 1.55 - aspect) * 0.16;
+      // Very wide phones already show plenty across; squat 4:3 tablets need a
+      // step back and a tighter fan so nothing runs off the sides.
+      const wide = Math.max(0, aspect - 1.9);
+      this.camera.fov = LAYOUTS.landscape.fov - wide * 2.2;
+      const squat = Math.max(0, 1.55 - aspect);
+      this.basePos.z += squat * 2.2;
+      this.basePos.y += squat * 0.5;
+      this.spread = LAYOUTS.landscape.spread - squat * 0.5;
     }
 
     this.camera.aspect = aspect;
@@ -176,7 +180,15 @@ export class Stage {
   }
 
   /** Framing override used while art-directing; never called in play. */
-  debugCamera(px: number, py: number, pz: number, lx: number, ly: number, lz: number, fov: number): void {
+  debugCamera(
+    px: number,
+    py: number,
+    pz: number,
+    lx: number,
+    ly: number,
+    lz: number,
+    fov: number,
+  ): void {
     this.basePos.set(px, py, pz);
     this.baseLook.set(lx, ly, lz);
     this.camera.fov = fov;

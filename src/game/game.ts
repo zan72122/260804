@@ -1,18 +1,31 @@
 import {
+  AdditiveBlending,
+  Color,
   DirectionalLight,
   Group,
   HemisphereLight,
   Mesh,
   Object3D,
   SpotLight,
+  Sprite,
+  SpriteMaterial,
   Vector3,
 } from 'three';
 import { Stage } from '../core/stage';
 import { Gestures, Stroke } from '../core/input';
-import { clamp, clamp01, damp, easeInOutSine, easeOutCubic, lerp, makeRng, randRange } from '../core/util';
+import {
+  clamp,
+  clamp01,
+  damp,
+  easeInOutSine,
+  easeOutCubic,
+  lerp,
+  makeRng,
+  randRange,
+} from '../core/util';
 import { softDisc, shadowMaterial, Water } from '../world/water';
 import { Sky } from '../world/sky';
-import { Environment } from '../world/environment';
+import { Environment, softSpriteTexture } from '../world/environment';
 import { Boat } from '../world/boat';
 import { Fire } from '../world/fire';
 import { Figure, makeNakanori, makeUsho } from '../world/usho';
@@ -76,6 +89,8 @@ export class Game {
   private ropes: Rope[] = [];
   private ropeMeshes: RopeMesh[] = [];
   private ropeAnchors: Vector3[] = [];
+  /** One pale patch per bird, seen through the skin of the river. */
+  private ghosts: Sprite[] = [];
 
   private splash: ParticlePool = makeSplash();
   private bubbles: ParticlePool = makeBubbles();
@@ -107,6 +122,10 @@ export class Game {
   private contacts: Vector3[] = [];
   private shiverClock = 0;
   private wakeClock = 0;
+  /** Tiny hand-held wobble on the big moments. Never enough to disorient. */
+  private shake = 0;
+  private shakeSeed = 0;
+  private nudgeClock = 0;
 
   /** Which thing the current finger stroke grabbed. */
   private grab: { kind: 'fire' | 'bird' | 'rope' | 'river'; bird?: Cormorant } | null = null;
@@ -118,6 +137,7 @@ export class Game {
     this.replayBtn = replayBtn;
 
     const scene = stage.scene;
+    const ghostTex = softSpriteTexture('rgba(210,232,255,0.95)', 'rgba(120,170,220,0)');
     this.fire = new Fire(this.boat.firePoleFoot);
 
     scene.add(this.sky.dome, this.sky.stars, this.sky.moon);
@@ -134,8 +154,10 @@ export class Game {
     this.usho.group.scale.setScalar(1.08);
     this.boat.group.add(this.usho.group);
 
-    this.nakanori.group.position.set(0.34, 0, 2.75);
-    this.nakanori.group.rotation.y = 0.2;
+    // The nakanori works amidships, off to port so he frames the usho rather
+    // than blocking him. The stern is behind the camera in both layouts.
+    this.nakanori.group.position.set(-0.34, 0, -1.05);
+    this.nakanori.group.rotation.y = -0.22;
     this.nakanori.group.scale.setScalar(0.94);
     this.boat.group.add(this.nakanori.group);
 
@@ -190,6 +212,27 @@ export class Game {
       this.ropeMeshes.push(rm);
       ropeGroup.add(rm.mesh);
       this.ropeAnchors.push(new Vector3());
+
+      // A diving cormorant has to stay *findable*. This is the pale smear of
+      // trapped air and disturbed water that marks where it is working — drawn
+      // over the surface, because a shape under near-opaque black water reads
+      // as nothing at all.
+      const ghost = new Sprite(
+        new SpriteMaterial({
+          map: ghostTex,
+          transparent: true,
+          depthWrite: false,
+          depthTest: false,
+          blending: AdditiveBlending,
+          color: new Color(0x74909f),
+          opacity: 0,
+          fog: false,
+        }),
+      );
+      ghost.renderOrder = 8;
+      ghost.scale.setScalar(1.1);
+      this.ghosts.push(ghost);
+      scene.add(ghost);
     }
     for (let i = 0; i < 6; i++) this.contacts.push(new Vector3());
 
@@ -215,9 +258,16 @@ export class Game {
     return Math.min(this.stage.width, this.stage.height);
   }
 
+  /**
+   * Screen distance to a world point, measured against the point *clamped into
+   * the frame*. If a bird has drifted a little past the edge, a touch at the
+   * edge should still reach it: the child is pointing at the right thing.
+   */
   private screenDist(world: Vector3, x: number, y: number): number {
     if (!this.stage.project(world, this.screen)) return Infinity;
-    return Math.hypot(this.screen.x - x, this.screen.y - y);
+    const px = clamp(this.screen.x, 0, this.stage.width);
+    const py = clamp(this.screen.y, 0, this.stage.height);
+    return Math.hypot(px - x, py - y);
   }
 
   /** Distance from a screen point to the nearest part of a rope. */
@@ -350,8 +400,15 @@ export class Game {
     this.usho.pulseFan();
     this.spray.emit(this.fireWorld, 5, 0.7, 0.7, 1.6, 0.045, 0.7, 0.12);
     if (this.phase === 'kindle' && this.fire.lit) {
+      // The moment the river lights up is the first thing worth coming back
+      // for, so it gets a proper whump rather than a state change.
       this.phase = 'fishing';
       this.phaseT = 0;
+      this.shake = 0.13;
+      this.spray.emit(this.fireWorld, 40, 1.5, 0.9, 3.2, 0.05, 1.3, 0.18);
+      for (let i = 0; i < 4; i++) {
+        this.water.ripple(randRange(this.rng, -2, 2), randRange(this.rng, -6, -3), 0.4, 3.4);
+      }
     }
   }
 
@@ -359,8 +416,10 @@ export class Game {
     if (bird.state !== 'perch') return;
     const idx = bird.index;
     const [sx, sz] = STATIONS[idx % STATIONS.length];
-    const jitter = randRange(this.rng, -0.5, 0.5);
-    this.tmp.set(sx * this.stage.spread + jitter, 0, sz + jitter * 0.8);
+    const jitter = randRange(this.rng, -0.45, 0.45);
+    // Fanning wider on wide screens is good; fanning a bird off the edge is not.
+    const x = clamp(sx * this.stage.spread, -4.3, 4.3) + jitter;
+    this.tmp.set(x, 0, sz + jitter * 0.8);
     bird.launch(bird.pos, this.tmp);
     this.usho.lookAt(this.tmp.x);
   }
@@ -393,12 +452,7 @@ export class Game {
 
   private hintNudge(): void {
     // A stray tap on open water still gives something to look at.
-    this.water.ripple(
-      randRange(this.rng, -3, 3),
-      randRange(this.rng, -8, -2),
-      0.35,
-      3.0,
-    );
+    this.water.ripple(randRange(this.rng, -3, 3), randRange(this.rng, -8, -2), 0.35, 3.0);
   }
 
   // =========================================================================
@@ -440,9 +494,8 @@ export class Game {
 
   layoutForOrientation(): void {
     // Portrait keeps the working water closer so small thumbs can reach it.
-    // On the tallest phones the stern crewman crowds the frame; drop him.
-    const portrait = this.stage.orientation === 'portrait';
-    this.nakanori.group.visible = !portrait || this.stage.height / this.stage.width < 1.8;
+    // Nothing to swap per orientation right now; the two camera layouts do
+    // the work. Kept as the single place that would.
   }
 
   // =========================================================================
@@ -454,6 +507,10 @@ export class Game {
     this.phaseT += dt;
     this.idle += dt;
 
+    // Camera offsets are rebuilt from scratch every frame; the phase owns the
+    // composition and the shake is layered on afterwards.
+    this.stage.camOffset.set(0, 0, 0);
+    this.stage.lookOffset.set(0, 0, 0);
     this.updatePhase(dt);
 
     // ---- water & world ----------------------------------------------------
@@ -477,7 +534,6 @@ export class Game {
     this.boat.group.position.y = (hFore + hAft) * 0.5 - 0.02;
     this.boat.group.rotation.x = Math.atan2(hAft - hFore, 5.2) * 0.85;
     this.boat.group.rotation.z = Math.atan2(hPort - hStbd, 1.4) * 0.7;
-    this.boat.update(this.t);
     this.boat.group.updateMatrixWorld(true);
     this.boatShadow.position.set(0, 0.01, 0);
 
@@ -493,11 +549,17 @@ export class Game {
       -0.2,
       this.boat.group.position.z + 1.2,
     );
-    this.fireSpot.intensity = this.fire.strength * this.fire.strength * 9;
+    this.fireSpot.intensity = this.fire.strength * this.fire.strength * 4.2;
     this.hemi.intensity = 0.11 + (1 - this.night) * 0.55 + this.fire.strength * 0.08;
+    // Warm bounce off the lit river fills the undersides of everything aboard.
+    this.hemi.groundColor.setRGB(
+      0.012 + this.fire.strength * 0.075,
+      0.02 + this.fire.strength * 0.032,
+      0.04 + this.fire.strength * 0.008,
+    );
     this.moonLight.intensity = 0.1 + this.night * 0.26;
-    this.fill.intensity = 0.06 + this.fire.strength * 0.34;
-    this.stage.renderer.toneMappingExposure = 0.9 + this.fire.strength * 0.14;
+    this.fill.intensity = 0.05 + this.fire.strength * 0.22;
+    this.stage.renderer.toneMappingExposure = 0.82 + this.fire.strength * 0.1;
 
     // ---- crew -------------------------------------------------------------
     this.updateCrew(dt);
@@ -517,6 +579,14 @@ export class Game {
 
     // ---- coaching ---------------------------------------------------------
     this.updateHints(dt);
+
+    // A hand-held wobble that decays fast. Small on purpose.
+    this.shake = damp(this.shake, 0, 4.5, dt);
+    this.shakeSeed += dt * 21;
+    if (this.shake > 0.001) {
+      this.stage.camOffset.x += Math.sin(this.shakeSeed) * this.shake;
+      this.stage.camOffset.y += Math.sin(this.shakeSeed * 1.7 + 1.1) * this.shake * 0.7;
+    }
 
     this.stage.update(dt);
   }
@@ -563,8 +633,26 @@ export class Game {
         hand: this.handWorld,
         surfaceAt: surfAt,
         onSplash: (p, power) => {
-          this.splash.emit(p, Math.round(10 + power * 16), 1.5 * power, 1.0, 2.2 * power, 0.05, 0.75, 0.12);
-          this.spray.emit(p, Math.round(4 + power * 8), 1.1 * power, 1.0, 1.7 * power, 0.04, 0.6, 0.1);
+          this.splash.emit(
+            p,
+            Math.round(10 + power * 16),
+            1.5 * power,
+            1.0,
+            2.2 * power,
+            0.05,
+            0.75,
+            0.12,
+          );
+          this.spray.emit(
+            p,
+            Math.round(4 + power * 8),
+            1.1 * power,
+            1.0,
+            1.7 * power,
+            0.04,
+            0.6,
+            0.1,
+          );
         },
         onBubbles: (p, n) => this.bubbles.emit(p, n, 0.28, 0.9, 0.5, 0.035, 1.5, 0.09),
         onRipple: (x, z, s) => this.water.ripple(x, z, s, s > 0.8 ? 5.0 : 3.0),
@@ -572,6 +660,16 @@ export class Game {
         onSurfaced: (b) => this.onBirdSurfaced(b),
         onBoard: (b) => this.onBirdBoard(b),
       });
+
+      // Pale patch on the water above a working bird.
+      const ghost = this.ghosts[i];
+      const depth = Math.max(0, -bird.pos.y);
+      const showing = bird.submerged || bird.state === 'rising' || bird.state === 'dive';
+      const want = showing ? 0.27 * clamp01(1.35 - depth * 0.7) : 0;
+      const mat = ghost.material as SpriteMaterial;
+      mat.opacity = damp(mat.opacity, want, 5, dt);
+      ghost.position.set(bird.pos.x, 0.02, bird.pos.z);
+      ghost.scale.setScalar(0.85 + depth * 0.75 + Math.sin(this.t * 2.2 + i) * 0.06);
 
       // A loaded rope never stops talking to you.
       if (shiverNow && bird.waitingToHaul) {
@@ -590,6 +688,7 @@ export class Game {
   }
 
   private onBirdSurfaced(bird: Cormorant): void {
+    this.shake = Math.max(this.shake, 0.05);
     this.spray.emit(bird.pos, 22, 1.7, 1.1, 2.6, 0.05, 0.85, 0.16);
     this.splash.emit(bird.pos, 24, 1.9, 1.1, 2.8, 0.055, 0.8, 0.16);
     this.water.ripple(bird.pos.x, bird.pos.z, 1.5, 5.2);
@@ -629,6 +728,8 @@ export class Game {
         f.mesh.scale.setScalar(0.85);
         this.boat.addToBasket(f.mesh, this.fishCount);
         this.fishCount++;
+        this.boat.toWorld(this.boat.basketMouth, this.tmp);
+        this.spray.emit(this.tmp, 8, 0.5, 0.9, 0.8, 0.028, 0.55, 0.14);
         // A little celebration in the water, not on a scoreboard.
         this.water.ripple(this.boat.group.position.x, this.boat.group.position.z + 1.5, 0.35, 2.4);
       }
@@ -662,19 +763,19 @@ export class Game {
           slack = 0.22;
           break;
         case 'launch':
-          slack = 0.3;
+          slack = 0.22;
           break;
         case 'swim':
-          slack = 0.34;
+          slack = 0.24;
           break;
         case 'dive':
-          slack = 0.38;
+          slack = 0.26;
           break;
         case 'under':
-          slack = 0.4;
+          slack = 0.26;
           break;
         case 'rising':
-          slack = lerp(0.38, 0.012, clamp01(bird.haulProgress * 1.5));
+          slack = lerp(0.26, 0.012, clamp01(bird.haulProgress * 1.5));
           break;
         default:
           slack = 0.18;
@@ -766,14 +867,29 @@ export class Game {
   // =========================================================================
 
   private updateHints(dt: number): void {
-    void dt;
-    if (this.idle < IDLE_HINT || this.phase === 'depart' || this.phase === 'finale' || this.phase === 'done') {
+    if (
+      this.idle < IDLE_HINT ||
+      this.phase === 'depart' ||
+      this.phase === 'finale' ||
+      this.phase === 'done'
+    ) {
       if (this.idle < IDLE_HINT) this.hints.hide();
+      this.nudgeClock = 0;
       return;
     }
 
+    // Beyond the dotted trail, the world itself gestures: the embers flare, the
+    // usho's hands move, the loaded rope shivers harder, the rings get bigger.
+    this.nudgeClock += dt;
+    const nudge = this.nudgeClock > 2.2;
+    if (nudge) this.nudgeClock = 0;
+
     if (this.phase === 'kindle') {
       this.hints.show({ anchor: this.fireWorld, dx: 0, dy: -1, hue: 'ember' });
+      if (nudge) {
+        this.fire.flare();
+        this.usho.pulseFan();
+      }
       return;
     }
 
@@ -783,6 +899,13 @@ export class Game {
       const rope = this.ropes[waiting.index];
       const mid = rope.pts[Math.floor(rope.n * 0.45)];
       this.hints.show({ anchor: mid, dx: 0, dy: 1, hue: 'water' });
+      if (nudge) {
+        rope.shiver(1.3);
+        this.usho.pulseHaul();
+        this.usho.lookAt(waiting.pos.x);
+        this.water.ripple(waiting.pos.x, waiting.pos.z, 0.75, 3.4);
+        this.bubbles.emit(waiting.pos, 8, 0.32, 0.9, 0.55, 0.04, 1.5, 0.12);
+      }
       return;
     }
 
@@ -791,6 +914,11 @@ export class Game {
     if (perched) {
       const outward = Math.sign(perched.pos.x - this.boat.group.position.x) || -1;
       this.hints.show({ anchor: perched.pos, dx: outward * 0.5, dy: -1, hue: 'pale' });
+      if (nudge) {
+        this.ropes[perched.index].shiver(0.5);
+        this.usho.lookAt(perched.pos.x);
+        this.fire.flare();
+      }
       return;
     }
 
@@ -798,7 +926,24 @@ export class Game {
     const allHome = this.birds.every((b) => b.state === 'perch' || b.state === 'settle');
     if (this.fishCount >= FISH_FOR_FINALE && allHome) {
       this.boat.toWorld(this.tmp.set(0, 0.5, 1.2), this.tmpB);
-      this.hints.show({ anchor: this.tmpB, dx: 0, dy: -1, len: this.shortSide() * 0.3, hue: 'ember' });
+      this.hints.show({
+        anchor: this.tmpB,
+        dx: 0,
+        dy: -1,
+        len: this.shortSide() * 0.3,
+        hue: 'ember',
+      });
+      if (nudge) {
+        this.fire.flare();
+        for (let i = 0; i < 3; i++) {
+          this.water.ripple(
+            randRange(this.rng, -1.2, 1.2),
+            randRange(this.rng, 2.0, 3.6),
+            0.4,
+            2.8,
+          );
+        }
+      }
       return;
     }
 
@@ -808,6 +953,7 @@ export class Game {
   /** Long downstream push while everything is home ends the evening. */
   maybeFinishFromAdvance(): void {
     const allHome = this.birds.every((b) => b.state === 'perch' || b.state === 'settle');
-    if (this.phase === 'fishing' && this.fishCount >= FISH_FOR_FINALE && allHome) this.startFinale();
+    if (this.phase === 'fishing' && this.fishCount >= FISH_FOR_FINALE && allHome)
+      this.startFinale();
   }
 }

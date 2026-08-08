@@ -107,7 +107,11 @@ export class Figure {
       side: DoubleSide,
     });
     const trim = new MeshStandardMaterial({ color: PAL.robeTrim, roughness: 0.78 });
-    const straw = new MeshStandardMaterial({ color: PAL.strawSkirt, roughness: 0.95, side: DoubleSide });
+    const straw = new MeshStandardMaterial({
+      color: PAL.strawSkirt,
+      roughness: 0.95,
+      side: DoubleSide,
+    });
     const skin = new MeshStandardMaterial({ color: PAL.skin, roughness: 0.68 });
     const hatMat = new MeshStandardMaterial({ color: 0x101116, roughness: 0.42, metalness: 0.08 });
     const dark = new MeshStandardMaterial({ color: 0x0e1017, roughness: 0.9 });
@@ -312,7 +316,10 @@ export class Figure {
       this.leftHandLocal.set(-0.3, 0.5, -0.24);
     } else {
       // Nakanori poles the boat: a long bamboo sao.
-      this.pole = new Mesh(new CylinderGeometry(0.026, 0.02, 3.4, 6), new MeshStandardMaterial({ color: PAL.bamboo, roughness: 0.7 }));
+      this.pole = new Mesh(
+        new CylinderGeometry(0.026, 0.02, 3.4, 6),
+        new MeshStandardMaterial({ color: PAL.bamboo, roughness: 0.7 }),
+      );
       this.pole.castShadow = true;
       this.torso.add(this.pole);
       this.leftHandLocal.set(-0.24, 0.72, -0.2);
@@ -429,9 +436,9 @@ export class Figure {
 
     if (this.pole) {
       // Nakanori leans on the sao, pushing off the river bed.
-      const swing = Math.sin(t * 0.42) * 0.1;
-      this.pole.position.set(0.3, 0.8, -0.3);
-      this.pole.rotation.set(0.95 + swing, 0.06, 0.28);
+      const swing = Math.sin(t * 0.42) * 0.09;
+      this.pole.position.set(0.38, 0.62, 0.5);
+      this.pole.rotation.set(-1.12 + swing, 0.1, -0.2);
     }
 
     this.group.updateMatrixWorld(true);

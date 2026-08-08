@@ -95,11 +95,7 @@ export class Fire {
     // Bail chain from the pole tip.
     const bail = new Mesh(
       tubeThrough(
-        [
-          new Vector3(0, 0.52, 0),
-          new Vector3(-R * 0.7, 0.28, 0),
-          new Vector3(-R * 0.86, H, 0),
-        ],
+        [new Vector3(0, 0.52, 0), new Vector3(-R * 0.7, 0.28, 0), new Vector3(-R * 0.86, H, 0)],
         0.014,
         5,
       ),
@@ -159,7 +155,10 @@ export class Fire {
     });
     for (let i = 0; i < 5; i++) {
       const a = randRange(this.rng, 0, TAU);
-      const log = new Mesh(roundedBox(randRange(this.rng, 0.34, 0.5), 0.085, 0.085, 0.038), this.emberMat);
+      const log = new Mesh(
+        roundedBox(randRange(this.rng, 0.34, 0.5), 0.085, 0.085, 0.038),
+        this.emberMat,
+      );
       log.position.set(
         Math.cos(a) * randRange(this.rng, 0, 0.13),
         0.05 + i * 0.045,
@@ -287,7 +286,7 @@ export class Fire {
     this.innerGlow.renderOrder = 22;
     this.group.add(this.innerGlow);
 
-    this.light = new PointLight(0xff8a2e, 3, 34, 1.7);
+    this.light = new PointLight(0xff8a2e, 3, 34, 2.0);
     this.light.position.copy(this.heart);
     this.group.add(this.light);
 
@@ -352,6 +351,12 @@ export class Fire {
     for (let i = 0; i < 26; i++) this.spawnSpark(heart, 1.9);
   }
 
+  /** A visual flare with no gameplay effect — used to catch a wandering eye. */
+  flare(): void {
+    this.puff = Math.min(1.2, this.puff + 0.35);
+    for (let i = 0; i < 10; i++) this.spawnSpark(this.heart, 1.3);
+  }
+
   setStrength(v: number): void {
     this.target = clamp01(v);
   }
@@ -384,15 +389,13 @@ export class Fire {
 
     // Two-rate flicker: a slow breath under a fast crackle.
     const flick =
-      0.82 +
-      0.12 * Math.sin(t * 8.7) * Math.sin(t * 3.1 + 0.7) +
-      0.09 * Math.sin(t * 21.3 + 2.0);
+      0.82 + 0.12 * Math.sin(t * 8.7) * Math.sin(t * 3.1 + 0.7) + 0.09 * Math.sin(t * 21.3 + 2.0);
 
     for (const m of this.shellMats) {
       m.uniforms.uTime.value = t;
       m.uniforms.uStrength.value = s;
     }
-    this.light.intensity = (0.3 + s * s * 17) * flick;
+    this.light.intensity = (0.25 + s * s * 11) * flick;
     this.light.distance = 20 + s * 22;
 
     this.glow.material.opacity = (0.06 + s * 0.42) * flick;
@@ -430,7 +433,8 @@ export class Fire {
       this.sparkPos[k + 1] += this.sparkVel[k + 1] * dt;
       this.sparkPos[k + 2] += this.sparkVel[k + 2] * dt;
       const lt = this.sparkAge[i] / this.sparkLife[i];
-      alphas.array[i] = (1 - lt) * (1 - lt) * (0.5 + 0.5 * Math.sin(t * 18 + this.sparkSeed[i] * 9));
+      alphas.array[i] =
+        (1 - lt) * (1 - lt) * (0.5 + 0.5 * Math.sin(t * 18 + this.sparkSeed[i] * 9));
     }
     alphas.needsUpdate = true;
     (this.sparks.geometry.getAttribute('position') as BufferAttribute).needsUpdate = true;

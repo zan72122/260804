@@ -143,7 +143,14 @@ export class DynamicTube {
 }
 
 /** Cubic Bezier sample. */
-export function bezier(p0: Vector3, p1: Vector3, p2: Vector3, p3: Vector3, t: number, out: Vector3): Vector3 {
+export function bezier(
+  p0: Vector3,
+  p1: Vector3,
+  p2: Vector3,
+  p3: Vector3,
+  t: number,
+  out: Vector3,
+): Vector3 {
   const u = 1 - t;
   const a = u * u * u;
   const b = 3 * u * u * t;
@@ -189,7 +196,12 @@ export function roundedBox(w: number, h: number, d: number, r = 0.04, seg = 2): 
 }
 
 /** Smooth tube through points — used for rails, hoops and rope coils. */
-export function tubeThrough(points: Vector3[], radius: number, radial = 7, closed = false): BufferGeometry {
+export function tubeThrough(
+  points: Vector3[],
+  radius: number,
+  radial = 7,
+  closed = false,
+): BufferGeometry {
   const curve = new CatmullRomCurve3(points, closed, 'catmullrom', 0.5);
   return new TubeGeometry(curve, Math.max(12, points.length * 6), radius, radial, closed);
 }
@@ -258,13 +270,16 @@ export interface HullParams {
   topTrim?: number;
 }
 
-export function hullSection(t: number, p: HullParams): { halfW: number; draft: number; sheer: number } {
+export function hullSection(
+  t: number,
+  p: HullParams,
+): { halfW: number; draft: number; sheer: number } {
   const tt = Math.min(1, Math.max(0, t));
   const halfW = p.halfWidth * Math.pow(Math.sin(Math.PI * Math.pow(tt, 0.88)), 0.72);
   const draft = p.draft * Math.pow(Math.sin(Math.PI * Math.pow(tt, 0.7)), 0.4);
   const rise = Math.pow(Math.abs(tt - 0.44) / 0.56, 2.3);
   const bow = Math.pow(Math.max(0, tt - 0.68) / 0.32, 2.0);
-  const sheer = 0.30 + rise * 0.30 + bow * 0.34;
+  const sheer = 0.3 + rise * 0.3 + bow * 0.34;
   return { halfW, draft, sheer };
 }
 
@@ -316,9 +331,7 @@ export function sheerLine(p: HullParams, side: number, samples = 26, inset = 1):
   for (let i = 0; i <= samples; i++) {
     const t = i / samples;
     const sec = hullSection(t, p);
-    out.push(
-      new Vector3(side * sec.halfW * inset, sec.sheer, (0.5 - t) * p.length),
-    );
+    out.push(new Vector3(side * sec.halfW * inset, sec.sheer, (0.5 - t) * p.length));
   }
   return out;
 }

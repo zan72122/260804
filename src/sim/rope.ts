@@ -1,11 +1,4 @@
-import {
-  BufferAttribute,
-  BufferGeometry,
-  Color,
-  Mesh,
-  MeshStandardMaterial,
-  Vector3,
-} from 'three';
+import { BufferAttribute, BufferGeometry, Color, Mesh, MeshStandardMaterial, Vector3 } from 'three';
 import { PAL } from '../core/palette';
 import { clamp, clamp01 } from '../core/util';
 
@@ -174,7 +167,7 @@ export class Rope {
       // Bending stiffness: a one-sided constraint across every other point.
       // Without this a slack rope buckles into a sawtooth; with it, it curls
       // and loops the way wet hemp actually does.
-      const bend = seg * 1.72;
+      const bend = seg * 1.9;
       for (let i = 0; i < n - 2; i++) {
         const a = this.pts[i];
         const b = this.pts[i + 2];
@@ -187,7 +180,7 @@ export class Rope {
         const mB = i + 2 === n - 1 && this.endPinned ? 0 : 1;
         const sum = mA + mB;
         if (sum === 0) continue;
-        const corr = ((d - bend) / d) * 0.32;
+        const corr = ((d - bend) / d) * 0.62;
         a.x += dx * ((corr * mA) / sum);
         a.y += dy * ((corr * mA) / sum);
         a.z += dz * ((corr * mA) / sum);
@@ -303,7 +296,10 @@ export class RopeMesh {
 
       const wetness = clamp01(-p.y * 3.2 + 0.35);
       const r = this.radiusList[i];
-      const c = this.tmpCol.copy(this.dry).lerp(this.wet, wetness).multiplyScalar(1 + sheen * 0.5);
+      const c = this.tmpCol
+        .copy(this.dry)
+        .lerp(this.wet, wetness)
+        .multiplyScalar(1 + sheen * 0.5);
       for (let j = 0; j < R; j++) {
         const ang = (j / R) * Math.PI * 2;
         const cx = Math.cos(ang);

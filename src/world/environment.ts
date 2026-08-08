@@ -168,13 +168,17 @@ export class Environment {
 
     // Reed clusters catching a sliver of firelight.
     const reeds: Mesh[] = [];
-    for (let i = 0; i < 26; i++) {
+    for (let i = 0; i < 16; i++) {
       const cz = randRange(rng, -84, 10);
       const cx = side * (edgeAt(cz) + randRange(rng, -0.6, 2.4));
-      for (let k = 0; k < 5; k++) {
-        const h = randRange(rng, 1.2, 2.6);
+      for (let k = 0; k < 4; k++) {
+        const h = randRange(rng, 0.5, 1.7);
         const reed = new Mesh(new ConeGeometry(0.045, h, 4, 1, true), reedMat);
-        reed.position.set(cx + randRange(rng, -0.5, 0.5), h * 0.5 - 0.2, cz + randRange(rng, -0.6, 0.6));
+        reed.position.set(
+          cx + randRange(rng, -0.5, 0.5),
+          h * 0.5 - 0.2,
+          cz + randRange(rng, -0.6, 0.6),
+        );
         reed.rotation.z = randRange(rng, -0.28, 0.28);
         reed.rotation.x = randRange(rng, -0.2, 0.2);
         reeds.push(reed);
@@ -209,7 +213,7 @@ export class Environment {
   /** Other ukai boats working the same reach, far upstream. */
   private buildFleet(): void {
     const glow = fireGlowTexture();
-    const hull = new MeshStandardMaterial({ color: 0x030407, roughness: 0.95, metalness: 0 });
+    const hull = new MeshBasicMaterial({ color: 0x03050c, fog: true });
     const spots: [number, number][] = [
       [-14, -62],
       [12.5, -80],
@@ -246,7 +250,7 @@ export class Environment {
 
       g.position.set(x, 0, z);
       g.rotation.y = randRange(this.rng, -0.4, 0.4);
-      g.scale.setScalar(0.55 + i * 0.06);
+      g.scale.setScalar(0.34 + i * 0.04);
       this.group.add(g);
     }
   }
@@ -313,7 +317,10 @@ export function fireGlowTexture(): CanvasTexture {
   return new CanvasTexture(c);
 }
 
-export function softSpriteTexture(inner = 'rgba(255,255,255,1)', outer = 'rgba(255,255,255,0)'): CanvasTexture {
+export function softSpriteTexture(
+  inner = 'rgba(255,255,255,1)',
+  outer = 'rgba(255,255,255,0)',
+): CanvasTexture {
   const s = 64;
   const c = document.createElement('canvas');
   c.width = c.height = s;
