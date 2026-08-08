@@ -203,6 +203,12 @@ export class TreeSpade {
     this._buildRing();
     for (let i = 0; i < 4; i++) this._buildBlade(i);
     this._buildWorker();
+    // 影は大きな部材だけに落とさせる（シャドウパスの描画数を減らす）
+    this.group.traverse((o) => {
+      if (!o.isMesh || !o.castShadow) return;
+      o.geometry.computeBoundingSphere();
+      if (o.geometry.boundingSphere.radius < 0.42) o.castShadow = false;
+    });
     this.setLift(0);
     this.setGate(0);
   }
@@ -555,6 +561,13 @@ export class TreeSpade {
   }
 
   setWorkLight(v) { this.workLight.intensity = v; }
+
+  /** 車体の沈み込み・跳ね返り（重さの表現） */
+  setChassisRecoil(v) {
+    this.carrier.position.y = -v * 0.16;
+    this.carrier.rotation.z = v * 0.016;
+    this.assembly.rotation.z = v * 0.010;
+  }
 
   setBeacon(on) {
     this.beacon.visible = true;

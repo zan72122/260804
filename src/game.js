@@ -594,12 +594,15 @@ export class Game {
       st.tension = k;
       A.strainLoop.set(k);
       this.setLift(k * 0.075);
+      // 車体が沈み込む＝力がかかっている
+      this.machine.setChassisRecoil(k * 0.9);
       const site = st.isHole ? this.holeSite : this.treeSite;
       site.setCrack(smoothstep(0.30, 0.95, k));
-      this.dir.addShake(0.006 + k * 0.022);
+      this.dir.addShake(0.006 + k * 0.024);
       if (this.tree && !st.isHole) {
+        // 幹がきしんで、樹冠が遅れて揺れる
         this.tree.addImpulse(new THREE.Vector3(
-          Math.sin(this.clock * 9) * 0.02 * k, 0, Math.cos(this.clock * 7.3) * 0.02 * k));
+          Math.sin(this.clock * 9) * 0.025 * k, -0.03 * k, Math.cos(this.clock * 7.3) * 0.025 * k));
       }
       if (Math.random() < k * 0.30) {
         const plug = st.isHole ? this.holePlug : this.treePlug;
@@ -624,11 +627,18 @@ export class Game {
     if (this.levers[0]) { this.levers[0].lock(true); this.levers[0].nudgeTarget = 1; }
     this.ui.hideHint();
 
-    // 1) さいごの抵抗（わずかに沈む）
+    // 0) 抜ける直前から、カメラはもう静かに後退をはじめる
+    if (!isHole) this.dir.move(SHOTS.dollyOut(this.treeH), 3.0, easeInOutCubic);
+
+    // 1) さいごの抵抗（機械も木もわずかに沈む）
     A.strainLoop.set(1);
-    this.tw.add(0.22, (k) => {
-      this.setLift(0.075 - Math.sin(k * Math.PI) * 0.055);
-      this.dir.addShake(0.03 + k * 0.03);
+    A.crumble(0.5);
+    this.tw.add(0.26, (k) => {
+      const dip = Math.sin(k * Math.PI);
+      this.setLift(0.075 - dip * 0.06);
+      this.machine.setChassisRecoil(0.9 + dip * 0.7);
+      this.dir.addShake(0.03 + k * 0.035);
+      if (this.tree && !isHole) this.tree.addImpulse(new THREE.Vector3(0, -0.05 * dip, 0));
     }, () => {
       // 2) 解放：スポン！
       A.strainLoop.stop();
@@ -642,21 +652,26 @@ export class Game {
       if (isHole) this.carriedHolePlug = true;
       const rim = new THREE.Vector3(site.pos.x, 0.05, site.pos.z);
       this.particles.burst(rim, isHole ? 22 : 40, isHole ? 2.1 : 3.0, 0);
-      if (this.tree && !isHole) this.tree.addImpulse(new THREE.Vector3(0.10, 0, 0.06));
+      // 樹冠は幹に遅れてついてくる（下へ取り残されてから跳ね上がる）
+      if (this.tree && !isHole) this.tree.addImpulse(new THREE.Vector3(0.09, -0.42, 0.05));
       this.ui.toast(isHole ? 'スポン！' : 'スポン！！', 1500);
 
-      // カメラ：接写 → 自動ドリーアウト（連続したまま）
-      if (!isHole) this.tw.wait(0.10, () => this.dir.move(SHOTS.dollyOut(this.treeH), 2.3, easeOutCubic));
-      else this.tw.wait(0.10, () => this.dir.move(SHOTS.wide(this.treeH), 1.8, easeOutCubic));
+      if (isHole) this.tw.wait(0.10, () => this.dir.move(SHOTS.wide(this.treeH), 1.8, easeOutCubic));
 
       // 3) 一気に上がる → 機械が少し跳ね返る → ゆっくり上げきる
-      const fast = isHole ? 0.42 : 0.62;
-      this.tw.add(0.26, (k) => this.setLift(lerp(0.02, fast, k)), () => {
-        // 跳ね返り
-        this.tw.add(0.42, (k) => {
-          const bounce = Math.sin(k * Math.PI) * (isHole ? 0.06 : 0.13) * (1 - k * 0.4);
+      const fast = isHole ? 0.46 : 0.68;
+      this.tw.add(0.19, (k) => {
+        this.setLift(lerp(0.015, fast, k));
+        this.machine.setChassisRecoil(1.6 * (1 - k) - 0.5 * k);
+      }, () => {
+        A.clank(0.55);
+        // 跳ね返り：機械が少しだけ上へ戻ってから落ち着く
+        this.tw.add(0.55, (k) => {
+          const bounce = Math.sin(k * Math.PI) * (isHole ? 0.07 : 0.15) * (1 - k * 0.4);
           this.setLift(fast + bounce);
+          this.machine.setChassisRecoil(-0.5 * Math.cos(k * Math.PI * 2) * (1 - k));
         }, () => {
+          this.machine.setChassisRecoil(0);
           const dur = isHole ? 1.1 : 1.9;
           const from = this.liftY;
           this.tw.add(dur, (k) => {
