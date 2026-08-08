@@ -975,9 +975,10 @@ const furnace = {
       } else if (T < 2.55) {                  // carrying it to the hearth
         if (!this._walking2) {
           this._walking2 = true;
-          // right up at the mouth: he has to be able to actually reach the
-          // crucible, or the ingot leaves his hand and flies the last metre
-          founderWalkTo(W, -3.42, -0.74, W.furnace.position.x, W.furnace.position.z, 1.05);
+          // Beside the mouth, not square in it: close enough that his hand
+          // really reaches the crucible, but off the camera's line to it so
+          // the player can see the metal go in.
+          founderWalkTo(W, -3.06, -0.52, -3.63, -1.20, 1.05);
           founderLook(W, this._crucible.x, this._crucible.y + 0.4, this._crucible.z);
         }
         founderReach(W, 0.62);

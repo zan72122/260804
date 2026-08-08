@@ -225,12 +225,16 @@ export function buildWorkshop(scene, renderer) {
 
   // crucible sitting in the hearth
   const cruc = cyl(0.42, 0.34, 0.72, 18, M.ironDark);
-  at(cruc, 0, 1.71, 0.14); cruc.castShadow = true; furnace.add(cruc);
+  // Near the mouth, not at the back of the chamber.  A crucible has to be
+  // charged by hand and lifted out with tongs; one placed beyond arm's reach
+  // forces whoever loads it to stand square in the opening, hiding the very
+  // thing the player just asked them to do.
+  at(cruc, 0, 1.71, 0.52); cruc.castShadow = true; furnace.add(cruc);
   W.crucible = cruc;
   const crucMelt = new THREE.Mesh(new THREE.CircleGeometry(0.4, 20),
     new THREE.MeshBasicMaterial({ color: 0xff9a3c, fog: false }));
   crucMelt.rotation.x = -Math.PI / 2;
-  at(crucMelt, 0, 2.03, 0.14); crucMelt.visible = false; furnace.add(crucMelt);
+  at(crucMelt, 0, 2.03, 0.52); crucMelt.visible = false; furnace.add(crucMelt);
   W.crucibleMelt = crucMelt;
 
   // sliding safety door -- its own material so it can glow when the furnace
