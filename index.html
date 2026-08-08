@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0b0806">
+<meta name="description" content="金沢の金箔づくりを、たたく・ひらく・ゆらす・のせる・なでるの5つの動作で遊ぶ、4歳からのWebGL体験">
+<title>かなざわ きんぱく</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230b0806'/%3E%3Cpath d='M6 20 L16 7 L26 20 L16 25 Z' fill='%23f0c465'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --gold: #f0c465;
+    --gold-deep: #b8862f;
+    --ink: #0b0806;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--ink);
+    overflow: hidden;
+    overscroll-behavior: none;
+    touch-action: none;
+    -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    font-family: "Hiragino Maru Gothic ProN", "ヒラギノ丸ゴ ProN", "Hiragino Sans",
+                 "Yu Gothic", "Noto Sans JP", system-ui, sans-serif;
+  }
+  #gl {
+    position: fixed; inset: 0;
+    width: 100%; height: 100%;
+    display: block;
+    touch-action: none;
+  }
+
+  /* ---------- overlay ---------- */
+  #ui {
+    position: fixed; inset: 0;
+    pointer-events: none;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: space-between;
+    padding: calc(env(safe-area-inset-top, 0px) + 3.2vmin)
+             calc(env(safe-area-inset-right, 0px) + 4vmin)
+             calc(env(safe-area-inset-bottom, 0px) + 3.2vmin)
+             calc(env(safe-area-inset-left, 0px) + 4vmin);
+  }
+  /* The shoji behind the words is the brightest thing in the room, so the
+     overlay carries its own gradient rather than relying on the scene. */
+  #ui::before, #ui::after {
+    content: ''; position: fixed; left: 0; right: 0;
+    pointer-events: none;
+  }
+  #ui::before {
+    top: 0; height: 30vmin;
+    background: linear-gradient(to bottom, rgba(5, 3, 2, 0.78), rgba(5, 3, 2, 0));
+  }
+  #ui::after {
+    bottom: 0; height: 26vmin;
+    background: linear-gradient(to top, rgba(5, 3, 2, 0.55), rgba(5, 3, 2, 0));
+  }
+  #top, #hint, #again { position: relative; z-index: 1; }
+  #top { display: flex; flex-direction: column; align-items: center; gap: 1.6vmin; }
+  #word {
+    font-size: clamp(30px, 8.4vmin, 78px);
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    color: #ffe9b8;
+    text-shadow: 0 0 4px rgba(0, 0, 0, 0.9),
+                 0 2px 14px rgba(0, 0, 0, 0.95),
+                 0 0 22px rgba(255, 190, 90, 0.5),
+                 0 0 60px rgba(255, 170, 60, 0.3);
+    transition: opacity 0.5s ease;
+    white-space: nowrap;
+  }
+  #sub {
+    font-size: clamp(12px, 2.6vmin, 20px);
+    color: rgba(255, 226, 178, 0.72);
+    letter-spacing: 0.24em;
+  }
+  #beads { display: flex; gap: 2.2vmin; transition: opacity 0.4s ease; opacity: 0; }
+  #beads span {
+    width: 3.0vmin; height: 3.0vmin; min-width: 13px; min-height: 13px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 214, 150, 0.45);
+    background: rgba(255, 214, 150, 0.06);
+    transition: all 0.28s cubic-bezier(.2,1.4,.4,1);
+  }
+  #beads span.on {
+    background: radial-gradient(circle at 35% 30%, #fff2cf, var(--gold) 55%, var(--gold-deep));
+    border-color: rgba(255, 236, 195, 0.95);
+    box-shadow: 0 0 16px rgba(255, 190, 90, 0.8);
+    transform: scale(1.18);
+  }
+
+  #hint {
+    width: clamp(72px, 17vmin, 150px);
+    height: clamp(72px, 17vmin, 150px);
+    opacity: 1;
+    transition: opacity 0.45s ease;
+    margin-bottom: 1vmin;
+  }
+  #hint svg { width: 100%; height: 100%; overflow: visible; }
+  .g-hand { fill: rgba(255, 237, 205, 0.92); }
+  .g-ring, .g-trail, .g-arrow {
+    fill: none; stroke: rgba(255, 214, 150, 0.85);
+    stroke-width: 5; stroke-linecap: round; stroke-linejoin: round;
+  }
+  .g-dot { fill: rgba(255, 214, 150, 0.85); }
+  .g-dash { stroke-dasharray: 7 9; }
+  .g-ring { animation: ring 1.9s ease-out infinite; }
+  .g-ring2 { animation-delay: 0.65s; }
+  @keyframes ring {
+    0% { transform: scale(0.45); opacity: 0; }
+    25% { opacity: 0.9; }
+    100% { transform: scale(1.5); opacity: 0; }
+  }
+  .g-ring, .g-ring2 { transform-origin: 60px 58px; }
+  .g-tap { animation: tapmove 1.9s ease-in-out infinite; }
+  @keyframes tapmove { 0%,100% { transform: translateY(6px);} 18% { transform: translateY(-8px);} 30% { transform: translateY(4px);} }
+  .g-swipe { animation: swipemove 2.1s ease-in-out infinite; }
+  @keyframes swipemove { 0% { transform: translateY(18px); opacity: .25;} 25% { opacity: 1;} 70% { transform: translateY(-18px); opacity: 1;} 100% { transform: translateY(-18px); opacity: 0;} }
+  .g-fan { animation: fanmove 1.8s ease-in-out infinite; }
+  @keyframes fanmove { 0%,100% { transform: translateX(-22px) rotate(-10deg);} 50% { transform: translateX(22px) rotate(10deg);} }
+  .g-wave1 { animation: wavemove 2.2s linear infinite; }
+  .g-wave2 { animation: wavemove 2.2s linear infinite; animation-delay: .5s; }
+  @keyframes wavemove { 0% { opacity: 0; transform: translateX(-14px);} 40% { opacity: .9;} 100% { opacity: 0; transform: translateX(16px);} }
+  .g-drag { animation: dragmove 2.4s ease-in-out infinite; }
+  @keyframes dragmove { 0%,8% { transform: translate(-30px,-26px);} 70%,100% { transform: translate(28px,22px);} }
+  .g-brush { animation: brushmove 1.7s ease-in-out infinite; }
+  @keyframes brushmove { 0%,100% { transform: translateX(-26px) rotate(-8deg);} 50% { transform: translateX(26px) rotate(8deg);} }
+  .g-brushline { stroke-dasharray: 6 10; animation: wavemove 1.7s linear infinite; }
+
+  .pop { animation: pop 0.55s cubic-bezier(.2,1.5,.35,1); }
+  @keyframes pop {
+    0% { transform: scale(0.55) translateY(10px); opacity: 0.35; }
+    60% { transform: scale(1.12); opacity: 1; }
+    100% { transform: scale(1); }
+  }
+
+  #again {
+    pointer-events: auto;
+    position: fixed;
+    left: 50%;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 7vmin);
+    transform: translate(-50%, 24px) scale(0.8);
+    width: clamp(112px, 26vmin, 190px);
+    height: clamp(112px, 26vmin, 190px);
+    border-radius: 50%;
+    border: none;
+    display: grid; place-items: center;
+    font-family: inherit;
+    font-size: clamp(17px, 4.2vmin, 34px);
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    color: #3a2408;
+    background: radial-gradient(circle at 34% 28%, #fff6df, var(--gold) 52%, var(--gold-deep));
+    box-shadow: 0 0 44px rgba(255, 186, 84, 0.55), 0 10px 26px rgba(0,0,0,0.5);
+    opacity: 0; visibility: hidden;
+    transition: opacity .45s ease, transform .5s cubic-bezier(.2,1.5,.35,1), visibility .45s;
+  }
+  #again.show { opacity: 1; visibility: visible; transform: translate(-50%, 0) scale(1); animation: breathe 2.6s ease-in-out infinite; }
+  #again:active { transform: translate(-50%, 0) scale(0.93); }
+  @keyframes breathe { 0%,100% { box-shadow: 0 0 40px rgba(255,186,84,.5), 0 10px 26px rgba(0,0,0,.5);} 50% { box-shadow: 0 0 70px rgba(255,200,110,.85), 0 10px 26px rgba(0,0,0,.5);} }
+
+  #fallback {
+    position: fixed; inset: 0; display: none;
+    align-items: center; justify-content: center;
+    text-align: center; padding: 8vmin;
+    color: #ffe4b5; font-size: 4.2vmin; line-height: 1.9;
+    background: #0b0806;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .g-ring, .g-tap, .g-swipe, .g-fan, .g-wave1, .g-wave2, .g-drag, .g-brush,
+    .g-brushline, #again.show { animation: none; }
+  }
+</style>
+</head>
+<body>
+  <canvas id="gl"></canvas>
+  <div id="ui">
+    <div id="top">
+      <div id="word">きんぱく</div>
+      <div id="sub"></div>
+      <div id="beads"></div>
+    </div>
+    <div id="hint"></div>
+    <button id="again" type="button" aria-label="もういちど">もういちど</button>
+  </div>
+  <div id="fallback">この あそびには WebGL2 が ひつようです。<br>Safari や Chrome の さいしんばんで ひらいてね。</div>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

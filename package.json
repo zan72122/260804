@@ -1,0 +1,12 @@
+{
+  "name": "kanazawa-gold-leaf",
+  "private": true,
+  "description": "かなざわ きんぱく — a WebGL2 gold-leaf workshop for four-year-olds",
+  "scripts": {
+    "start": "python3 -m http.server 8123",
+    "shoot": "node tools/shoot.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.62.1"
+  }
+}
