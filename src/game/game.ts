@@ -665,11 +665,14 @@ export class Game {
       const ghost = this.ghosts[i];
       const depth = Math.max(0, -bird.pos.y);
       const showing = bird.submerged || bird.state === 'rising' || bird.state === 'dive';
-      const want = showing ? 0.27 * clamp01(1.35 - depth * 0.7) : 0;
+      const want = showing ? 0.17 * clamp01(1.35 - depth * 0.7) : 0;
       const mat = ghost.material as SpriteMaterial;
       mat.opacity = damp(mat.opacity, want, 5, dt);
       ghost.position.set(bird.pos.x, 0.02, bird.pos.z);
-      ghost.scale.setScalar(0.85 + depth * 0.75 + Math.sin(this.t * 2.2 + i) * 0.06);
+      // Flattened, because it is a patch of disturbed water lying on a surface,
+      // not a lamp floating in the air.
+      const w = 1.15 + depth * 0.95 + Math.sin(this.t * 2.2 + i) * 0.08;
+      ghost.scale.set(w, w * 0.5, 1);
 
       // A loaded rope never stops talking to you.
       if (shiverNow && bird.waitingToHaul) {

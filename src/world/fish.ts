@@ -154,7 +154,7 @@ export class FishShoal {
       m.scale.setScalar(randRange(rng, 0.75, 1.15));
       const base = new Vector3(
         randRange(rng, -7.5, 7.5),
-        randRange(rng, -1.15, -0.42),
+        randRange(rng, -1.7, -0.85),
         randRange(rng, -12, -2),
       );
       m.position.copy(base);

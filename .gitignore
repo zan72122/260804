@@ -2,3 +2,5 @@ node_modules/
 shots/
 *.log
 tools/_probe.mjs
+dist2/
+artifact.html

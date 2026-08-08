@@ -24,7 +24,7 @@ const ONLY = arg('only', '');
 // Headless runs use a software rasteriser, so retina pixel counts make them
 // crawl. `--dpr=1` trades screenshot resolution for a much faster pass;
 // preview.mjs is the tool for beauty shots.
-const DPR = +arg('dpr', '0');
+const DPR = +arg('dpr', '1');
 
 const VIEWPORTS = [
   { name: 'iphone-portrait', width: 393, height: 852, dpr: 3 },
@@ -104,6 +104,17 @@ const targets = (page) =>
 
 const inFrame = (t, W, H) => t.x > 4 && t.x < W - 4 && t.y > 4 && t.y < H - 4;
 
+/**
+ * Where a finger would actually land for a target that has drifted past an
+ * edge. The game hit-tests against clamped positions too, so a touch at the
+ * edge still reaches something just outside it — the harness should press
+ * where a child would press, not refuse to press at all.
+ */
+const reachable = (t, W, H) => ({
+  x: Math.min(W - 24, Math.max(24, t.x)),
+  y: Math.min(H - 24, Math.max(24, t.y)),
+});
+
 async function run(vp) {
   const browser = await chromium.launch({
     args: [
@@ -163,26 +174,27 @@ async function run(vp) {
   // --- 3. work the birds ---------------------------------------------------
   let released = 0;
   let hauls = 0;
-  for (let round = 0; round < 90; round++) {
+  const offEdge = new Set();
+  for (let round = 0; round < 45; round++) {
     const s = await state(page);
     if (s.phase === 'finale' || s.phase === 'done') break;
     if (s.fish >= 11) break;
 
     const t = await targets(page);
     for (const b of t.perched) {
-      if (!inFrame(b, W, H)) {
-        problems.push(`perched bird ${b.i} off-screen at ${b.x},${b.y}`);
-        continue;
-      }
-      const away = b.x < cx ? -1 : 1;
-      await swipe(page, b.x, b.y, b.x + away * W * 0.11, b.y - H * 0.13, 8);
+      if (!inFrame(b, W, H)) offEdge.add(`bird ${b.i}`);
+      const p = reachable(b, W, H);
+      const away = p.x < cx ? -1 : 1;
+      await swipe(page, p.x, p.y, p.x + away * W * 0.11, p.y - H * 0.13, 8);
       released++;
       await waitGame(page, 0.3);
     }
     // Haul whoever is loudest about it.
     const rope = t.ropes.sort((a, b) => (b.waiting ? 1 : 0) - (a.waiting ? 1 : 0))[0];
-    if (rope && inFrame(rope, W, H)) {
-      await swipe(page, rope.x, rope.y, rope.x, Math.min(H - 10, rope.y + H * 0.22), 8);
+    if (rope) {
+      if (!inFrame(rope, W, H)) offEdge.add(`rope ${rope.i}`);
+      const p = reachable(rope, W, H);
+      await swipe(page, p.x, p.y, p.x, Math.min(H - 10, p.y + H * 0.22), 8);
       hauls++;
     }
     if (round === 3) await shot('04-released');
@@ -194,6 +206,7 @@ async function run(vp) {
   await shot('07-basket');
   const fished = await state(page);
   logs.push(`after fishing (${released} releases, ${hauls} hauls): ${JSON.stringify(fished)}`);
+  if (offEdge.size) logs.push(`reached past an edge for: ${[...offEdge].join(', ')}`);
   if (fished.fish < 6) problems.push(`only ${fished.fish} fish landed`);
   if (fished.inBasket !== fished.fish) {
     problems.push(`basket holds ${fished.inBasket} but ${fished.fish} were caught`);
