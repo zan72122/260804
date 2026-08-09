@@ -48,6 +48,9 @@ const POUR_FRAG = /* glsl */ `
   }
 `;
 
+/** The whole sluice is modelled at working size, then scaled to the section. */
+const GATE_SCALE = 0.42;
+
 export class Gate {
   readonly group = new THREE.Group();
   /** 0 = shut, 1 = fully lifted. */
@@ -65,11 +68,17 @@ export class Gate {
   readonly handle = new THREE.Vector3();
   /** Mouth of the gate, where the water lands. */
   readonly mouth = new THREE.Vector3();
+  /** Top of the catwalk plank — where an operator actually stands. */
+  readonly deckY: number = 4.67 * GATE_SCALE;
 
   constructor(v: FieldVariant) {
     const base = gatePosition(v);
     this.group.position.copy(base);
     this.group.name = 'gate';
+    // A sluice for one working section is a small thing: about a metre and a
+    // half of opening. Built full size and scaled, so the proportions of the
+    // stem, yoke and hand wheel stay right relative to each other.
+    this.group.scale.setScalar(GATE_SCALE);
 
     const concrete = new THREE.MeshStandardMaterial({ color: '#9c968a', roughness: 0.92 });
     const steel = new THREE.MeshStandardMaterial({
@@ -177,8 +186,30 @@ export class Gate {
     this.group.add(this.pour);
     this.disposables.push(pourGeo, this.pourMat);
 
-    this.handle.copy(base).add(new THREE.Vector3(0, 7.1, -0.35));
-    this.mouth.copy(base).add(new THREE.Vector3(0, 0.6, 4.4));
+    // a plank catwalk, so the wheel is somewhere a person could reach it
+    const deckGeo = new THREE.BoxGeometry(3.0, 0.14, 1.5);
+    const deck = new THREE.Mesh(deckGeo, paint);
+    deck.position.set(0, 4.6, -1.5);
+    deck.castShadow = true;
+    deck.receiveShadow = true;
+    this.group.add(deck);
+    const railGeo = new THREE.CylinderGeometry(0.06, 0.06, 3.0, 6);
+    railGeo.rotateZ(Math.PI / 2);
+    for (const dy of [0.55, 1.05]) {
+      const rail = new THREE.Mesh(railGeo, steel);
+      rail.position.set(0, 4.6 + dy, -2.2);
+      this.group.add(rail);
+    }
+    const postGeo = new THREE.CylinderGeometry(0.07, 0.07, 1.2, 6);
+    for (const dx of [-1.4, 1.4]) {
+      const post = new THREE.Mesh(postGeo, steel);
+      post.position.set(dx, 5.2, -2.2);
+      this.group.add(post);
+    }
+    this.disposables.push(deckGeo, railGeo, postGeo);
+
+    this.handle.copy(base).add(new THREE.Vector3(0, 7.1 * GATE_SCALE, -0.35 * GATE_SCALE));
+    this.mouth.copy(base).add(new THREE.Vector3(0, 0.6 * GATE_SCALE, 4.4 * GATE_SCALE));
   }
 
   /** Drive from a gesture: positive = opening. Clamped and smoothed. */

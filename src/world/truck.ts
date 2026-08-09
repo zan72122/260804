@@ -180,8 +180,8 @@ export class Truck {
     this.home.copy(this.group.position);
 
     /* ---- pump skid on the dike, between bog and truck ---- */
-    this.pump.set(v.halfX * 0.24, 1.7, v.halfZ + 2.2);
-    this.pumpIntake.set(v.halfX * 0.24, 1.35, v.halfZ + 0.5);
+    this.pump.set(v.halfX * 0.72, 1.55, v.halfZ + 3.1);
+    this.pumpIntake.set(v.halfX * 0.72, 1.2, v.halfZ + 0.55);
     this.buildPump(v, body, dark, steel);
   }
 
@@ -237,7 +237,7 @@ export class Truck {
     const g = new THREE.Group();
     g.position.set(this.pump.x, 0, this.pump.z);
     g.rotation.y = Math.PI;
-    g.scale.setScalar(0.8);
+    g.scale.setScalar(0.62);
 
     const skidGeo = new THREE.BoxGeometry(3.2, 0.34, 2.2);
     const skid = new THREE.Mesh(skidGeo, dark);

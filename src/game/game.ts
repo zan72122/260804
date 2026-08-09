@@ -23,6 +23,7 @@ import {
   WATER_DRY,
   WATER_FULL,
   bogInset,
+  floorHeight,
   clampToBog,
   type FieldVariant,
 } from '../world/layout';
@@ -65,7 +66,10 @@ const BEAD_OF: Record<number, number> = {
 };
 
 /** Fraction of the bog the reel must sweep before the big reveal. */
-const REEL_TARGET = 0.45;
+// A walked machine covers ground slowly, so the sweep asks for less of the
+// section than it did when the beater moved at a sprint — the stage should
+// still land at roughly twenty seconds of churning.
+const REEL_TARGET = 0.3;
 /** How tightly a corralled raft may pack: 1 = single layer, lower = heaped. */
 const PACK_TIGHT = 0.52;
 /** Water-surface area one berry needs when fully packed, plus slack. */
@@ -115,6 +119,7 @@ export class Game {
     this.seed = seed;
     this.scene.background = null;
     this.world = new World(seed);
+    this.scene.fog = this.world.fog;
     this.scene.add(this.world.root);
     this.enter(Step.Intro);
   }
@@ -127,6 +132,9 @@ export class Game {
   get elapsedInStep(): number {
     return this.stepTime;
   }
+
+  /** Rolling average of the berry simulation cost, in milliseconds. */
+  berryMs = 0;
 
   /** 0..1 through the suction stage — drives the camera slide. */
   get suctionProgress(): number {
@@ -147,6 +155,7 @@ export class Game {
     this.scene.remove(this.world.root);
     this.world.dispose();
     this.world = new World(seed);
+    this.scene.fog = this.world.fog;
     this.scene.add(this.world.root);
     this.fill = 0;
     this.pumping = false;
@@ -214,6 +223,7 @@ export class Game {
     this.scene.remove(this.world.root);
     this.world.dispose();
     this.world = new World(this.seed);
+    this.scene.fog = this.world.fog;
     this.scene.add(this.world.root);
     this.fill = step >= Step.Reel ? 1 : fill;
     if (step < Step.Reel) {
@@ -345,8 +355,27 @@ export class Game {
       w.hose.update(dt, (x, z) => w.water.heightAt(x, z), this.pumping ? 1 : 0);
       w.berries.setHose(w.hose.curve, 0.62);
     }
+    this.updateWorkers(dt);
     w.truck.update(dt, this.pumping ? 1 : 0);
+    const t0 = performance.now();
     w.berries.update(dt, this.director.camera);
+    this.berryMs = this.berryMs * 0.9 + (performance.now() - t0) * 0.1;
+    // things that float need something under them, or they read as decals
+    const cs = w.contact;
+    cs.begin();
+    const wl = w.water.level;
+    if (w.water.flood > 0.25) {
+      if (w.reel.group.visible) cs.add(w.reel.pos.x, wl, w.reel.pos.y, 1.35);
+      if (w.driver.group.visible) {
+        const dp = w.driver.group.position;
+        cs.add(dp.x, wl, dp.z, 0.5);
+      }
+      if (w.hose.group.visible) {
+        const n = w.hose.nozzle.position;
+        cs.add(n.x, wl, n.z, 0.62);
+      }
+    }
+    cs.end();
     w.particles.update(dt, w.water.level);
     w.particles.setProjection(height, this.director.camera.fov);
 
@@ -363,6 +392,62 @@ export class Game {
     this.director.set(this.shot);
     this.director.update(dt);
     this.updateHint(dt, width, height);
+  }
+
+  /**
+   * Keep the crew where the work is. The operator walks behind the beater
+   * with both hands on the bar; once the churning is done he wades over to
+   * the boom and then to the pump, so the machinery is never being worked by
+   * nobody.
+   */
+  private updateWorkers(dt: number): void {
+    const w = this.world;
+    const r = w.reel;
+    const onFoot = this.step === Step.Reel || this.step === Step.Sandbox;
+
+    if (onFoot) {
+      // behind the handlebar, hip-deep
+      const bx = r.pos.x - Math.sin(r.heading) * 1.32;
+      const bz = r.pos.y - Math.cos(r.heading) * 1.32;
+      w.driver.update(dt, bx, floorHeight(w.variant, bx, bz), bz, r.heading);
+      w.driver.gripForward();
+      w.driver.setVisible(true);
+    } else if (this.step === Step.Boom) {
+      // wading to the near buoy, hands down on the float line
+      const h = w.boom.posB;
+      const face = Math.atan2(w.boom.centre.x - h.x, w.boom.centre.y - h.y);
+      this.tmpB.set(h.x - Math.sin(face) * 1.1, h.y - Math.cos(face) * 1.1);
+      clampToBog(w.variant, this.tmpB, 0.4);
+      w.driver.update(dt, this.tmpB.x, floorHeight(w.variant, this.tmpB.x, this.tmpB.y), this.tmpB.y, face);
+      w.driver.gripForward();
+      w.driver.setVisible(true);
+    } else if (this.step === Step.Hose || this.step === Step.Pump) {
+      // alongside the nozzle, steadying it
+      const n = w.hose.nozzle.position;
+      const face = Math.atan2(n.x - w.boom.centre.x, n.z - w.boom.centre.y);
+      w.driver.update(dt, n.x - 0.85, floorHeight(w.variant, n.x - 0.85, n.z - 0.7), n.z - 0.7, face);
+      w.driver.gripForward();
+      w.driver.setVisible(true);
+    } else if (this.step === Step.Gate) {
+      // up on the sluice catwalk, winding the wheel
+      const g = w.gate.handle;
+      w.driver.update(dt, g.x + 0.34, w.gate.deckY, g.z - 0.62, Math.PI);
+      w.driver.reachUp(this.stepTime * 5 * (0.2 + w.gate.open));
+      w.driver.setVisible(true);
+    } else {
+      w.driver.setVisible(this.step === Step.Intro || this.step === Step.Reveal);
+      if (this.step === Step.Reveal) {
+        const bx = r.pos.x - Math.sin(r.heading) * 1.32;
+        const bz = r.pos.y - Math.cos(r.heading) * 1.32;
+        w.driver.update(dt, bx, floorHeight(w.variant, bx, bz), bz, r.heading);
+        w.driver.gripForward();
+      } else if (this.step === Step.Intro) {
+        const g = w.gate.handle;
+        w.driver.update(dt, g.x + 0.34, w.gate.deckY, g.z - 0.62, Math.PI);
+        w.driver.reachUp(this.stepTime);
+      }
+    }
+    w.hand.setVisible(this.step >= Step.Hose && this.step <= Step.Done);
   }
 
   /* ------------------------------------------------------------------ *
@@ -535,14 +620,14 @@ export class Game {
           0,
           w.reel.churn.x,
           w.reel.churn.z,
-          0.06 + clamp(w.reel.speed / 3.6, 0, 1) * 0.16,
-          3.4,
+          0.02 + clamp(w.reel.speed / 1.25, 0, 1) * 0.05,
+          1.5,
         );
         const front = w.reel.frontPoint(this.tmp3);
-        const moving = clamp(w.reel.speed / 1.8, 0, 1);
+        const moving = clamp(w.reel.speed / 1.0, 0, 1);
         w.berries.harvestAt(front.x, front.z, w.reel.swathe, 0.07 + moving * 0.5);
         if (Math.random() < 0.7) {
-          w.spawnChurn(w.reel.churn.x, w.water.level, w.reel.churn.z, 0.25 + moving * 0.75);
+          w.spawnChurn(front.x, w.water.level, front.z, 0.2 + moving * 0.6);
         }
         if (w.berries.harvested >= REEL_TARGET) this.enter(Step.Reveal);
         break;
@@ -581,7 +666,7 @@ export class Game {
 
       case Step.Hose: {
         this.parkReel(dt);
-        if (w.hose.trySnap(3.8)) {
+        if (w.hose.trySnap(1.7)) {
           sfxClick();
           say('カチッ');
           window.setTimeout(() => {
@@ -639,14 +724,14 @@ export class Game {
           0,
           w.reel.churn.x,
           w.reel.churn.z,
-          0.06 + clamp(w.reel.speed / 3.6, 0, 1) * 0.16,
-          3.4,
+          0.02 + clamp(w.reel.speed / 1.25, 0, 1) * 0.05,
+          1.5,
         );
         const front = w.reel.frontPoint(this.tmp3);
-        const moving = clamp(w.reel.speed / 1.8, 0, 1);
+        const moving = clamp(w.reel.speed / 1.0, 0, 1);
         w.berries.harvestAt(front.x, front.z, w.reel.swathe, 0.07 + moving * 0.5);
         if (Math.random() < 0.6) {
-          w.spawnChurn(w.reel.churn.x, w.water.level, w.reel.churn.z, 0.25 + moving * 0.75);
+          w.spawnChurn(front.x, w.water.level, front.z, 0.2 + moving * 0.6);
         }
         w.berries.setIntake(this.pumping, w.hose.intakePoint(this.tmp3), 5.5);
         if (this.pumping && Math.random() < 0.3) sfxTumble();
@@ -678,10 +763,10 @@ export class Game {
     switch (this.step) {
       case Step.Intro: {
         const t = clamp(this.stepTime / 5, 0, 1);
-        s.target.set(0, 0.6, 1.5);
+        s.target.set(v.halfX * 0.18, 0.5, 0.4);
         s.yaw = 0.5 - t * 0.16;
-        s.pitch = (portrait ? 0.64 : 0.46) + t * 0.03;
-        s.dist = wide * 2.9 * (portrait ? 1.14 : 1) - t * wide * 0.32;
+        s.pitch = (portrait ? 0.56 : 0.40) + t * 0.03;
+        s.dist = wide * 3.5 * (portrait ? 1.2 : 1) - t * wide * 0.3;
         s.fov = fovBase;
         s.rate = 0.7;
         break;
@@ -690,10 +775,10 @@ export class Game {
       case Step.Gate: {
         const g = w.gate.group.position;
         // gate and the flooding front held in one frame throughout
-        s.target.set(g.x * 0.6, 1.0, lerp(g.z + 5.5, -v.halfZ * 0.1, this.fill * 0.85));
+        s.target.set(g.x * 0.6, 0.8, lerp(g.z + 3.4, -v.halfZ * 0.1, this.fill * 0.85));
         s.yaw = portrait ? 0.12 : 0.24;
         s.pitch = portrait ? 0.44 : 0.3;
-        s.dist = (portrait ? 18 : 17) * pf;
+        s.dist = (portrait ? 12 : 11) * pf;
         s.fov = fovBase;
         s.bias = portrait ? 1.5 : 0.5;
         s.rate = 1.1;
@@ -704,13 +789,13 @@ export class Game {
         const r = w.reel;
         // three-quarters behind, close enough that the paddles fill the frame
         s.target.set(
-          r.pos.x + Math.sin(r.viewHeading) * 2.0,
-          w.water.level + 0.5,
-          r.pos.y + Math.cos(r.viewHeading) * 2.0,
+          r.pos.x + Math.sin(r.viewHeading) * 0.9,
+          w.water.level + 0.35,
+          r.pos.y + Math.cos(r.viewHeading) * 0.9,
         );
         s.yaw = r.viewHeading + Math.PI + (portrait ? 0.22 : 0.36);
         s.pitch = portrait ? 0.52 : 0.3;
-        s.dist = portrait ? 15.5 : 10.5;
+        s.dist = portrait ? 5.6 : 4.6;
         s.fov = portrait ? 58 : 52;
         s.bias = portrait ? 1.0 : 0.35;
         s.rate = 2.2;
@@ -727,7 +812,7 @@ export class Game {
           s.target.set(w.reel.churn.x, w.water.level + 0.15, w.reel.churn.z);
           s.yaw = w.reel.viewHeading + Math.PI + 0.95;
           s.pitch = 0.08;
-          s.dist = 6.6;
+          s.dist = 3.4;
           s.fov = portrait ? 66 : 58;
           s.bias = 0.75;
           s.rate = 1.1;
@@ -738,7 +823,7 @@ export class Game {
           s.target.set(c.x * 0.5, w.water.level, c.y * 0.5);
           s.yaw = w.reel.viewHeading + Math.PI + 0.95 - e * 0.6;
           s.pitch = lerp(0.05, portrait ? 1.05 : 0.88, e);
-          s.dist = lerp(6.6, wide * (portrait ? 2.1 : 1.7), e);
+          s.dist = lerp(3.4, wide * (portrait ? 2.4 : 1.95), e);
           s.fov = lerp(portrait ? 66 : 58, fovBase, e);
           s.bias = lerp(0.75, 0, e);
           s.rate = 0.95;
@@ -753,7 +838,7 @@ export class Game {
         s.yaw = portrait ? 0.06 : 0.16;
         s.pitch = portrait ? 1.0 : 0.82;
         // frame the ring, tightening with it so the squeeze reads
-        s.dist = clamp(span * (portrait ? 1.5 : 1.15) + 5, 11, wide * 2.6);
+        s.dist = clamp(span * (portrait ? 1.6 : 1.2) + 3.4, 7.5, wide * 3.0);
         s.fov = fovBase;
         s.rate = 0.9;
         break;
@@ -767,7 +852,7 @@ export class Game {
         s.target.set((c.x + n.x) / 2, w.water.level + 0.2, (c.y + n.z) / 2);
         s.yaw = Math.PI + (portrait ? 0.14 : 0.3);
         s.pitch = portrait ? 0.62 : 0.5;
-        s.dist = portrait ? 15 : 13.5;
+        s.dist = portrait ? 9.5 : 8.5;
         s.fov = fovBase;
         s.bias = portrait ? 1.2 : 0.4;
         s.rate = 1.2;
@@ -783,7 +868,7 @@ export class Game {
           target: new THREE.Vector3(w.hose.mouth.x, w.water.level + 0.1, w.hose.mouth.z),
           yaw: Math.PI + (portrait ? 0.1 : 0.26),
           pitch: portrait ? 0.62 : 0.52,
-          dist: portrait ? 10.5 : 9.5,
+          dist: portrait ? 7.5 : 6.6,
           fov: portrait ? 64 : 54,
           bias: portrait ? 1.5 : 0.5,
         };
@@ -794,7 +879,7 @@ export class Game {
           target: arch.clone(),
           yaw: Math.PI + (portrait ? 0.34 : 0.46),
           pitch: portrait ? 0.3 : 0.24,
-          dist: portrait ? 5.4 : 5.0,
+          dist: portrait ? 3.6 : 3.2,
           fov: portrait ? 62 : 52,
           bias: portrait ? 0.35 : 0.1,
         };
@@ -805,7 +890,7 @@ export class Game {
           // heap in the bed is never blocked by the pipework
           yaw: portrait ? 1.35 : 1.25,
           pitch: portrait ? 0.4 : 0.34,
-          dist: portrait ? 7.2 : 7.6,
+          dist: portrait ? 6.2 : 6.6,
           fov: portrait ? 60 : 50,
           bias: portrait ? 0.35 : 0.2,
         };
@@ -833,7 +918,7 @@ export class Game {
         s.target.set(lerp(bed.x, 0, t), lerp(bed.y + 1, 1.5, t), lerp(bed.z, v.halfZ * 0.25, t));
         s.yaw = lerp(1.25, 0.5, t);
         s.pitch = lerp(0.4, portrait ? 0.44 : 0.32, t);
-        s.dist = lerp(8, wide * 2.4 * pf, t);
+        s.dist = lerp(6.6, wide * 3.0 * pf, t);
         s.fov = lerp(portrait ? 60 : 50, fovBase, t);
         s.rate = 0.5;
         break;
@@ -844,7 +929,7 @@ export class Game {
         s.target.set(r.pos.x, w.water.level + 0.5, r.pos.y);
         s.yaw = r.viewHeading + Math.PI + 0.4;
         s.pitch = portrait ? 0.58 : 0.44;
-        s.dist = portrait ? 18 : 14;
+        s.dist = portrait ? 11 : 9;
         s.fov = portrait ? 62 : 52;
         s.bias = portrait ? 1.1 : 0.35;
         s.rate = 1.8;

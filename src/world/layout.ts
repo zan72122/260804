@@ -13,15 +13,23 @@ import { rng, type Rng } from '../core/math';
 export const FLOOR_Y = 0;
 /** Water height before the gate opens — a puddle in the lowest corner only. */
 export const WATER_DRY = -0.27;
-/** Water height once flooded: vines fully under, berries have room to rise. */
-export const WATER_FULL = 1.08;
+/**
+ * Water height once flooded. A wet harvest floods the bed with something
+ * like a foot to a foot and a half of water — enough to cover the vines and
+ * float the fruit, and no more. Waist-deep was wrong, and it was the reason
+ * the crew looked like they were swimming.
+ */
+export const WATER_FULL = 0.62;
 
 /**
- * Berries are exaggerated roughly ten-fold against the machinery. That is a
- * deliberate trade: at true scale the flooded bog would read as pink haze,
- * and the whole point of the reveal is a surface that turns red.
+ * Fruit size, in metres. A real cranberry is about 14mm; at that scale a
+ * flooded bog would be pink haze, so this is still an exaggeration — but a
+ * modest one. The raft's *colour* comes from a density field painted into
+ * the water surface, which is what a real raft looks like at any distance,
+ * so the instances no longer have to be the size of the machine to make the
+ * bog turn red.
  */
-export const BERRY_R = 0.30;
+export const BERRY_R = 0.145;
 
 export interface FieldVariant {
   seed: number;
@@ -58,13 +66,17 @@ const TRUCKS = ['#e8734a', '#4f9ad6', '#e2b83f', '#8f6fc4', '#5fb98a'];
 export function makeVariant(seed: number): FieldVariant {
   const r = rng(seed);
   const sky = r.pick(SKIES);
-  const halfX = r.range(10.5, 12);
-  const halfZ = r.range(8.5, 9.8);
+  // One boomed-off working section, not a whole farm. Wet harvesting is done
+  // a section at a time, and this size is what makes the numbers honest: a
+  // machine somebody walks behind can cross it, and the crop that comes off
+  // it actually covers the water.
+  const halfX = r.range(6.2, 7.0);
+  const halfZ = r.range(5.2, 5.9);
   return {
     seed,
     halfX,
     halfZ,
-    corner: r.range(1.8, 3.6),
+    corner: r.range(1.1, 2.2),
     berryCount: 0, // filled by the berry field from the quality profile
     paleRatio: r.range(0.015, 0.05),
     skyTop: new THREE.Color(sky[0]),
@@ -126,10 +138,11 @@ export function floorHeight(v: FieldVariant, x: number, z: number): number {
 export function gatePosition(v: FieldVariant): THREE.Vector3 {
   // set well back off the dike: the suction camera works from the far side
   // of the bog later on, and must not end up inside the headwall
-  return new THREE.Vector3(-v.halfX * 0.34, 0, -v.halfZ - 3.2);
+  return new THREE.Vector3(-v.halfX * 0.3, 0, -v.halfZ - 2.6);
 }
 
 /** Truck + pump station wait on the near berm, to the right. */
 export function truckPosition(v: FieldVariant): THREE.Vector3 {
-  return new THREE.Vector3(v.halfX * 0.55, 0, v.halfZ + 5.4);
+  // parked off the working ground, clear of the sluice end of the dike
+  return new THREE.Vector3(v.halfX * 1.25, 0, v.halfZ + 6.2);
 }

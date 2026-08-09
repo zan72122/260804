@@ -68,7 +68,7 @@ function berryGeometry(radius: number, rings: number, segs: number): THREE.Buffe
   return geo;
 }
 
-const FAR_DIST_SQ = 22 * 22;
+const FAR_DIST_SQ = 13 * 13;
 /** Fruit in the truck bed is drawn at this fraction of its size. */
 const BED_SCALE = 0.45;
 
@@ -128,9 +128,24 @@ export class BerryField {
    */
   readonly radius: number;
 
-  /** Spatial hash for the separation pass. */
+  /**
+   * Uniform grid for the separation pass, as a counting sort over flat typed
+   * arrays: `cellStart` holds the prefix sum and `cellItems` the berry
+   * indices bucketed by cell. A Map of per-cell arrays would allocate every
+   * frame and dominate the whole simulation.
+   *
+   * The cell is sized to the *largest* separation distance, so a 3x3
+   * neighbourhood is exactly enough. Coarser is not free: every factor of
+   * cell size squares the candidate pairs each berry has to test.
+   */
   private readonly cell: number;
-  private readonly grid = new Map<number, number[]>();
+  private readonly gw: number;
+  private readonly gh: number;
+  private readonly gx0: number;
+  private readonly gz0: number;
+  private readonly cellCount: Int32Array;
+  private readonly cellStart: Int32Array;
+  private readonly cellItems: Int32Array;
 
   private readonly tmpM = new THREE.Matrix4();
   private readonly tmpQ = new THREE.Quaternion();
@@ -139,6 +154,21 @@ export class BerryField {
   private readonly tmpS = new THREE.Vector3();
   private readonly tmp2 = new THREE.Vector2();
   private readonly col = new THREE.Color();
+
+  /**
+   * Coarse map of how much fruit is floating where, handed to the water
+   * shader. A raft of cranberries is a solid red mass at any distance — you
+   * only resolve individual fruit within a couple of metres. Painting the
+   * mass into the surface is what lets the *instances* be a believable size
+   * instead of beach balls: the density carries the colour, the instances
+   * carry the detail.
+   */
+  readonly densityTex: THREE.DataTexture;
+  private readonly densityData: Uint8Array<ArrayBuffer>;
+  private readonly densityRaw: Float32Array;
+  private readonly dw: number;
+  private readonly dh: number;
+  private densityClock = 0;
 
   private time = 0;
   floatingCount = 0;
@@ -157,9 +187,17 @@ export class BerryField {
     lowDetail: boolean,
   ) {
     this.n = Math.min(count, anchors.length * 3);
-    this.radius = BERRY_R * clamp(Math.sqrt(1200 / Math.max(1, this.n)), 1, 1.24);
-    this.cell = this.radius * 3.4;
+    this.radius = BERRY_R * clamp(Math.sqrt(1700 / Math.max(1, this.n)), 1, 1.2);
+    this.cell = this.radius * 1.95;
+    // one margin of bog around the playfield, so nothing can fall out of grid
+    this.gx0 = -(v.halfX + 3);
+    this.gz0 = -(v.halfZ + 3);
+    this.gw = Math.ceil(((v.halfX + 3) * 2) / this.cell) + 1;
+    this.gh = Math.ceil(((v.halfZ + 3) * 2) / this.cell) + 1;
+    this.cellCount = new Int32Array(this.gw * this.gh + 1);
+    this.cellStart = new Int32Array(this.gw * this.gh + 1);
     const n = this.n;
+    this.cellItems = new Int32Array(n);
     this.px = new Float32Array(n);
     this.py = new Float32Array(n);
     this.pz = new Float32Array(n);
@@ -182,6 +220,24 @@ export class BerryField {
     this.stray = new Uint8Array(n);
     this.crowd = new Float32Array(n);
     this.dropScale = new Float32Array(n).fill(1);
+
+    // density map: about one texel per half metre of bog
+    this.dw = Math.max(8, Math.round((v.halfX + 2) * 2 / 0.55));
+    this.dh = Math.max(8, Math.round((v.halfZ + 2) * 2 / 0.55));
+    this.densityRaw = new Float32Array(this.dw * this.dh);
+    this.densityData = new Uint8Array(new ArrayBuffer(this.dw * this.dh));
+    this.densityTex = new THREE.DataTexture(
+      this.densityData,
+      this.dw,
+      this.dh,
+      THREE.RedFormat,
+      THREE.UnsignedByteType,
+    );
+    this.densityTex.minFilter = THREE.LinearFilter;
+    this.densityTex.magFilter = THREE.LinearFilter;
+    this.densityTex.wrapS = THREE.ClampToEdgeWrapping;
+    this.densityTex.wrapT = THREE.ClampToEdgeWrapping;
+    this.densityTex.needsUpdate = true;
 
     const r = v.rng;
     for (let i = 0; i < n; i++) {
@@ -240,12 +296,17 @@ export class BerryField {
       m.frustumCulled = false;
       m.count = 0;
       m.castShadow = false;
-      m.receiveShadow = false;
+      m.receiveShadow = true;
     }
     this.near.name = 'berries-near';
     this.far.name = 'berries-far';
     this.group.add(this.near, this.far);
     this.group.name = 'berries';
+  }
+
+  /** Turn self-shadowing on for the near fruit only — the far mesh is a wash. */
+  set castShadow(on: boolean) {
+    this.near.castShadow = on;
   }
 
   /* ---------------- queries used by the game loop ---------------- */
@@ -362,10 +423,15 @@ export class BerryField {
 
   /* ---------------- simulation ---------------- */
 
-  private hash(x: number, z: number): number {
-    const i = Math.floor(x / this.cell);
-    const j = Math.floor(z / this.cell);
-    return (i + 4096) * 8192 + (j + 4096);
+  /** Grid column/row for a world position, clamped into the fixed grid. */
+  private gcol(x: number): number {
+    const i = Math.floor((x - this.gx0) / this.cell);
+    return i < 0 ? 0 : i >= this.gw ? this.gw - 1 : i;
+  }
+
+  private grow(z: number): number {
+    const j = Math.floor((z - this.gz0) / this.cell);
+    return j < 0 ? 0 : j >= this.gh ? this.gh - 1 : j;
   }
 
   update(dt: number, camera: THREE.Camera): void {
@@ -380,15 +446,26 @@ export class BerryField {
     let bed = 0;
     let inHose = 0;
 
-    /* --- rebuild the neighbour grid for floating fruit --- */
-    this.grid.clear();
+    /* --- rebuild the neighbour grid for floating fruit (counting sort) --- */
+    const cells = this.gw * this.gh;
+    this.cellCount.fill(0, 0, cells + 1);
     for (let i = 0; i < this.n; i++) {
       const s = this.state[i];
       if (s !== S.FLOATING && s !== S.INTAKE) continue;
-      const key = this.hash(this.px[i], this.pz[i]);
-      const arr = this.grid.get(key);
-      if (arr) arr.push(i);
-      else this.grid.set(key, [i]);
+      this.cellCount[this.grow(this.pz[i]) * this.gw + this.gcol(this.px[i])]++;
+    }
+    let running = 0;
+    for (let c = 0; c < cells; c++) {
+      this.cellStart[c] = running;
+      running += this.cellCount[c];
+      this.cellCount[c] = this.cellStart[c];
+    }
+    this.cellStart[cells] = running;
+    for (let i = 0; i < this.n; i++) {
+      const s = this.state[i];
+      if (s !== S.FLOATING && s !== S.INTAKE) continue;
+      const c = this.grow(this.pz[i]) * this.gw + this.gcol(this.px[i]);
+      this.cellItems[this.cellCount[c]++] = i;
     }
 
     for (let i = 0; i < this.n; i++) {
@@ -477,16 +554,20 @@ export class BerryField {
           }
 
           // separation from neighbours: this is what makes "ぎゅっ" feel packed
-          const gi = Math.floor(this.px[i] / this.cell);
-          const gj = Math.floor(this.pz[i] / this.cell);
+          const gi = this.gcol(this.px[i]);
+          const gj = this.grow(this.pz[i]);
           const minD = this.radius * 1.92 * this.packFactor;
           let near = 0;
-          for (let oi = -1; oi <= 1; oi++) {
-            for (let oj = -1; oj <= 1; oj++) {
-              const arr = this.grid.get((gi + oi + 4096) * 8192 + (gj + oj + 4096));
-              if (!arr) continue;
-              for (let k = 0; k < arr.length; k++) {
-                const j = arr[k];
+          const oi0 = gi > 0 ? -1 : 0;
+          const oi1 = gi < this.gw - 1 ? 1 : 0;
+          const oj0 = gj > 0 ? -1 : 0;
+          const oj1 = gj < this.gh - 1 ? 1 : 0;
+          for (let oi = oi0; oi <= oi1; oi++) {
+            for (let oj = oj0; oj <= oj1; oj++) {
+              const c = (gj + oj) * this.gw + (gi + oi);
+              const end = this.cellCount[c]; // scatter left this at the cell end
+              for (let k = this.cellStart[c]; k < end; k++) {
+                const j = this.cellItems[k];
                 if (j === i) continue;
                 const dx = this.px[i] - this.px[j];
                 const dz = this.pz[i] - this.pz[j];
@@ -599,8 +680,8 @@ export class BerryField {
           const nx = -tan.z;
           const nz = tan.x;
           const len = Math.hypot(nx, nz) || 1;
-          const o1 = this.hoseOff[i * 2] * 0.14;
-          const o2 = this.hoseOff[i * 2 + 1] * 0.14;
+          const o1 = this.hoseOff[i * 2] * 0.075;
+          const o2 = this.hoseOff[i * 2 + 1] * 0.075;
           const wig = Math.sin(this.time * 6 + this.wobble[i]) * 0.04;
           this.px[i] = p.x + (nx / len) * (o1 + wig);
           this.pz[i] = p.z + (nz / len) * (o1 + wig);
@@ -655,7 +736,62 @@ export class BerryField {
     this.floatingCount = floating;
     this.bedCount = bed;
     this.inHoseCount = inHose;
+
+    // The density map only feeds a soft colour wash, so a third of the frame
+    // rate is plenty and the interpolation hides the staleness.
+    this.densityClock -= dt;
+    if (this.densityClock <= 0) {
+      this.densityClock = 0.1;
+      this.updateDensity();
+    }
+
     this.writeInstances(camera);
+  }
+
+  /**
+   * Splat every floating berry into the coarse map, blur it once, and push
+   * it to the GPU. One berry covers roughly one texel, so the raw counts are
+   * already close to a coverage fraction.
+   */
+  private updateDensity(): void {
+    const raw = this.densityRaw;
+    raw.fill(0);
+    const sx = this.dw / ((this.v.halfX + 2) * 2);
+    const sz = this.dh / ((this.v.halfZ + 2) * 2);
+    const perBerry = (this.radius * this.radius * Math.PI) / (0.55 * 0.55);
+    for (let i = 0; i < this.n; i++) {
+      const st = this.state[i];
+      if (st !== S.FLOATING && st !== S.INTAKE) continue;
+      const u = Math.floor((this.px[i] + this.v.halfX + 2) * sx);
+      const vv = Math.floor((this.pz[i] + this.v.halfZ + 2) * sz);
+      if (u < 0 || vv < 0 || u >= this.dw || vv >= this.dh) continue;
+      raw[vv * this.dw + u] += perBerry;
+    }
+    // separable 1-2-1 blur, in place along each axis
+    const w = this.dw;
+    const h = this.dh;
+    for (let y = 0; y < h; y++) {
+      let prev = raw[y * w];
+      for (let x = 0; x < w; x++) {
+        const cur = raw[y * w + x];
+        const next = x + 1 < w ? raw[y * w + x + 1] : cur;
+        raw[y * w + x] = (prev + cur * 2 + next) * 0.25;
+        prev = cur;
+      }
+    }
+    for (let x = 0; x < w; x++) {
+      let prev = raw[x];
+      for (let y = 0; y < h; y++) {
+        const cur = raw[y * w + x];
+        const next = y + 1 < h ? raw[(y + 1) * w + x] : cur;
+        raw[y * w + x] = (prev + cur * 2 + next) * 0.25;
+        prev = cur;
+      }
+    }
+    for (let k = 0; k < raw.length; k++) {
+      this.densityData[k] = Math.min(255, Math.round(raw[k] * 255 * 1.25));
+    }
+    this.densityTex.needsUpdate = true;
   }
 
   /** Push the simulation state into the two instanced meshes. */
@@ -694,12 +830,16 @@ export class BerryField {
       let b = this.baseCol[i * 3 + 2];
       const st = this.state[i];
       if (st === S.ON_VINE || st === S.DETACHED || st === S.RISING) {
-        const under = clamp((waterLevel - y) / 1.1, 0, 1) * smoothstep(this.water.flood * 2);
-        const k = under * 0.45;
+        // Water absorbs red before anything else, so fruit under the surface
+        // goes dark and loses its warmth. Tinting it *toward* the water made
+        // it pale, which read as grey pebbles on the bottom.
+        const under = clamp((waterLevel - y) / 0.8, 0, 1) * smoothstep(this.water.flood * 2);
+        const k = under * 0.68;
         const tint = this.v.waterTint;
-        r = r * (1 - k) + tint.r * k * 1.5;
-        g = g * (1 - k) + tint.g * k * 1.5;
-        b = b * (1 - k) + tint.b * k * 1.5;
+        const dim = 1 - under * 0.38;
+        r = (r * (1 - k * 0.92) + tint.r * k * 0.45) * dim;
+        g = (g * (1 - k * 0.6) + tint.g * k * 0.6) * dim;
+        b = (b * (1 - k * 0.5) + tint.b * k * 0.7) * dim;
       }
 
       if (dist2 < FAR_DIST_SQ) {
@@ -802,6 +942,7 @@ export class BerryField {
   }
 
   dispose(): void {
+    this.densityTex.dispose();
     this.geoNear.dispose();
     this.geoFar.dispose();
     this.matNear.dispose();

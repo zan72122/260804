@@ -5,8 +5,8 @@ four-year-old who cannot read yet.
 
 > みずを いれて、ぐるぐるして、あかい みを うかせて、あつめて、すいこむ。
 
-One harvest day, start to finish, in three to five minutes. No score, no
-stars, no timer, no way to fail.
+One harvest day on one boomed-off section of bog, start to finish, in three
+to five minutes. No score, no stars, no timer, no way to fail.
 
 ---
 
@@ -14,7 +14,7 @@ stars, no timer, no way to fail.
 
 | # | Verb | Gesture | What the child sees |
 |---|------|---------|---------------------|
-| 1 | look | — | a dry bog, red fruit low on the vines, gate, reel, boom and truck all in one world |
+| 1 | look | — | a dry section, red fruit low on the vines, and the crew, sluice, beater, boom and truck all in one world |
 | 2 | flood | swipe **up** anywhere | the sluice lifts, water pours in and finds the low ground; the level climbs while the gate is open |
 | 3 | churn | **drag** | the water reel drives where the finger goes; paddles beat the surface, fruit comes off the vine |
 | 4 | watch | (stir, optional) | camera drops to the waterline: berries rise through the water, break the surface and bob — then rises to show a red bog |
@@ -64,9 +64,20 @@ the cheapest thing that still makes the cause visible.
 * **Berries** are rows in typed arrays and instances in one of two
   `InstancedMesh`es (detailed near the camera, cheap far away). Buoyancy is a
   per-berry spring with a staggered delay; crowd motion is a flow field plus
-  a grid-based separation pass; containment is the signed distance to the
-  boom circle. A `packFactor` lets the raft heap up as the ring closes, which
-  is what turns "berries move together" into "berries pack into a red mass".
+  a separation pass over a flat counting-sort grid; containment is the signed
+  distance to the boom circle. A `packFactor` lets the raft heap up as the
+  ring closes, which is what turns "berries move together" into "berries pack
+  into a red mass".
+* **The raft's colour is not the instances.** Floating fruit is splatted into
+  a coarse density map that the water shader reads and paints as a mass of
+  wet domes. A real raft is solid red at any distance and you only resolve
+  individual fruit within a couple of metres — doing it this way is why the
+  berries can be a believable size instead of having to be the size of the
+  machine to make the bog turn red.
+* **Contact shadows** are a handful of soft multiplied discs laid on the
+  surface under the beater, the crew and the nozzle. The water is a custom
+  transparent shader and cannot take part in the shadow pass, and anything
+  floating with nothing underneath it reads as pasted on.
 * **The boom** is a circle you *haul in*, not a rope with physics — always a
   smooth closed curve however erratic the dragging.
 * **The hose** is a Catmull-Rom spline; the tube's vertex buffer is rewritten
@@ -85,6 +96,14 @@ the cheapest thing that still makes the cause visible.
 * No post-processing, no bloom, no screen-space refraction, no shadow except
   one small directional map (off on low).
 * `visibilitychange` suspends audio and drops the huge first frame on return.
+
+### Keeping the world honest
+
+The scale is set by the person, not the other way round: an adult is 1.78m,
+the beater is a machine one of them walks behind at about 1.2 m/s, the flood
+is knee deep, and the section is the size a crew actually booms off at once.
+Every other dimension — sluice, boom floats, suction bore, truck — was sized
+against that, and the cameras were re-framed to match.
 
 ### Portrait and landscape
 

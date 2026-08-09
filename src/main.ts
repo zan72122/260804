@@ -222,6 +222,7 @@ declare global {
       restart(same: boolean, sandbox?: boolean): void;
       tier(): string;
       drawCalls(): number;
+      perf(): { berryMs: number; tris: number; calls: number; berries: number };
     };
   }
 }
@@ -245,4 +246,10 @@ window.__game = {
   restart: (same: boolean, sandbox = false) => game.restart(same, sandbox),
   tier: () => currentTier(),
   drawCalls: () => renderer.info.render.calls,
+  perf: () => ({
+    berryMs: game.berryMs,
+    tris: renderer.info.render.triangles,
+    calls: renderer.info.render.calls,
+    berries: game.world.berries.n,
+  }),
 };

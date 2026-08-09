@@ -15,6 +15,8 @@ import { Reel } from '../world/reel';
 import { Boom } from '../world/boom';
 import { Hose } from '../world/hose';
 import { Truck } from '../world/truck';
+import { Worker } from '../world/worker';
+import { ContactShadows } from '../world/contact';
 import { quality, currentTier } from '../core/settings';
 import { sfxPop } from '../core/audio';
 
@@ -31,8 +33,14 @@ export class World {
   readonly boom: Boom;
   readonly hose: Hose;
   readonly truck: Truck;
+  /** The operator who walks the beater. */
+  readonly driver: Worker;
+  /** A second hand, on the dike by the pump. */
+  readonly hand: Worker;
   readonly sun: THREE.DirectionalLight;
   readonly hemi: THREE.HemisphereLight;
+  readonly fog: THREE.Fog;
+  readonly contact = new ContactShadows(8);
 
   private readonly bubbleColor = new THREE.Color('#dff2f0');
   private readonly dropColor = new THREE.Color('#cfe8ea');
@@ -65,32 +73,51 @@ export class World {
     );
     v.berryCount = this.berries.n;
 
+    // Aerial perspective. Without it the far treeline is exactly as
+    // saturated and contrasty as the fruit two metres away, and the whole
+    // farm collapses into a diorama with no depth.
+    this.fog = new THREE.Fog(v.skyBottom.clone().lerp(v.skyTop, 0.3), 22, 105);
+
     this.gate = new Gate(v);
     this.reel = new Reel(v);
     this.boom = new Boom(v);
     this.truck = new Truck(v, this.berries.n);
     this.hose = new Hose(this.truck.pumpIntake, this.truck.pump, this.truck.discharge);
+    this.driver = new Worker(v.seed, 0);
+    this.hand = new Worker(v.seed ^ 0x51, 1);
+    // the second hand stands on the dike beside the pump skid, where the
+    // suction line comes ashore
+    this.hand.update(0.016, this.truck.pump.x - 1.5, 1.62, this.truck.pump.z + 0.4, -2.5);
     this.berries.setBed(this.truck.bedOrigin, this.truck.slots);
+    this.water.setRaft(this.berries.densityTex, 1);
+    this.water.setFog(this.fog.color, this.fog.near, this.fog.far);
 
     /* ---- lighting: one warm key, one cool sky fill ---- */
     // one warm key with real punch, plus a cool sky fill; the contrast
     // between them is what keeps the machinery and the fruit readable
-    this.hemi = new THREE.HemisphereLight(v.skyTop.clone(), new THREE.Color('#4a3f28'), 0.8);
-    this.sun = new THREE.DirectionalLight(v.sunColor.clone(), 3.1);
+    this.hemi = new THREE.HemisphereLight(v.skyTop.clone(), new THREE.Color('#54492e'), 1.0);
+    this.sun = new THREE.DirectionalLight(v.sunColor.clone(), 2.7);
     this.sun.position.set(16, 26, 13);
     if (q.shadows) {
       this.sun.castShadow = true;
-      this.sun.shadow.mapSize.set(1024, 1024);
+      this.sun.shadow.mapSize.set(currentTier() === 'high' ? 2048 : 1536, currentTier() === 'high' ? 2048 : 1536);
       const c = this.sun.shadow.camera;
-      const r = Math.max(v.halfX, v.halfZ) + 10;
+      // tight to the working section: a bigger box only wastes resolution
+      const r = Math.max(v.halfX, v.halfZ) + 11;
       c.left = -r;
       c.right = r;
       c.top = r;
       c.bottom = -r;
       c.near = 1;
       c.far = 80;
-      this.sun.shadow.bias = -0.0016;
-      this.sun.shadow.normalBias = 0.05;
+      this.sun.shadow.bias = -0.0006;
+      this.sun.shadow.normalBias = 0.02;
+      // Fruit deliberately does NOT cast: at 15cm across it lands on a
+      // handful of shadow texels and comes back as hard black blotches,
+      // which reads far worse than no self-shadowing at all. The crevices
+      // between packed berries are drawn by the raft shader instead.
+      this.driver.group.traverse((o) => { o.castShadow = true; });
+      this.hand.group.traverse((o) => { o.castShadow = true; });
     }
 
     this.root.add(
@@ -99,11 +126,14 @@ export class World {
       this.berries.group,
       this.water.mesh,
       this.particles.points,
+      this.contact.mesh,
       this.gate.group,
       this.reel.group,
       this.boom.group,
       this.hose.group,
       this.truck.group,
+      this.driver.group,
+      this.hand.group,
       this.hemi,
       this.sun,
       this.sun.target,
@@ -138,7 +168,7 @@ export class World {
         this.dropColor,
       );
     }
-    p.spawn(PKind.Foam, x, y, z, 0, 0, 0, 0.34, 0.55, this.foamColor);
+    p.spawn(PKind.Foam, x, y, z, 0, 0, 0, 0.16, 0.55, this.foamColor);
     // a pop for roughly one berry in four — a hundred clicks at once is noise
     if (this.popBudget <= 0) {
       sfxPop(0.55 + Math.random() * 0.5);
@@ -203,26 +233,26 @@ export class World {
     for (let i = 0; i < n; i++) {
       p.spawn(
         PKind.Droplet,
-        x + (Math.random() - 0.5) * 1.6,
-        y + 0.1,
-        z + (Math.random() - 0.5) * 1.6,
-        (Math.random() - 0.5) * 3.2,
-        1.4 + Math.random() * 2.4 * intensity,
-        (Math.random() - 0.5) * 3.2,
+        x + (Math.random() - 0.5) * 0.8,
+        y + 0.06,
+        z + (Math.random() - 0.5) * 0.8,
+        (Math.random() - 0.5) * 1.6,
+        0.8 + Math.random() * 1.5 * intensity,
+        (Math.random() - 0.5) * 1.6,
         0.07 + Math.random() * 0.08,
         0.4 + Math.random() * 0.4,
         this.dropColor,
       );
     }
     if (Math.random() < 0.4 * intensity) {
-      p.spawn(PKind.Foam, x, y, z, 0, 0, 0, 0.5, 0.7, this.foamColor);
+      p.spawn(PKind.Foam, x, y, z, 0, 0, 0, 0.28, 0.7, this.foamColor);
     }
     if (Math.random() < 0.1) {
       p.spawn(
         PKind.Leaf,
-        x + (Math.random() - 0.5) * 2,
-        y + 0.3,
-        z + (Math.random() - 0.5) * 2,
+        x + (Math.random() - 0.5) * 1.0,
+        y + 0.2,
+        z + (Math.random() - 0.5) * 1.0,
         (Math.random() - 0.5) * 1.4,
         0.6,
         (Math.random() - 0.5) * 1.4,
@@ -234,6 +264,9 @@ export class World {
   }
 
   dispose(): void {
+    this.contact.dispose();
+    this.driver.dispose();
+    this.hand.dispose();
     this.terrain.dispose();
     this.water.dispose();
     this.vines.dispose();

@@ -18,7 +18,10 @@ import { clamp, damp, smoothstep } from '../core/math';
  * Roughly its own half-length: past this the bearing to the finger is not
  * meaningful any more, it is just noise.
  */
-const DEAD_ZONE = 1.6;
+const DEAD_ZONE = 1.2;
+
+/** Shrinks the built model to a machine one person can walk behind. */
+const REEL_SCALE = 0.55;
 
 export class Reel {
   readonly group = new THREE.Group();
@@ -52,11 +55,15 @@ export class Reel {
   /** World-space centre of the churn, a little behind the drums. */
   readonly churn = new THREE.Vector3();
   /** How wide a swathe the machine strips, in world units. */
-  readonly swathe = 2.2;
+  readonly swathe = 1.05;
 
   constructor(private readonly v: FieldVariant) {
     this.group.name = 'reel';
     this.group.add(this.hull);
+    // Built at a comfortable working size and scaled to a real walk-behind
+    // beater: about 1.7m across the drums, hood at waist height. At full
+    // size it dwarfed the person pushing it.
+    this.group.scale.setScalar(REEL_SCALE);
 
     const steel = new THREE.MeshStandardMaterial({
       color: '#8d97a2',
@@ -162,9 +169,9 @@ export class Reel {
     this.hull.add(housing);
     this.disposables.push(boxGeo);
 
-    const mastGeo = new THREE.CylinderGeometry(0.055, 0.055, 1.5, 6);
+    const mastGeo = new THREE.CylinderGeometry(0.055, 0.055, 1.1, 6);
     const mast = new THREE.Mesh(mastGeo, steel);
-    mast.position.set(0, 1.6, -1.2);
+    mast.position.set(0, 1.35, -1.2);
     this.hull.add(mast);
     this.disposables.push(mastGeo);
 
@@ -176,17 +183,25 @@ export class Reel {
       roughness: 0.4,
     });
     const beacon = new THREE.Mesh(beaconGeo, beaconMat);
-    beacon.position.set(0, 2.4, -1.2);
+    beacon.position.set(0, 1.95, -1.2);
     this.hull.add(beacon);
     this.disposables.push(beaconGeo, beaconMat);
 
     // handlebar — reads as "a person walks this thing"
-    const barsGeo = new THREE.TorusGeometry(0.5, 0.06, 6, 14, Math.PI);
+    const barsGeo = new THREE.TorusGeometry(0.52, 0.055, 6, 14, Math.PI);
     const bars = new THREE.Mesh(barsGeo, steel);
-    bars.position.set(0, 1.05, -1.75);
+    bars.position.set(0, 1.42, -2.05);
     bars.rotation.x = Math.PI / 2.6;
     this.hull.add(bars);
-    this.disposables.push(barsGeo);
+    // the stays that carry the bar back to the frame
+    const stayGeo = new THREE.CylinderGeometry(0.045, 0.045, 1.5, 6);
+    for (const dx of [-0.5, 0.5]) {
+      const stay = new THREE.Mesh(stayGeo, steel);
+      stay.position.set(dx, 1.0, -1.66);
+      stay.rotation.x = 0.62;
+      this.hull.add(stay);
+    }
+    this.disposables.push(barsGeo, stayGeo);
   }
 
   /** Place the machine before the reel scene starts. */
@@ -231,7 +246,7 @@ export class Reel {
       while (diff < -Math.PI) diff += Math.PI * 2;
       // ease the turn down as the bearing error shrinks, so the last few
       // degrees are approached rather than bounced between
-      const maxTurn = 2.1 * dt;
+      const maxTurn = 1.5 * dt;
       const turn = clamp(diff * 0.6, -maxTurn, maxTurn);
       this.heading += turn;
       this.turnRate = damp(this.turnRate, turn / Math.max(dt, 1e-3), 7, dt);
@@ -246,8 +261,14 @@ export class Reel {
     // Speed reaches zero *at* the dead zone, not inside it. If the machine
     // were still creeping where it has stopped steering it would sail past
     // the finger, re-acquire, turn back, and orbit forever.
-    const reach = this.engaged ? smoothstep((dist - DEAD_ZONE) / 1.8) : 0;
-    this.speed = damp(this.speed, clamp(throttle, 0, 1) * 3.0 * reach, 3.0, dt);
+    const reach = this.engaged ? smoothstep((dist - DEAD_ZONE) / 1.2) : 0;
+
+    // A walk-behind beater travels at the pace of the person pushing it.
+    // Three metres a second was a sprint, and it read as a toy on a string.
+    // It also has mass: it leans into moving off and takes longer to
+    // gather speed than to lose it.
+    const want = clamp(throttle, 0, 1) * 1.25 * reach;
+    this.speed = damp(this.speed, want, want > this.speed ? 1.5 : 2.4, dt);
   }
 
   coast(dt: number): void {
@@ -265,36 +286,36 @@ export class Reel {
 
     this.pos.x += Math.sin(this.heading) * this.speed * dt;
     this.pos.y += Math.cos(this.heading) * this.speed * dt;
-    clampToBog(this.v, this.pos, 2.0);
+    clampToBog(this.v, this.pos, 1.5);
 
     // drums always turn a little, faster when travelling
-    const rpm = 5.2 + this.speed * 3.6;
+    const rpm = 6.5 + this.speed * 7.0;
     this.spin += rpm * dt;
     this.drums[0].rotation.x = -this.spin;
     this.drums[1].rotation.x = -this.spin * 1.15 + 0.4;
 
     this.bob += dt * (2.4 + this.speed);
     // A hull has mass: it follows the surface, it does not snap to it.
-    const wh = waterHeight(this.pos.x, this.pos.y) - 0.22;
+    const wh = waterHeight(this.pos.x, this.pos.y) - 0.14;
     this.floatY = Number.isNaN(this.floatY) ? wh : damp(this.floatY, wh, 6, dt);
-    this.group.position.set(this.pos.x, this.floatY + Math.sin(this.bob) * 0.035, this.pos.y);
+    this.group.position.set(this.pos.x, this.floatY + Math.sin(this.bob) * 0.02, this.pos.y);
     this.group.rotation.y = this.heading;
     this.hull.rotation.z = this.roll;
     this.hull.rotation.x = Math.sin(this.bob * 0.7) * 0.02 - this.speed * 0.015;
 
     this.churn.set(
-      this.pos.x - Math.sin(this.heading) * 0.2,
+      this.pos.x - Math.sin(this.heading) * 0.12,
       wh,
-      this.pos.y - Math.cos(this.heading) * 0.2,
+      this.pos.y - Math.cos(this.heading) * 0.12,
     );
   }
 
   /** Front of the machine, where the paddles actually enter the water. */
   frontPoint(out = new THREE.Vector3()): THREE.Vector3 {
     return out.set(
-      this.pos.x + Math.sin(this.heading) * 1.0,
-      this.group.position.y + 0.3,
-      this.pos.y + Math.cos(this.heading) * 1.0,
+      this.pos.x + Math.sin(this.heading) * 0.6,
+      this.group.position.y + 0.18,
+      this.pos.y + Math.cos(this.heading) * 0.6,
     );
   }
 

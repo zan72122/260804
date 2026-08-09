@@ -199,7 +199,8 @@ export class Vines {
       const y = floorHeight(v, x, z);
       p.set(x, y, z);
       q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), r.range(0, Math.PI * 2));
-      const sc = r.range(1.35, 2.15);
+      // cranberry vines are a low mat of runners, ankle deep
+      const sc = r.range(0.5, 0.85);
       scl.set(sc, r.range(0.8, 1.25) * sc, sc);
       m.compose(p, q, scl);
       this.mesh.setMatrixAt(placed, m);

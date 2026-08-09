@@ -9,7 +9,7 @@
  */
 
 import * as THREE from 'three';
-import { bogInset, floorHeight, type FieldVariant } from './layout';
+import { bogInset, floorHeight, gatePosition, type FieldVariant } from './layout';
 import { clamp, noise2, smoothstep } from '../core/math';
 
 const SKY_VERT = /* glsl */ `
@@ -144,36 +144,49 @@ export class Terrain {
     if (decor) this.buildTrees();
   }
 
+  /**
+   * The supply ditch. It is short, sunk into the dike and only as wide as
+   * the sluice it feeds — as a full-width wall standing proud of the ground
+   * it read as a fence somebody had built across the farm for no reason.
+   */
   private buildChannel(): void {
     const v = this.v;
     const g = new THREE.Group();
-    const wallMat = new THREE.MeshStandardMaterial({ color: '#8a8579', roughness: 0.85 });
+    const gp = gatePosition(v);
+    const wallMat = new THREE.MeshStandardMaterial({ color: '#7d7466', roughness: 0.9 });
     const waterMat = new THREE.MeshStandardMaterial({
-      color: v.waterTint.clone().multiplyScalar(1.5),
-      roughness: 0.2,
-      metalness: 0.1,
-      transparent: true,
-      opacity: 0.9,
+      color: v.waterTint.clone().multiplyScalar(1.35),
+      roughness: 0.18,
+      metalness: 0.05,
     });
     this.disposables.push(wallMat, waterMat);
 
-    // A shallow flume running along the far dike, feeding the gate.
-    const len = v.halfX * 1.5;
-    const chanGeo = new THREE.BoxGeometry(len, 0.9, 3.4);
-    const chan = new THREE.Mesh(chanGeo, waterMat);
-    chan.position.set(-v.halfX * 0.15, 1.15, -v.halfZ - 5.7);
-    g.add(chan);
-    this.disposables.push(chanGeo);
+    const len = 7.5;
+    const halfW = 0.95;
+    // the ditch is cut *into* the ground, so its water sits below the crest
+    const trough = new THREE.BoxGeometry(halfW * 2, 1.5, len);
+    const cut = new THREE.Mesh(trough, wallMat);
+    cut.position.set(gp.x, 0.35, gp.z - len / 2 - 0.4);
+    cut.receiveShadow = true;
+    g.add(cut);
+    this.disposables.push(trough);
 
-    const wallGeo = new THREE.BoxGeometry(len + 1.2, 2.2, 0.7);
-    for (const dz of [-1.95, 1.95]) {
-      const w = new THREE.Mesh(wallGeo, wallMat);
-      w.position.set(-v.halfX * 0.15, 1.0, -v.halfZ - 5.7 + dz);
-      w.castShadow = true;
-      w.receiveShadow = true;
-      g.add(w);
+    const surface = new THREE.BoxGeometry(halfW * 2 - 0.08, 0.06, len - 0.1);
+    const surf = new THREE.Mesh(surface, waterMat);
+    surf.position.set(gp.x, 0.92, gp.z - len / 2 - 0.4);
+    g.add(surf);
+    this.disposables.push(surface);
+
+    // coping stones along both lips
+    const copeGeo = new THREE.BoxGeometry(0.34, 0.22, len);
+    for (const dx of [-halfW - 0.15, halfW + 0.15]) {
+      const c = new THREE.Mesh(copeGeo, wallMat);
+      c.position.set(gp.x + dx, 1.05, gp.z - len / 2 - 0.4);
+      c.castShadow = true;
+      c.receiveShadow = true;
+      g.add(c);
     }
-    this.disposables.push(wallGeo);
+    this.disposables.push(copeGeo);
     this.group.add(g);
   }
 
@@ -209,19 +222,21 @@ export class Terrain {
     const palette = ['#5f7a34', '#8a6a2c', '#a85a2c', '#6d8a3f', '#c08a35'];
 
     for (let i = 0; i < count; i++) {
-      const ang = (i / count) * Math.PI * 2 + r.range(-0.05, 0.05);
-      const rad = Math.max(v.halfX, v.halfZ) + r.range(15, 44);
+      // clustered, not a picket ring: a few gaps, a few thickets
+      const ang = (i / count) * Math.PI * 2 + r.range(-0.34, 0.34);
+      // clustered in depth, but never inside the working ground
+      const rad = Math.max(v.halfX, v.halfZ) + 11 + r.range(0, 46) * (0.45 + r.bell());
       const x = Math.cos(ang) * rad * 1.15;
       const z = Math.sin(ang) * rad;
       const base = landHeight(v, x, z);
-      const h = r.range(2.4, 5.2);
+      const h = r.range(3.2, 7.6);
       p.set(x, base, z);
       q.identity();
       s.set(1, h / 2.4, 1);
       m.compose(p, q, s);
       trunks.setMatrixAt(i, m);
 
-      const cr = r.range(1.5, 3.1);
+      const cr = r.range(1.5, 3.3);
       p.set(x, base + h * 0.62 + cr * 0.5, z);
       q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), r.range(0, 6.28));
       s.set(cr, cr * r.range(0.85, 1.2), cr);
@@ -235,6 +250,9 @@ export class Terrain {
     if (crowns.instanceColor) crowns.instanceColor.needsUpdate = true;
     trunks.frustumCulled = false;
     crowns.frustumCulled = false;
+    trunks.castShadow = true;
+    crowns.castShadow = true;
+    crowns.receiveShadow = true;
     this.group.add(trunks, crowns);
     this.disposables.push(trunkGeo, crownGeo, trunkMat, crownMat);
   }

@@ -63,7 +63,8 @@ export class Boom {
     });
     this.disposables.push(yellow, white, skirtMat);
 
-    const floatGeo = new THREE.CapsuleGeometry(0.26, 0.5, 3, 8);
+    // containment boom: a string of fist-sized floats on a skirted line
+    const floatGeo = new THREE.CapsuleGeometry(0.105, 0.2, 3, 8);
     floatGeo.rotateZ(Math.PI / 2);
     this.floats = new THREE.InstancedMesh(floatGeo, yellow, FLOATS);
     this.floats.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(FLOATS * 3), 3);
@@ -76,7 +77,7 @@ export class Boom {
     this.disposables.push(floatGeo);
 
     // a skirt below the floats: this is what makes the ring read as a barrier
-    const skirtGeo = new THREE.BoxGeometry(0.72, 0.42, 0.03);
+    const skirtGeo = new THREE.BoxGeometry(0.3, 0.26, 0.02);
     this.skirts = new THREE.InstancedMesh(skirtGeo, skirtMat, FLOATS);
     this.skirts.frustumCulled = false;
     this.group.add(this.skirts);
@@ -89,23 +90,23 @@ export class Boom {
 
   private buildHandle(yellow: THREE.Material, white: THREE.Material): THREE.Group {
     const g = new THREE.Group();
-    const buoyGeo = new THREE.SphereGeometry(0.62, 16, 12);
+    const buoyGeo = new THREE.SphereGeometry(0.27, 14, 10);
     const buoy = new THREE.Mesh(buoyGeo, yellow);
     buoy.scale.y = 0.84;
     g.add(buoy);
-    const bandGeo = new THREE.TorusGeometry(0.6, 0.1, 10, 22);
+    const bandGeo = new THREE.TorusGeometry(0.26, 0.045, 8, 18);
     const band = new THREE.Mesh(bandGeo, white);
     band.rotation.x = Math.PI / 2;
-    band.position.y = 0.1;
+    band.position.y = 0.04;
     g.add(band);
-    const poleGeo = new THREE.CylinderGeometry(0.045, 0.045, 1.3, 6);
+    const poleGeo = new THREE.CylinderGeometry(0.028, 0.028, 1.05, 6);
     const pole = new THREE.Mesh(poleGeo, white);
-    pole.position.y = 0.75;
+    pole.position.y = 0.55;
     g.add(pole);
     // a grab ring on top: the visual affordance for "pull me"
-    const ringGeo = new THREE.TorusGeometry(0.26, 0.06, 8, 18);
+    const ringGeo = new THREE.TorusGeometry(0.15, 0.035, 8, 16);
     const ring = new THREE.Mesh(ringGeo, yellow);
-    ring.position.y = 1.4;
+    ring.position.y = 1.02;
     ring.rotation.y = Math.PI / 2;
     g.add(ring);
     this.disposables.push(buoyGeo, bandGeo, poleGeo, ringGeo);
@@ -202,7 +203,7 @@ export class Boom {
     let dx = x - this.centre.x;
     let dz = z - this.centre.y;
     const d = Math.hypot(dx, dz);
-    const limit = this.radius - 0.28;
+    const limit = this.radius - 0.14;
     if (d <= limit) return -1;
     if (d < 1e-5) {
       dx = 1;
@@ -238,13 +239,13 @@ export class Boom {
       const y = waterHeight(px, pz);
       tangent.set(-Math.sin(a), 0, Math.cos(a));
       q.setFromUnitVectors(xAxis, tangent);
-      p.set(px, y + 0.05, pz);
-      s.set(clamp(segLen / 1.02, 0.6, 2.6), 1, 1);
+      p.set(px, y + 0.02, pz);
+      s.set(clamp(segLen / 0.41, 0.6, 2.6), 1, 1);
       m.compose(p, q, s);
       this.floats.setMatrixAt(i, m);
 
-      p.set(px, y - 0.22, pz);
-      s.set(clamp(segLen / 0.72, 0.6, 2.8), 1, 1);
+      p.set(px, y - 0.13, pz);
+      s.set(clamp(segLen / 0.3, 0.6, 2.8), 1, 1);
       m.compose(p, q, s);
       this.skirts.setMatrixAt(i, m);
     }
