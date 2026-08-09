@@ -688,7 +688,7 @@ export class Game {
     this.camera.aspect = w / h;
     this.camera.fov = portrait ? 42 : 38;
     this.camera.updateProjectionMatrix();
-    this.director.zoom = portrait ? 1.12 : 1.16;
+    this.director.zoom = portrait ? 1.12 : 1.06;
     this.ui.root.dataset.orient = portrait ? 'portrait' : 'landscape';
   }
 }

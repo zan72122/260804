@@ -56,22 +56,23 @@ export const SHOTS = {
   playAim: { pos: V(0.0, 1.26, 0.62), target: V(0, 0.240, 0.02), speed: 2.4 },
 };
 
-// 接触は低い斜め側面から。押される向きの正面側に回り込む。
+// 接触は低い斜め側面から。押される向きの正面側へ回り込む。
+// 側面の壁は不透明なので、視線は必ず開いている手前から入れる。
 export function contactShot(prizePos, dir) {
   const side = dir >= 0 ? -1 : 1;
   return {
-    pos: V(side * 0.92, 0.58, 0.94),
-    target: V(prizePos.x * 0.5, prizePos.y - 0.03, prizePos.z * 0.7),
+    pos: V(side * 0.66, 0.50, 1.02),
+    target: V(prizePos.x * 0.5, prizePos.y - 0.04, prizePos.z * 0.7),
     speed: 2.2,
   };
 }
 
 // 落ちるときだけ少し引く
 export function fallShot(prizePos, dir) {
-  const s = contactShot(prizePos, dir);
-  s.pos.multiplyScalar(1.18);
-  s.pos.y = 0.72;
-  s.target.set(prizePos.x * 0.4, 0.14, prizePos.z * 0.6);
-  s.speed = 1.5;
-  return s;
+  const side = dir >= 0 ? -1 : 1;
+  return {
+    pos: V(side * 0.52, 0.66, 1.22),
+    target: V(prizePos.x * 0.4, 0.15, 0.05),
+    speed: 1.5,
+  };
 }
