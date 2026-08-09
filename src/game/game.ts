@@ -20,10 +20,10 @@ import { CameraDirector, type Shot } from './camera';
 import { InputManager } from '../core/input';
 import { UI, type HintKind } from '../ui/ui';
 import {
-  BERRY_R,
   WATER_DRY,
   WATER_FULL,
   bogInset,
+  clampToBog,
   type FieldVariant,
 } from '../world/layout';
 import { clamp, damp, lerp, smoothstep } from '../core/math';
@@ -65,11 +65,11 @@ const BEAD_OF: Record<number, number> = {
 };
 
 /** Fraction of the bog the reel must sweep before the big reveal. */
-const REEL_TARGET = 0.52;
+const REEL_TARGET = 0.45;
 /** How tightly a corralled raft may pack: 1 = single layer, lower = heaped. */
 const PACK_TIGHT = 0.52;
 /** Water-surface area one berry needs when fully packed, plus slack. */
-const BERRY_AREA = (BERRY_R * 1.92 * PACK_TIGHT) ** 2 * 0.866 * 1.3;
+const berryArea = (r: number): number => (r * 1.92 * PACK_TIGHT) ** 2 * 0.866 * 0.95;
 
 export class Game {
   readonly scene = new THREE.Scene();
@@ -175,8 +175,9 @@ export class Game {
     const w = this.world;
     if (step >= Step.Reel && step !== Step.Intro) {
       this.fill = 1;
-      w.gate.setTarget(1);
-      w.gate.open = 1;
+      // flooded and shut off, exactly as the gate step leaves it
+      w.gate.setTarget(0);
+      w.gate.open = 0;
       w.water.targetLevel = WATER_FULL;
       w.water.level = WATER_FULL;
     }
@@ -188,7 +189,7 @@ export class Game {
     if (step >= Step.Hose && step <= Step.Done) {
       w.boom.group.visible = true;
       const c = w.berries.floatCentroid(this.tmp2);
-      w.boom.deploy(c, w.berries.floatingCount, BERRY_AREA);
+      w.boom.deploy(c, w.berries.floatingCount, berryArea(w.berries.radius));
       w.berries.setContainment(w.boom.contain);
       w.berries.packFactor = PACK_TIGHT;
       w.reel.reset(-w.variant.halfX * 0.72, -w.variant.halfZ * 0.72, 2.4);
@@ -247,6 +248,8 @@ export class Game {
       case Step.Reel: {
         w.reel.group.visible = true;
         w.reel.reset(-w.variant.halfX * 0.42, -w.variant.halfZ * 0.42, 0.7);
+        // the bog is at depth: shut the gate, the way a crew would
+        w.gate.setTarget(0);
         say('ぐるぐる いくよ');
         break;
       }
@@ -260,7 +263,7 @@ export class Game {
       case Step.Boom: {
         w.boom.group.visible = true;
         const c = w.berries.floatCentroid(this.tmp2);
-        w.boom.deploy(c, w.berries.floatingCount, BERRY_AREA);
+        w.boom.deploy(c, w.berries.floatingCount, berryArea(w.berries.radius));
         w.berries.setContainment(w.boom.contain);
         say('ぎゅーっと あつめよう');
         break;
@@ -271,10 +274,10 @@ export class Game {
         const c = w.boom.centre;
         // strays escape under the boom before the pump arrives
         w.berries.makeStrays(10, c);
-        const edge = new THREE.Vector2(
-          lerp(c.x, w.variant.halfX * 0.5, 0.85),
-          lerp(c.y, w.variant.halfZ * 0.75, 0.85),
-        );
+        // start the nozzle on the near side of the raft, so the child's drag
+        // is a simple push away from themselves toward the glowing ring
+        const edge = new THREE.Vector2(c.x + w.variant.halfX * 0.12, c.y - w.variant.halfZ * 0.62);
+        clampToBog(w.variant, edge, 1.6);
         w.hose.place(edge.x, edge.y, c);
         say('ホースを もっていこう');
         break;
@@ -392,8 +395,11 @@ export class Game {
           const hit = this.input.worldOnPlane(this.director.camera, w.water.level, this.tmp3);
           if (hit) {
             this.tmp2.set(hit.x, hit.z);
+            // Holding the finger still still drives the machine at a useful
+            // pace; moving it faster only adds on top. A child who parks a
+            // fingertip and waits must not be punished with a crawl.
             const pxSpeed = p.delta.length() / Math.max(dt, 1e-3);
-            const throttle = clamp(0.28 + pxSpeed / (height * 0.75), 0.28, 1);
+            const throttle = clamp(0.55 + pxSpeed / (height * 0.9), 0.55, 1);
             w.reel.steerTo(this.tmp2, throttle, dt);
           }
         } else {
@@ -615,10 +621,13 @@ export class Game {
 
       case Step.Done: {
         this.doneT += dt;
-        w.terrain.setDusk(clamp(this.doneT / 5, 0, 1) * 0.75);
+        w.setEvening(clamp(this.doneT / 6, 0, 1));
         w.water.fadeDisturb(2, dt, 1.5);
+        // the crew lifts the hose out before the truck pulls away, otherwise
+        // it would stretch across the field after it
+        if (this.doneT > 2.2) w.hose.group.visible = false;
         if (this.doneT > 2.6 && !w.truck.leaving) w.truck.driveAway();
-        if (this.doneT > 4.2 && !this.endShown) {
+        if (this.doneT > 6.5 && !this.endShown) {
           this.endShown = true;
           this.ui.showEndCard(true);
         }
@@ -671,8 +680,8 @@ export class Game {
         const t = clamp(this.stepTime / 5, 0, 1);
         s.target.set(0, 0.6, 1.5);
         s.yaw = 0.5 - t * 0.16;
-        s.pitch = (portrait ? 0.58 : 0.46) + t * 0.03;
-        s.dist = wide * 2.9 * pf - t * wide * 0.32;
+        s.pitch = (portrait ? 0.64 : 0.46) + t * 0.03;
+        s.dist = wide * 2.9 * (portrait ? 1.14 : 1) - t * wide * 0.32;
         s.fov = fovBase;
         s.rate = 0.7;
         break;
@@ -681,10 +690,10 @@ export class Game {
       case Step.Gate: {
         const g = w.gate.group.position;
         // gate and the flooding front held in one frame throughout
-        s.target.set(g.x * 0.6, 1.0, lerp(g.z + 3.6, -v.halfZ * 0.1, this.fill * 0.85));
+        s.target.set(g.x * 0.6, 1.0, lerp(g.z + 5.5, -v.halfZ * 0.1, this.fill * 0.85));
         s.yaw = portrait ? 0.12 : 0.24;
-        s.pitch = portrait ? 0.42 : 0.28;
-        s.dist = (portrait ? 17 : 16) * pf;
+        s.pitch = portrait ? 0.44 : 0.3;
+        s.dist = (portrait ? 18 : 17) * pf;
         s.fov = fovBase;
         s.bias = portrait ? 1.5 : 0.5;
         s.rate = 1.1;
@@ -699,10 +708,10 @@ export class Game {
           w.water.level + 0.5,
           r.pos.y + Math.cos(r.heading) * 2.0,
         );
-        s.yaw = r.heading + Math.PI + (portrait ? 0.2 : 0.36);
-        s.pitch = portrait ? 0.4 : 0.3;
-        s.dist = portrait ? 9.5 : 10.5;
-        s.fov = portrait ? 62 : 52;
+        s.yaw = r.heading + Math.PI + (portrait ? 0.22 : 0.36);
+        s.pitch = portrait ? 0.52 : 0.3;
+        s.dist = portrait ? 15.5 : 10.5;
+        s.fov = portrait ? 58 : 52;
         s.bias = portrait ? 1.0 : 0.35;
         s.rate = 2.2;
         break;
@@ -715,21 +724,23 @@ export class Game {
         const riseLen = fast ? 1.6 : 3.4;
         if (this.revealPhase === 0) {
           // down to the waterline, right behind the machine, no cut
-          s.target.set(w.reel.churn.x, w.water.level + 0.2, w.reel.churn.z);
-          s.yaw = w.reel.heading + Math.PI + 0.5;
-          s.pitch = 0.055;
-          s.dist = 6.0;
+          s.target.set(w.reel.churn.x, w.water.level + 0.15, w.reel.churn.z);
+          s.yaw = w.reel.heading + Math.PI + 0.95;
+          s.pitch = 0.08;
+          s.dist = 6.6;
           s.fov = portrait ? 66 : 58;
+          s.bias = 0.75;
           s.rate = 1.1;
         } else {
           // and up, in one move, to show what the whole bog just became
           const t = clamp((this.stepTime - diveEnd) / riseLen, 0, 1);
           const e = smoothstep(t);
           s.target.set(c.x * 0.5, w.water.level, c.y * 0.5);
-          s.yaw = w.reel.heading + Math.PI + 0.5 - e * 0.3;
+          s.yaw = w.reel.heading + Math.PI + 0.95 - e * 0.6;
           s.pitch = lerp(0.05, portrait ? 1.05 : 0.88, e);
-          s.dist = lerp(6.0, wide * (portrait ? 2.1 : 1.7), e);
+          s.dist = lerp(6.6, wide * (portrait ? 2.1 : 1.7), e);
           s.fov = lerp(portrait ? 66 : 58, fovBase, e);
+          s.bias = lerp(0.75, 0, e);
           s.rate = 0.95;
         }
         break;
@@ -751,10 +762,12 @@ export class Game {
       case Step.Hose: {
         const c = w.boom.centre;
         const n = w.hose.nozzle.position;
+        // from the bog side: the hose runs away from the lens toward the
+        // pump, instead of charging straight down the barrel of it
         s.target.set((c.x + n.x) / 2, w.water.level + 0.2, (c.y + n.z) / 2);
-        s.yaw = portrait ? 0.06 : 0.22;
-        s.pitch = portrait ? 0.74 : 0.58;
-        s.dist = portrait ? 14 : 13;
+        s.yaw = Math.PI + (portrait ? 0.14 : 0.3);
+        s.pitch = portrait ? 0.62 : 0.5;
+        s.dist = portrait ? 15 : 13.5;
         s.fov = fovBase;
         s.bias = portrait ? 1.2 : 0.4;
         s.rate = 1.2;
@@ -769,8 +782,8 @@ export class Game {
         const a: Shot = {
           target: new THREE.Vector3(w.hose.mouth.x, w.water.level + 0.1, w.hose.mouth.z),
           yaw: Math.PI + (portrait ? 0.1 : 0.26),
-          pitch: portrait ? 0.5 : 0.36,
-          dist: portrait ? 12 : 11,
+          pitch: portrait ? 0.62 : 0.52,
+          dist: portrait ? 10.5 : 9.5,
           fov: portrait ? 64 : 54,
           bias: portrait ? 1.5 : 0.5,
         };
@@ -791,10 +804,10 @@ export class Game {
           // from beyond the truck, so the hose runs away from us and the
           // heap in the bed is never blocked by the pipework
           yaw: portrait ? 1.35 : 1.25,
-          pitch: portrait ? 0.46 : 0.36,
-          dist: portrait ? 8.5 : 8,
+          pitch: portrait ? 0.4 : 0.34,
+          dist: portrait ? 7.2 : 7.6,
           fov: portrait ? 60 : 50,
-          bias: portrait ? 0.8 : 0.25,
+          bias: portrait ? 0.35 : 0.2,
         };
         // dwell on the clear window through the middle of the run
         const seg =
@@ -814,7 +827,8 @@ export class Game {
       }
 
       case Step.Done: {
-        const t = smoothstep(clamp(this.doneT / 7, 0, 1));
+        // hold on the full bed first, then pull wide while the truck leaves
+        const t = smoothstep(clamp((this.doneT - 2.8) / 5.5, 0, 1));
         const bed = w.truck.bedOrigin;
         s.target.set(lerp(bed.x, 0, t), lerp(bed.y + 1, 1.5, t), lerp(bed.z, v.halfZ * 0.25, t));
         s.yaw = lerp(1.25, 0.5, t);
@@ -829,8 +843,8 @@ export class Game {
         const r = w.reel;
         s.target.set(r.pos.x, w.water.level + 0.5, r.pos.y);
         s.yaw = r.heading + Math.PI + 0.4;
-        s.pitch = portrait ? 0.54 : 0.44;
-        s.dist = portrait ? 13 : 14;
+        s.pitch = portrait ? 0.58 : 0.44;
+        s.dist = portrait ? 18 : 14;
         s.fov = portrait ? 62 : 52;
         s.bias = portrait ? 1.1 : 0.35;
         s.rate = 1.8;

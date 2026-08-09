@@ -34,7 +34,9 @@ npm run dev        # http://localhost:5173  (--host is on, so a phone on the
 npm run build      # type-check + production bundle into dist/
 npm run preview    # serve dist/ on :4173
 npm run typecheck
-npm test           # Playwright: scripted play-throughs at four device sizes
+npm test           # Playwright: scripted play-throughs at four device sizes,
+                   # rotation, low-graphics, free play, suspend/restore
+npm run shots      # authoring sweep: screenshots every scene at two sizes
 ```
 
 `?tier=low|mid|high` on the URL forces a quality tier, which is handy for

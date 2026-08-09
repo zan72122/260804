@@ -114,7 +114,7 @@ test.describe('visual sweep', () => {
       await page.mouse.up();
 
       await page.evaluate(() => window.__game!.setStep(7));
-      await waitGame(page, 4.5);
+      await waitGame(page, 8.5);
       await shot('l-done');
     });
   }

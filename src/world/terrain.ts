@@ -161,14 +161,14 @@ export class Terrain {
     const len = v.halfX * 1.5;
     const chanGeo = new THREE.BoxGeometry(len, 0.9, 3.4);
     const chan = new THREE.Mesh(chanGeo, waterMat);
-    chan.position.set(-v.halfX * 0.15, 1.15, -v.halfZ - 3.6);
+    chan.position.set(-v.halfX * 0.15, 1.15, -v.halfZ - 5.7);
     g.add(chan);
     this.disposables.push(chanGeo);
 
     const wallGeo = new THREE.BoxGeometry(len + 1.2, 2.2, 0.7);
     for (const dz of [-1.95, 1.95]) {
       const w = new THREE.Mesh(wallGeo, wallMat);
-      w.position.set(-v.halfX * 0.15, 1.0, -v.halfZ - 3.6 + dz);
+      w.position.set(-v.halfX * 0.15, 1.0, -v.halfZ - 5.7 + dz);
       w.castShadow = true;
       w.receiveShadow = true;
       g.add(w);

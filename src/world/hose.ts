@@ -17,8 +17,14 @@ import { clamp, damp } from '../core/math';
 const RADIAL = 12;
 const TUBULAR = 96;
 /** Fraction of the run that is see-through. */
-const WINDOW_A = 0.26;
-const WINDOW_B = 0.6;
+/**
+ * Fraction of the run that is see-through. Chosen to cover the stretch from
+ * just above the bell to the arch out of the water — the part that is
+ * physically closest to the camera in both suction shots, and therefore the
+ * part where a berry going past is actually legible.
+ */
+const WINDOW_A = 0.02;
+const WINDOW_B = 0.34;
 
 export class Hose {
   readonly group = new THREE.Group();
@@ -40,6 +46,7 @@ export class Hose {
   private readonly ctrl: THREE.Vector3[] = [];
   private readonly nozzlePos = new THREE.Vector2();
   private readonly ringMat: THREE.MeshStandardMaterial;
+  private collars: THREE.Mesh[] = [];
   private time = 0;
 
   constructor(
@@ -53,8 +60,8 @@ export class Hose {
     this.curve = new THREE.CatmullRomCurve3(this.ctrl, false, 'catmullrom', 0.4);
 
     this.matBody = new THREE.MeshStandardMaterial({
-      color: '#38414a',
-      roughness: 0.62,
+      color: '#4d5763',
+      roughness: 0.6,
       metalness: 0.18,
       side: THREE.DoubleSide,
     });
@@ -62,11 +69,11 @@ export class Hose {
     // the far wall be culled, which is what actually reads as glass. Drawing
     // both walls just doubles the haze and hides the flow.
     this.matClear = new THREE.MeshStandardMaterial({
-      color: '#dcefec',
-      roughness: 0.12,
+      color: '#bfd8d4',
+      roughness: 0.1,
       metalness: 0.06,
       transparent: true,
-      opacity: 0.3,
+      opacity: 0.4,
       side: THREE.FrontSide,
       depthWrite: false,
     });
@@ -78,6 +85,21 @@ export class Hose {
     this.mesh.renderOrder = 9;
     this.group.add(this.mesh);
     this.disposables.push(this.geo);
+
+    // steel collars at each end of the glass, so the see-through stretch
+    // reads as a deliberate sight window rather than a hole in the model
+    const collar = new THREE.TorusGeometry(0.62, 0.1, 8, 20);
+    const collarMat = new THREE.MeshStandardMaterial({
+      color: '#aeb6bc',
+      roughness: 0.32,
+      metalness: 0.85,
+    });
+    this.collars = [new THREE.Mesh(collar, collarMat), new THREE.Mesh(collar, collarMat)];
+    this.collars.forEach((c) => {
+      c.frustumCulled = false;
+      this.group.add(c);
+    });
+    this.disposables.push(collar, collarMat);
 
     this.buildNozzle();
     this.buildCoupling();
@@ -115,7 +137,9 @@ export class Hose {
       for (let j = 0; j < RADIAL; j++) {
         const a = i * (RADIAL + 1) + j;
         const b = (i + 1) * (RADIAL + 1) + j;
-        idx.push(a, b, a + 1, a + 1, b, b + 1);
+        // wound so that front faces point outward, matching the outward
+        // vertex normals below — the clear section is single-sided
+        idx.push(a, a + 1, b, a + 1, b + 1, b);
       }
     }
     bounds.push([start, idx.length - start, currentMat]);
@@ -135,20 +159,20 @@ export class Hose {
     const foam = new THREE.MeshStandardMaterial({ color: '#f6f2e6', roughness: 0.85 });
     this.disposables.push(steel, grip, foam);
 
-    const bellGeo = new THREE.CylinderGeometry(0.78, 0.44, 1.0, 16, 1, true);
+    const bellGeo = new THREE.CylinderGeometry(0.92, 0.52, 1.05, 16, 1, true);
     const bell = new THREE.Mesh(bellGeo, steel);
     bell.material.side = THREE.DoubleSide;
     bell.position.y = -0.2;
     this.nozzle.add(bell);
 
-    const collarGeo = new THREE.TorusGeometry(0.46, 0.11, 8, 18);
+    const collarGeo = new THREE.TorusGeometry(0.56, 0.12, 8, 18);
     const collar = new THREE.Mesh(collarGeo, grip);
     collar.rotation.x = Math.PI / 2;
     collar.position.y = 0.32;
     this.nozzle.add(collar);
 
     // flotation collar keeps the bell at the surface and gives a fat target
-    const floatGeo = new THREE.TorusGeometry(0.95, 0.24, 10, 22);
+    const floatGeo = new THREE.TorusGeometry(1.05, 0.26, 10, 22);
     const flt = new THREE.Mesh(floatGeo, foam);
     flt.rotation.x = Math.PI / 2;
     flt.position.y = 0.18;
@@ -159,7 +183,7 @@ export class Hose {
     handle.position.y = 0.72;
     this.nozzle.add(handle);
 
-    const stubGeo = new THREE.CylinderGeometry(0.36, 0.36, 0.5, 12);
+    const stubGeo = new THREE.CylinderGeometry(0.46, 0.46, 0.5, 12);
     const stub = new THREE.Mesh(stubGeo, steel);
     stub.position.y = 0.6;
     this.nozzle.add(stub);
@@ -302,7 +326,8 @@ export class Hose {
       binormal.crossVectors(tangent, normal).normalize();
 
       // fat at the pump end, slimmer at the bell; a gentle pulse when pumping
-      const r = 0.24 + 0.07 * Math.sin(t * Math.PI) + 0.01 * Math.sin(this.time * 7 - t * 12);
+      // wide enough that a berry rides *inside* the bore, never through it
+      const r = 0.5 + 0.1 * Math.sin(t * Math.PI) + 0.014 * Math.sin(this.time * 7 - t * 12);
       for (let j = 0; j <= RADIAL; j++) {
         const a = (j / RADIAL) * Math.PI * 2;
         const cx = Math.cos(a);
@@ -321,6 +346,16 @@ export class Hose {
     }
     pos.needsUpdate = true;
     nrm.needsUpdate = true;
+
+    const axis = new THREE.Vector3(0, 0, 1);
+    [WINDOW_A, WINDOW_B].forEach((t, i) => {
+      const c = this.collars[i];
+      if (!c) return;
+      this.curve.getPointAt(t, point);
+      this.curve.getTangentAt(t, tangent).normalize();
+      c.position.copy(point);
+      c.quaternion.setFromUnitVectors(axis, tangent);
+    });
   }
 
   /** Where the fruit should be pulled toward while the pump runs. */
@@ -339,7 +374,7 @@ export class Hose {
    * perpendicular, because a computed one can walk into the pump skid.
    */
   archPoint(out = new THREE.Vector3()): THREE.Vector3 {
-    return this.curve.getPointAt(0.42, out);
+    return this.curve.getPointAt(0.22, out);
   }
 
   dispose(): void {

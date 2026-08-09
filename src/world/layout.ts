@@ -21,7 +21,7 @@ export const WATER_FULL = 1.08;
  * deliberate trade: at true scale the flooded bog would read as pink haze,
  * and the whole point of the reveal is a surface that turns red.
  */
-export const BERRY_R = 0.24;
+export const BERRY_R = 0.30;
 
 export interface FieldVariant {
   seed: number;
@@ -70,7 +70,7 @@ export function makeVariant(seed: number): FieldVariant {
     skyTop: new THREE.Color(sky[0]),
     skyBottom: new THREE.Color(sky[1]),
     sunColor: new THREE.Color(sky[2]),
-    waterTint: new THREE.Color().setHSL(r.range(0.47, 0.53), r.range(0.34, 0.46), r.range(0.2, 0.27)),
+    waterTint: new THREE.Color().setHSL(r.range(0.47, 0.53), r.range(0.36, 0.48), r.range(0.15, 0.21)),
     truckColor: new THREE.Color(r.pick(TRUCKS)),
     waveAmp: r.range(0.028, 0.055),
     waveFreq: r.range(0.28, 0.42),
@@ -124,7 +124,9 @@ export function floorHeight(v: FieldVariant, x: number, z: number): number {
 
 /** Sluice gate sits at the far edge, slightly left of centre. */
 export function gatePosition(v: FieldVariant): THREE.Vector3 {
-  return new THREE.Vector3(-v.halfX * 0.36, 0, -v.halfZ - 1.1);
+  // set well back off the dike: the suction camera works from the far side
+  // of the bog later on, and must not end up inside the headwall
+  return new THREE.Vector3(-v.halfX * 0.34, 0, -v.halfZ - 3.2);
 }
 
 /** Truck + pump station wait on the near berm, to the right. */

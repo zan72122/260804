@@ -44,8 +44,8 @@ export interface BerryEvents {
  * dimple at the top and a stem nub underneath. Smooth-shaded on purpose —
  * a faceted low-poly ball reads as a crystal, not as fruit.
  */
-function berryGeometry(rings: number, segs: number): THREE.BufferGeometry {
-  const geo = new THREE.SphereGeometry(BERRY_R, rings, segs);
+function berryGeometry(radius: number, rings: number, segs: number): THREE.BufferGeometry {
+  const geo = new THREE.SphereGeometry(radius, rings, segs);
   const pos = geo.attributes.position as THREE.BufferAttribute;
   const v = new THREE.Vector3();
   for (let i = 0; i < pos.count; i++) {
@@ -58,7 +58,7 @@ function berryGeometry(rings: number, segs: number): THREE.BufferGeometry {
     const up = clamp(n.y, 0, 1);
     const dimple = Math.pow(up, 6) * 0.34;
     v.multiplyScalar(1 - dimple);
-    if (n.y < -0.86) v.y -= BERRY_R * 0.05;
+    if (n.y < -0.86) v.y -= radius * 0.05;
     // faint irregularity so a hundred berries are not a hundred clones
     const wob = Math.sin(n.x * 7.3) * Math.cos(n.z * 6.1) * 0.018;
     v.multiplyScalar(1 + wob);
@@ -70,7 +70,7 @@ function berryGeometry(rings: number, segs: number): THREE.BufferGeometry {
 
 const FAR_DIST_SQ = 22 * 22;
 /** Fruit in the truck bed is drawn at this fraction of its size. */
-const BED_SCALE = 0.55;
+const BED_SCALE = 0.45;
 
 export class BerryField {
   readonly group = new THREE.Group();
@@ -121,8 +121,15 @@ export class BerryField {
   private bedUsed = 0;
   private bedOrigin = new THREE.Vector3();
 
+  /**
+   * Fruit size. A smaller crop gets slightly larger berries so that the
+   * flooded surface still turns red on a low-end phone — the signature
+   * moment must survive every quality tier.
+   */
+  readonly radius: number;
+
   /** Spatial hash for the separation pass. */
-  private readonly cell = BERRY_R * 3.4;
+  private readonly cell: number;
   private readonly grid = new Map<number, number[]>();
 
   private readonly tmpM = new THREE.Matrix4();
@@ -150,6 +157,8 @@ export class BerryField {
     lowDetail: boolean,
   ) {
     this.n = Math.min(count, anchors.length * 3);
+    this.radius = BERRY_R * clamp(Math.sqrt(1200 / Math.max(1, this.n)), 1, 1.24);
+    this.cell = this.radius * 3.4;
     const n = this.n;
     this.px = new Float32Array(n);
     this.py = new Float32Array(n);
@@ -210,8 +219,10 @@ export class BerryField {
     }
     this.onVineCount = n;
 
-    this.geoNear = lowDetail ? berryGeometry(9, 7) : berryGeometry(14, 10);
-    this.geoFar = berryGeometry(7, 5);
+    this.geoNear = lowDetail
+      ? berryGeometry(this.radius, 9, 7)
+      : berryGeometry(this.radius, 14, 10);
+    this.geoFar = berryGeometry(this.radius, 7, 5);
     this.matNear = new THREE.MeshPhysicalMaterial({
       color: 0xffffff,
       roughness: 0.34,
@@ -363,7 +374,7 @@ export class BerryField {
       this.intakeTokens = Math.min(this.intakeTokens + this.intakeRate * dt, this.intakeRate * 0.5);
     }
     const water = this.water;
-    const surf = BERRY_R * 0.15; // how deep a floating berry sits
+    const surf = this.radius * 0.15; // how deep a floating berry sits
 
     let floating = 0;
     let bed = 0;
@@ -468,7 +479,7 @@ export class BerryField {
           // separation from neighbours: this is what makes "ぎゅっ" feel packed
           const gi = Math.floor(this.px[i] / this.cell);
           const gj = Math.floor(this.pz[i] / this.cell);
-          const minD = BERRY_R * 1.92 * this.packFactor;
+          const minD = this.radius * 1.92 * this.packFactor;
           let near = 0;
           for (let oi = -1; oi <= 1; oi++) {
             for (let oj = -1; oj <= 1; oj++) {
@@ -547,7 +558,7 @@ export class BerryField {
 
           // ride the surface
           const h =
-            water.heightAt(this.px[i], this.pz[i]) - surf + this.crowd[i] * BERRY_R * 1.5;
+            water.heightAt(this.px[i], this.pz[i]) - surf + this.crowd[i] * this.radius * 1.5;
           this.py[i] = damp(this.py[i], h, 12, dt);
           // roll slowly with the swell
           this.spin[i * 3] += (this.vz[i] * 0.9 + Math.sin(this.time + this.wobble[i]) * 0.2) * dt;
@@ -588,8 +599,8 @@ export class BerryField {
           const nx = -tan.z;
           const nz = tan.x;
           const len = Math.hypot(nx, nz) || 1;
-          const o1 = this.hoseOff[i * 2] * 0.15;
-          const o2 = this.hoseOff[i * 2 + 1] * 0.15;
+          const o1 = this.hoseOff[i * 2] * 0.14;
+          const o2 = this.hoseOff[i * 2 + 1] * 0.14;
           const wig = Math.sin(this.time * 6 + this.wobble[i]) * 0.04;
           this.px[i] = p.x + (nx / len) * (o1 + wig);
           this.pz[i] = p.z + (nz / len) * (o1 + wig);
@@ -684,7 +695,7 @@ export class BerryField {
       const st = this.state[i];
       if (st === S.ON_VINE || st === S.DETACHED || st === S.RISING) {
         const under = clamp((waterLevel - y) / 1.1, 0, 1) * smoothstep(this.water.flood * 2);
-        const k = under * 0.62;
+        const k = under * 0.45;
         const tint = this.v.waterTint;
         r = r * (1 - k) + tint.r * k * 1.5;
         g = g * (1 - k) + tint.g * k * 1.5;

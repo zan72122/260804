@@ -180,6 +180,22 @@ export class World {
     }
   }
 
+  /**
+   * Slide the whole scene into evening for the closing shot: the key light
+   * warms and drops, the sky fill cools off, and the last berries on the
+   * water catch the low sun.
+   */
+  setEvening(t: number): void {
+    const k = Math.min(Math.max(t, 0), 1);
+    this.sun.color.copy(this.variant.sunColor).lerp(this.eveningSun, k);
+    this.sun.intensity = 3.1 - k * 1.15;
+    this.sun.position.set(16 - k * 6, 26 - k * 17, 13 + k * 6);
+    this.hemi.intensity = 0.8 - k * 0.26;
+    this.terrain.setDusk(k * 0.8);
+  }
+
+  private readonly eveningSun = new THREE.Color('#ffb05f');
+
   /** Debris the reel kicks loose alongside the fruit. */
   spawnChurn(x: number, y: number, z: number, intensity: number): void {
     const p = this.particles;

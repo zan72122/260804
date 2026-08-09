@@ -157,7 +157,7 @@ export class Gate {
     this.disposables.push(rimGeo, spokeGeo, hubGeo);
 
     // the pouring sheet
-    const pourGeo = new THREE.PlaneGeometry(3.3, 4.4, 1, 1);
+    const pourGeo = new THREE.PlaneGeometry(3.3, 7.6, 1, 1);
     this.pourMat = new THREE.ShaderMaterial({
       uniforms: {
         uTime: { value: 0 },
@@ -171,14 +171,14 @@ export class Gate {
       side: THREE.DoubleSide,
     });
     this.pour = new THREE.Mesh(pourGeo, this.pourMat);
-    this.pour.position.set(0, 0.75, 1.35);
-    this.pour.rotation.x = -Math.PI / 2.34;
+    this.pour.position.set(0, 0.62, 2.9);
+    this.pour.rotation.x = -Math.PI / 2.18;
     this.pour.renderOrder = 7;
     this.group.add(this.pour);
     this.disposables.push(pourGeo, this.pourMat);
 
     this.handle.copy(base).add(new THREE.Vector3(0, 7.1, -0.35));
-    this.mouth.copy(base).add(new THREE.Vector3(0, 0.6, 2.6));
+    this.mouth.copy(base).add(new THREE.Vector3(0, 0.6, 4.4));
   }
 
   /** Drive from a gesture: positive = opening. Clamped and smoothed. */

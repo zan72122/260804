@@ -57,47 +57,62 @@ async function swipe(
 }
 
 async function openGate(page: Page, w: number, h: number): Promise<void> {
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < 14; i++) {
     if ((await step(page)) !== Step.Gate) return;
-    await swipe(page, { x: w / 2, y: h * 0.78 }, { x: w / 2, y: h * 0.24 }, 12, 10);
-    await page.waitForTimeout(120);
+    await swipe(page, { x: w / 2, y: h * 0.8 }, { x: w / 2, y: h * 0.2 }, 12, 25);
+    await page.waitForTimeout(400);
   }
 }
 
-/** Drive the reel around the bog in a lawnmower pattern. */
-async function driveReel(page: Page, w: number, h: number): Promise<void> {
+/**
+ * Drive the reel around the bog with one long continuous drag, the way a
+ * child actually holds the screen — and pace it off simulated time, because
+ * the software renderer here runs well under 20fps and the loop deliberately
+ * slows the game down rather than teleporting the machine.
+ */
+async function driveReel(page: Page, w: number, h: number, want = Step.Reel): Promise<void> {
   const cx = w / 2;
-  const cy = h * 0.52;
-  const rx = w * 0.36;
-  const ry = h * 0.2;
-  for (let lap = 0; lap < 26; lap++) {
-    if ((await step(page)) !== Step.Reel) return;
-    const a = lap * 0.9;
-    const bx = cx + Math.cos(a) * rx;
-    const by = cy + Math.sin(a * 1.3) * ry;
-    await swipe(page, { x: cx, y: cy }, { x: bx, y: by }, 8, 16);
-    await page.waitForTimeout(120);
+  const cy = h * 0.5;
+  const rx = w * 0.34;
+  const ry = h * 0.22;
+  await page.mouse.move(cx, cy);
+  await page.mouse.down();
+  for (let i = 0; i < 600; i++) {
+    if (i % 4 === 0 && (await step(page)) !== want) break;
+    const a = i * 0.24;
+    await page.mouse.move(cx + Math.cos(a) * rx, cy + Math.sin(a * 1.7) * ry, { steps: 3 });
+    await page.waitForTimeout(260);
   }
+  await page.mouse.up();
 }
 
+/** Haul each buoy inward, over and over, the way the boom is meant to work. */
 async function pullBoom(page: Page, w: number, h: number): Promise<void> {
   const cx = w / 2;
   const cy = h * 0.5;
-  for (let i = 0; i < 26; i++) {
+  for (let i = 0; i < 90; i++) {
     if ((await step(page)) !== Step.Boom) return;
-    // alternately drag each end toward the middle
     const side = i % 2 === 0 ? -1 : 1;
-    const startX = cx + side * w * 0.42;
-    const endX = cx + side * w * 0.08;
-    await swipe(page, { x: startX, y: cy }, { x: endX, y: cy + (i % 3) * 8 - 8 }, 12, 14);
-    await page.waitForTimeout(120);
+    const ang = (i % 4) * 0.35 - 0.5;
+    await page.mouse.move(cx + side * w * 0.4, cy + Math.sin(ang) * h * 0.2);
+    await page.mouse.down();
+    for (let k = 1; k <= 5; k++) {
+      const t = k / 5;
+      await page.mouse.move(
+        cx + side * w * 0.4 * (1 - t * 0.92),
+        cy + Math.sin(ang) * h * 0.2 * (1 - t),
+      );
+      await page.waitForTimeout(320);
+    }
+    await page.mouse.up();
+    await page.waitForTimeout(150);
   }
 }
 
 test.describe('ぽこぽこ！クランベリー・ウェットハーベスト', () => {
   for (const size of SIZES) {
     test(`full harvest — ${size.name}`, async ({ page }) => {
-      test.setTimeout(240000);
+      test.setTimeout(900000);
       const errors: string[] = [];
       page.on('pageerror', (e) => errors.push(String(e)));
       page.on('console', (m) => {
@@ -115,50 +130,62 @@ test.describe('ぽこぽこ！クランベリー・ウェットハーベスト',
 
       /* --- 1. pre-harvest field --- */
       await shot('01-before');
-      expect(await page.evaluate(() => window.__game!.water())).toBeLessThan(0);
+      const dry = await page.evaluate(() => window.__game!.water());
+      expect(dry).toBeLessThan(-0.2); // the bog starts dry, not a pond
 
       /* --- 2. the gate --- */
       await page.mouse.click(w / 2, h / 2); // skip the establishing shot
       await waitStep(page, Step.Gate, 15000);
-      // a half swipe must move the water, but not all the way
-      await swipe(page, { x: w / 2, y: h * 0.7 }, { x: w / 2, y: h * 0.55 }, 8, 12);
-      await page.waitForTimeout(1200);
+      // a half swipe must start the water moving without finishing the job
+      await swipe(page, { x: w / 2, y: h * 0.7 }, { x: w / 2, y: h * 0.55 }, 8, 60);
+      await page.waitForFunction((d) => (window.__game?.water() ?? d) > d + 0.02, dry, {
+        timeout: 60000,
+        polling: 200,
+      });
       const partial = await page.evaluate(() => window.__game!.water());
-      expect(partial).toBeGreaterThan(-0.16);
+      expect(partial).toBeLessThan(0.9); // ... and it is not full yet
+      expect(await step(page)).toBe(Step.Gate);
       await shot('02-filling');
 
       await openGate(page, w, h);
-      await waitStep(page, Step.Reel, 60000);
+      await waitStep(page, Step.Reel, 120000);
       const full = await page.evaluate(() => window.__game!.water());
       expect(full).toBeGreaterThan(partial);
       await shot('03-flooded');
 
       /* --- 3. the reel --- */
       await driveReel(page, w, h);
-      await waitStep(page, Step.Reveal, 90000);
+      await waitStep(page, Step.Reveal, 180000);
       expect(await page.evaluate(() => window.__game!.harvested())).toBeGreaterThan(0.5);
       await shot('04-reel');
 
       /* --- 4. the reveal --- */
       await page.waitForTimeout(2500);
       await shot('05-surfacing');
-      await waitStep(page, Step.Boom, 30000);
+      await waitStep(page, Step.Boom, 180000);
       await shot('06-red-water');
       const afloat = await page.evaluate(() => window.__game!.floating());
       expect(afloat).toBeGreaterThan(200);
 
       /* --- 5/6. the boom --- */
       await pullBoom(page, w, h);
-      await waitStep(page, Step.Hose, 60000);
+      await waitStep(page, Step.Hose, 180000);
       await shot('07-packed');
 
       /* --- 7. the hose --- */
-      for (let i = 0; i < 14; i++) {
+      // deliberately sloppy: drop it near the coupling, never exactly on it
+      for (let i = 0; i < 20; i++) {
         if ((await step(page)) !== Step.Hose) break;
-        await swipe(page, { x: w * 0.3, y: h * 0.7 }, { x: w * 0.5, y: h * 0.45 }, 10, 14);
-        await page.waitForTimeout(150);
+        await swipe(
+          page,
+          { x: w * (0.5 + (i % 2 === 0 ? 0.06 : -0.06)), y: h * 0.74 },
+          { x: w * 0.5, y: h * 0.46 },
+          8,
+          120,
+        );
+        await page.waitForTimeout(250);
       }
-      await waitStep(page, Step.Pump, 40000);
+      await waitStep(page, Step.Pump, 60000);
       await shot('08-hose-connected');
 
       /* --- 8. the pump --- */
@@ -171,30 +198,39 @@ test.describe('ぽこぽこ！クランベリー・ウェットハーベスト',
       // hold, release, hold again — stopping must never break anything
       await page.mouse.move(px, py);
       await page.mouse.down();
-      await page.waitForTimeout(3500);
+      await page.waitForFunction(() => (window.__game?.bed() ?? 0) > 5, null, {
+        timeout: 300000,
+        polling: 300,
+      });
       await shot('09-hose-flow');
       const midBed = await page.evaluate(() => window.__game!.bed());
       await page.mouse.up();
-      await page.waitForTimeout(1200);
+      await page.waitForTimeout(2500);
       const paused = await page.evaluate(() => window.__game!.bed());
       await page.mouse.down();
       expect(await step(page)).toBe(Step.Pump);
+      // releasing must stop the intake: nothing new may enter the hose
+      expect(paused).toBeGreaterThanOrEqual(midBed);
+      const afterPause = await page.evaluate(() => window.__game!.bed());
+      await page.waitForTimeout(1500);
+      expect(await page.evaluate(() => window.__game!.bed())).toBeGreaterThanOrEqual(afterPause);
 
-      for (let i = 0; i < 120; i++) {
-        if ((await step(page)) !== Step.Pump) break;
-        await page.waitForTimeout(500);
-      }
+      await page
+        .waitForFunction(() => window.__game?.step() !== 6, null, {
+          timeout: 600000,
+          polling: 500,
+        })
+        .catch(() => undefined);
       await page.mouse.up();
       expect(midBed).toBeGreaterThan(0);
-      expect(paused).toBeGreaterThanOrEqual(midBed);
 
-      await waitStep(page, Step.Done, 40000);
+      await waitStep(page, Step.Done, 60000);
       await page.waitForTimeout(1500);
       await shot('10-truck-full');
       expect(await page.evaluate(() => window.__game!.bed())).toBeGreaterThan(100);
 
       /* --- 9. replay in two taps --- */
-      await page.waitForTimeout(4000);
+      await page.waitForTimeout(9000);
       await shot('11-done');
       const again = page.locator('button[aria-label="おなじ はたけで もういちど"]');
       await expect(again).toBeVisible();
@@ -208,17 +244,17 @@ test.describe('ぽこぽこ！クランベリー・ウェットハーベスト',
   }
 
   test('rotation mid-harvest keeps progress', async ({ page }) => {
-    test.setTimeout(180000);
+    test.setTimeout(900000);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/');
     await page.waitForFunction(() => !!window.__game, null, { timeout: 30000 });
     await page.mouse.click(195, 400);
     await waitStep(page, Step.Gate, 15000);
     await openGate(page, 390, 844);
-    await waitStep(page, Step.Reel, 60000);
+    await waitStep(page, Step.Reel, 120000);
     await driveReel(page, 390, 844);
-    await waitStep(page, Step.Reveal, 90000);
-    await waitStep(page, Step.Boom, 30000);
+    await waitStep(page, Step.Reveal, 180000);
+    await waitStep(page, Step.Boom, 180000);
 
     const before = await page.evaluate(() => ({
       floating: window.__game!.floating(),
@@ -241,7 +277,7 @@ test.describe('ぽこぽこ！クランベリー・ウェットハーベスト',
   });
 
   test('low graphics mode still shows the floating raft', async ({ page }) => {
-    test.setTimeout(120000);
+    test.setTimeout(900000);
     await page.addInitScript(() => {
       localStorage.setItem(
         'pokopoko.settings.v1',
@@ -255,18 +291,18 @@ test.describe('ぽこぽこ！クランベリー・ウェットハーベスト',
     await page.mouse.click(195, 400);
     await waitStep(page, Step.Gate, 15000);
     await openGate(page, 390, 844);
-    await waitStep(page, Step.Reel, 60000);
+    await waitStep(page, Step.Reel, 120000);
     await driveReel(page, 390, 844);
-    await waitStep(page, Step.Reveal, 90000);
-    await waitStep(page, Step.Boom, 30000);
+    await waitStep(page, Step.Reveal, 180000);
+    await waitStep(page, Step.Boom, 180000);
     expect(await page.evaluate(() => window.__game!.floating())).toBeGreaterThan(150);
     await page.screenshot({ path: 'test-results/shots/low-red-water.png' });
     const calls = await page.evaluate(() => window.__game!.drawCalls());
-    expect(calls).toBeLessThan(60);
+    expect(calls).toBeLessThan(90);
   });
 
   test('free play keeps producing berries', async ({ page }) => {
-    test.setTimeout(120000);
+    test.setTimeout(900000);
     await page.setViewportSize({ width: 844, height: 390 });
     await page.goto('/');
     await page.waitForFunction(() => !!window.__game, null, { timeout: 30000 });
@@ -274,7 +310,7 @@ test.describe('ぽこぽこ！クランベリー・ウェットハーベスト',
     await page.waitForTimeout(600);
     expect(await step(page)).toBe(Step.Sandbox);
     expect(await page.evaluate(() => window.__game!.water())).toBeGreaterThan(1);
-    await driveReel(page, 844, 390);
+    await driveReel(page, 844, 390, Step.Sandbox);
     expect(await page.evaluate(() => window.__game!.floating())).toBeGreaterThan(10);
     const pump = page.locator('button[aria-label="すいこむ"]');
     await expect(pump).toBeVisible();

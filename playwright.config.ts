@@ -2,6 +2,10 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests',
+  // shots.spec.ts is an authoring tool for eyeballing every scene, not a
+  // correctness check; it is slow on a software renderer, so `npm test`
+  // skips it and `npm run shots` runs it explicitly.
+  testIgnore: process.env.SHOTS ? [] : ['**/shots.spec.ts'],
   timeout: 900000,
   expect: { timeout: 20000 },
   fullyParallel: false,

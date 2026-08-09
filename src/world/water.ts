@@ -126,8 +126,8 @@ const FRAG = /* glsl */ `
 
     // sun glint
     vec3 h = normalize(uSunDir + view);
-    float spec = pow(max(dot(n, h), 0.0), 90.0);
-    col += uSunColor * spec * 0.55;
+    float spec = pow(max(dot(n, h), 0.0), 140.0);
+    col += uSunColor * spec * 0.45;
 
     // churn foam where something is stirring the water
     float foam = smoothstep(0.045, 0.16, vRipple);

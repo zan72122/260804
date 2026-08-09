@@ -115,16 +115,16 @@ export interface QualityProfile {
 
 const PROFILES: Record<Tier, QualityProfile> = {
   low: {
-    berries: 620,
+    berries: 900,
     waterSegments: 48,
     particles: 150,
-    vines: 700,
+    vines: 760,
     maxPixelRatio: 1.25,
     shadows: false,
     decor: false,
   },
   mid: {
-    berries: 1100,
+    berries: 1200,
     waterSegments: 80,
     particles: 280,
     vines: 1250,
@@ -133,7 +133,7 @@ const PROFILES: Record<Tier, QualityProfile> = {
     decor: true,
   },
   high: {
-    berries: 1500,
+    berries: 1550,
     waterSegments: 118,
     particles: 440,
     vines: 1700,

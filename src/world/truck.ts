@@ -27,7 +27,6 @@ export class Truck {
 
   private readonly wheels: THREE.Mesh[] = [];
   private readonly disposables: Array<{ dispose(): void }> = [];
-  private readonly chuteFlap: THREE.Mesh;
   private driveT = -1;
   private idle = 0;
   private readonly home = new THREE.Vector3();
@@ -155,20 +154,18 @@ export class Truck {
     }
     this.disposables.push(tyreGeo, hubGeo);
 
-    /* ---- discharge chute above the bed ---- */
-    const chuteGeo = new THREE.CylinderGeometry(0.62, 0.86, 1.5, 12, 1, true);
-    const chute = new THREE.Mesh(chuteGeo, steel);
-    chute.material.side = THREE.DoubleSide;
-    chute.position.set(-1.5, floorY + wallH + 1.5, 0);
-    this.group.add(chute);
-    this.disposables.push(chuteGeo);
-
-    const flapGeo = new THREE.BoxGeometry(1.5, 0.06, 1.4);
-    this.chuteFlap = new THREE.Mesh(flapGeo, dark);
-    this.chuteFlap.position.set(-1.5, floorY + wallH + 0.72, 0.55);
-    this.chuteFlap.rotation.x = -0.5;
-    this.group.add(this.chuteFlap);
-    this.disposables.push(flapGeo);
+    /* ---- discharge stand: the hose ends over the bed, on a light frame ---- */
+    const postGeo = new THREE.BoxGeometry(0.16, 2.6, 0.16);
+    for (const dz of [-inHalfZ - 0.1, inHalfZ + 0.1]) {
+      const post = new THREE.Mesh(postGeo, steel);
+      post.position.set(-1.5, floorY + wallH + 0.6, dz);
+      this.group.add(post);
+    }
+    const railTopGeo = new THREE.BoxGeometry(0.9, 0.16, inHalfZ * 2 + 0.4);
+    const railTop = new THREE.Mesh(railTopGeo, steel);
+    railTop.position.set(-1.5, floorY + wallH + 1.9, 0);
+    this.group.add(railTop);
+    this.disposables.push(postGeo, railTopGeo);
 
     /* ---- bed fill slots ---- */
     this.buildSlots(berryCount, inHalfX, inHalfZ, wallH);
@@ -290,13 +287,12 @@ export class Truck {
     // engine idle shiver, stronger while the pump is running
     const shake = 0.006 + pumping * 0.016;
     this.group.position.y = this.home.y + Math.sin(this.idle * 22) * shake;
-    this.chuteFlap.rotation.x = -0.5 - pumping * 0.55 + Math.sin(this.idle * 14) * pumping * 0.12;
 
     if (this.driveT >= 0) {
       this.driveT += dt;
       // straight line only: the bed slots are baked in world space, so the
       // load rides along exactly as long as we do not re-yaw the truck
-      const speed = Math.min(7.5, this.driveT * 2.4);
+      const speed = Math.min(4.2, this.driveT * 1.5);
       const dx = Math.cos(this.group.rotation.y) * speed * dt;
       const dz = -Math.sin(this.group.rotation.y) * speed * dt;
       this.group.position.x += dx;

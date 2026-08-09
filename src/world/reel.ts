@@ -198,7 +198,7 @@ export class Reel {
       this.roll = damp(this.roll, 0, 5, dt);
     }
     // it never overshoots the finger, and it never stops dead
-    const want = clamp(throttle, 0, 1) * 2.6 * clamp(dist / 1.4, 0, 1);
+    const want = clamp(throttle, 0, 1) * 3.0 * clamp(dist / 1.4, 0, 1);
     this.speed = damp(this.speed, want, 3.0, dt);
   }
 

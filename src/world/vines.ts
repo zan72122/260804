@@ -171,7 +171,7 @@ export class Vines {
         .replace(
           '#include <dithering_fragment>',
           `#include <dithering_fragment>
-           gl_FragColor.rgb = mix(gl_FragColor.rgb, gl_FragColor.rgb * vec3(0.62, 0.72, 0.72), uWet);`,
+           gl_FragColor.rgb = mix(gl_FragColor.rgb, gl_FragColor.rgb * vec3(0.42, 0.58, 0.58), uWet);`,
         );
     };
 
