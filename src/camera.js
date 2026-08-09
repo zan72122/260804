@@ -12,7 +12,6 @@ export class Director {
     this.wantTarget = this.target.clone();
     this.speed = 2.6;
     this.hold = 0;
-    this.portrait = false;
     this.zoom = 1;
   }
 
@@ -53,23 +52,26 @@ export const SHOTS = {
   buildOverview: { pos: V(0.03, 0.92, 1.02), target: V(0, 0.185, 0.075), speed: 2.4 },
   // バーを持つと、ソケットが見える角度へ軽く寄る
   buildCarry: { pos: V(0.04, 0.80, 0.90), target: V(0, 0.225, 0.075), speed: 3.0 },
-  playOverview: { pos: V(0.0, 0.86, 0.98), target: V(0, 0.235, 0.03), speed: 2.6 },
-  playAim: { pos: V(0.0, 1.00, 0.46), target: V(0, 0.255, 0.0), speed: 2.4 },
+  playOverview: { pos: V(0.0, 0.90, 1.02), target: V(0, 0.230, 0.03), speed: 2.6 },
+  playAim: { pos: V(0.0, 1.26, 0.62), target: V(0, 0.240, 0.02), speed: 2.4 },
 };
 
+// 接触は低い斜め側面から。押される向きの正面側に回り込む。
 export function contactShot(prizePos, dir) {
   const side = dir >= 0 ? -1 : 1;
   return {
-    pos: V(side * 0.54, 0.40, 0.50),
-    target: V(prizePos.x * 0.6, prizePos.y - 0.01, prizePos.z * 0.8),
+    pos: V(side * 0.92, 0.58, 0.94),
+    target: V(prizePos.x * 0.5, prizePos.y - 0.03, prizePos.z * 0.7),
     speed: 2.2,
   };
 }
 
+// 落ちるときだけ少し引く
 export function fallShot(prizePos, dir) {
   const s = contactShot(prizePos, dir);
-  s.pos.multiplyScalar(1.22);
-  s.pos.y = 0.52;
-  s.speed = 1.6;
+  s.pos.multiplyScalar(1.18);
+  s.pos.y = 0.72;
+  s.target.set(prizePos.x * 0.4, 0.14, prizePos.z * 0.6);
+  s.speed = 1.5;
   return s;
 }

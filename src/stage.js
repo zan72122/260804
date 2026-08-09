@@ -106,8 +106,8 @@ export class Stage {
   }
 
   _lights() {
-    this.scene.add(new THREE.HemisphereLight(0xdfefff, 0x2a3240, 1.05));
-    const key = new THREE.DirectionalLight(0xffffff, 2.1);
+    this.scene.add(new THREE.HemisphereLight(0xdfefff, 0x27303c, 0.78));
+    const key = new THREE.DirectionalLight(0xffffff, 2.7);
     key.position.set(0.42, 1.15, 0.62);
     key.castShadow = true;
     key.shadow.mapSize.set(1024, 1024);
@@ -128,7 +128,7 @@ export class Stage {
     this.cabinet = g;
 
     const shell = new THREE.MeshStandardMaterial({ color: 0x24405c, roughness: 0.62, metalness: 0.15 });
-    const rampMat = new THREE.MeshStandardMaterial({ color: 0x3a6ea8, roughness: 0.35, metalness: 0.1 });
+    const rampMat = new THREE.MeshStandardMaterial({ color: 0x27405e, roughness: 0.85, metalness: 0.05 });
 
     // 下の斜面（奥が高い）。落ちた景品はここを滑ってシュートへ。
     const dy = CAB.rampFarY - CAB.rampNearY;
@@ -233,11 +233,11 @@ export class Stage {
             gsock.position.set(side * SLOT_X[xi], SLOT_Y[yi], face);
             const mat = new THREE.MeshStandardMaterial({
               color: base, roughness: 0.35, metalness: 0.3,
-              emissive: new THREE.Color(base), emissiveIntensity: 0.0,
+              emissive: new THREE.Color(base), emissiveIntensity: 0.25,
             });
             const ring = new THREE.Mesh(ringGeo, mat);
             gsock.add(ring);
-            const hole = new THREE.Mesh(holeGeo, new THREE.MeshBasicMaterial({ color: 0x08121c }));
+            const hole = new THREE.Mesh(holeGeo, new THREE.MeshBasicMaterial({ color: 0x101d2c }));
             hole.position.z = -0.0008;
             gsock.add(hole);
             this.cabinet.add(gsock);
@@ -252,7 +252,7 @@ export class Stage {
     this.bars = [];
     const tubeGeo = new THREE.CylinderGeometry(BAR.radius, BAR.radius, 1, 20, 1, true);
     tubeGeo.rotateX(Math.PI / 2);
-    const coreGeo = new THREE.CylinderGeometry(0.0075, 0.0075, 1, 14);
+    const coreGeo = new THREE.CylinderGeometry(0.0082, 0.0082, 1, 14);
     coreGeo.rotateX(Math.PI / 2);
     const handleGeo = new THREE.SphereGeometry(HANDLE.radius, 20, 14);
     const collarGeo = new THREE.CylinderGeometry(0.0155, 0.0155, 0.016, 16);
@@ -262,7 +262,7 @@ export class Stage {
       const color = i === 0 ? COLORS.barLeft : COLORS.barRight;
       const g = new THREE.Group();
       const tubeMat = new THREE.MeshPhysicalMaterial({
-        color: 0xeaf6ff, transparent: true, opacity: 0.42, roughness: 0.05,
+        color, transparent: true, opacity: 0.30, roughness: 0.05,
         metalness: 0, clearcoat: 1, clearcoatRoughness: 0.03,
         envMapIntensity: 1.6, depthWrite: false, side: THREE.DoubleSide,
       });
@@ -270,7 +270,7 @@ export class Stage {
       tube.renderOrder = 3;
       const coreMat = new THREE.MeshStandardMaterial({
         color, roughness: 0.28, metalness: 0.15,
-        emissive: new THREE.Color(color), emissiveIntensity: 0.35,
+        emissive: new THREE.Color(color), emissiveIntensity: 0.5,
       });
       const core = new THREE.Mesh(coreGeo, coreMat);
       core.castShadow = true;
@@ -294,7 +294,7 @@ export class Stage {
       }
       this.scene.add(g);
       this.bars.push({
-        group: g, tube, core, coreMat, handles, collars, handleMat,
+        group: g, tube, core, coreMat, handles, collars,
         color, flash: 0, a: new THREE.Vector3(), b: new THREE.Vector3(),
       });
     }
@@ -492,8 +492,8 @@ export class Stage {
     for (const s of this.sockets) {
       const target = s.glow;
       const cur = s.mat.emissiveIntensity;
-      s.mat.emissiveIntensity = cur + (target - cur) * Math.min(1, dt * 12);
-      const sc = 1 + s.mat.emissiveIntensity * 0.22;
+      s.mat.emissiveIntensity = cur + (target + 0.25 - cur) * Math.min(1, dt * 12);
+      const sc = 1 + Math.max(0, s.mat.emissiveIntensity - 0.25) * 0.22;
       s.group.scale.setScalar(sc);
     }
     for (const bar of this.bars) {

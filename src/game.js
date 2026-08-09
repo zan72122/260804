@@ -198,11 +198,11 @@ export class Game {
     this.raycaster = new THREE.Raycaster();
   }
 
-  ndc(ev, yOffsetPx = 0) {
+  ndc(ev) {
     const r = this.canvas.getBoundingClientRect();
     return new THREE.Vector2(
       ((ev.clientX - r.left) / r.width) * 2 - 1,
-      -((ev.clientY - r.top - yOffsetPx) / r.height) * 2 + 1,
+      -((ev.clientY - r.top) / r.height) * 2 + 1,
     );
   }
 
@@ -252,7 +252,16 @@ export class Game {
     const hitsH = this.raycaster.intersectObjects(this.pick.handles.filter((h) => h.visible), false);
     if (hitsH.length) {
       const u = hitsH[0].object.userData;
-      this.drag = { kind: 'handle', index: u.index, end: u.end };
+      const z = (u.end === 0 ? BAR.z0 : BAR.z1) + HANDLE.dz;
+      const hit = this.raycaster.ray.intersectPlane(
+        new THREE.Plane(new THREE.Vector3(0, 0, 1), -z), new THREE.Vector3(),
+      );
+      const h = this.stage.bars[u.index].handles[u.end].position;
+      this.drag = {
+        kind: 'handle', index: u.index, end: u.end, z,
+        offX: hit ? h.x - hit.x : 0,
+        offY: hit ? h.y - hit.y : 0,
+      };
       A.sfxPick();
       // 段階を選んでいる間はカメラを止め、バーとソケットを同時に見せ続ける
       this.director.freeze(1e4);
@@ -321,14 +330,15 @@ export class Game {
     if (this.drag && this.drag.kind === 'handle') {
       const bar = this.layout.bars[this.drag.index];
       if (!bar.placed) return;
-      // 指で隠れないよう、接点を指より少し上に取る
-      this.raycaster.setFromCamera(this.ndc(ev, 34), this.camera);
-      const z = (this.drag.end === 0 ? BAR.z0 : BAR.z1) + HANDLE.dz;
-      const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -z);
+      this.raycaster.setFromCamera(this.ndc(ev), this.camera);
+      const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -this.drag.z);
       const hit = this.raycaster.ray.intersectPlane(plane, new THREE.Vector3());
       if (!hit) return;
-      const xi = nearestIndex(SLOT_X, Math.sign(hit.x) === bar.side ? Math.abs(hit.x) : 0);
-      const yi = nearestIndex(SLOT_Y, hit.y - HANDLE.dy);
+      // つかんだ瞬間のずれを保つので、指の下で値が飛ばない
+      const hx = hit.x + this.drag.offX;
+      const hyv = hit.y + this.drag.offY - HANDLE.dy;
+      const xi = nearestIndex(SLOT_X, Math.sign(hx) === bar.side ? Math.abs(hx) : 0);
+      const yi = nearestIndex(SLOT_Y, hyv);
       const end = this.drag.end === 0 ? bar.front : bar.back;
       if (end.xi !== xi || end.yi !== yi) {
         end.xi = xi; end.yi = yi;
@@ -678,7 +688,6 @@ export class Game {
     this.camera.aspect = w / h;
     this.camera.fov = portrait ? 42 : 38;
     this.camera.updateProjectionMatrix();
-    this.director.portrait = portrait;
     this.director.zoom = portrait ? 1.12 : 1.16;
     this.ui.root.dataset.orient = portrait ? 'portrait' : 'landscape';
   }

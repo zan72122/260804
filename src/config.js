@@ -35,7 +35,7 @@ export const BAR = {
 export const BAR_LENGTH = Math.abs(BAR.z0 - BAR.z1);
 
 // バー端の大きな丸ハンドル（バーより上・手前にずらして指で隠れにくくする）
-export const HANDLE = { dy: 0.034, dz: 0.020, radius: 0.0235, pickRadius: 0.045 };
+export const HANDLE = { dy: 0.036, dz: 0.020, radius: 0.0235, pickRadius: 0.050 };
 
 export const PRIZE = {
   capsule: {

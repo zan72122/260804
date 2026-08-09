@@ -92,7 +92,6 @@ export class Prize {
     this.invInertiaBody = new Matrix3();
     this.invInertiaWorld = new Matrix3();
     this.lastImpulse = 0;
-    this.barContactSides = 0;
     this.accel = new Vector3();
     this._prevVel = new Vector3();
     this._planePts = [];
@@ -319,7 +318,6 @@ export class World {
       }
     }
     for (const pl of this.planes) this._collectPlane(body, pl);
-    body.barContactSides = barSides;
 
     if (this.contacts.length === 0) {
       this._integrate(body, h);
@@ -349,15 +347,15 @@ export class World {
     }
 
     // 落ちた景品が斜面の途中で立ったまま止まらないようにする
-    if (body.com.y < this.assistBelowY
-      && body.vel.lengthSq() < 0.02 && body.omega.lengthSq() < 0.6) {
+    // 落ちた景品は、寝かせながらゆっくりシュートへ送る（途中で立ち止まらせない）
+    if (body.com.y < this.assistBelowY && body.vel.lengthSq() < 0.05) {
       _tmp.set(0, 1, 0).applyQuaternion(body.quat);
-      if (_tmp.y < 0.8) {
+      if (_tmp.y < 0.8 && body.omega.lengthSq() < 0.6) {
         _tmp2.crossVectors(_tmp, UP_AXIS);
         const l = _tmp2.length();
         if (l > 1e-6) body.omega.addScaledVector(_tmp2.divideScalar(l), 7.0 * h);
       }
-      body.vel.z += 0.9 * h;
+      if (body.vel.z < 0.20) body.vel.z += 2.5 * h;
     }
 
     let maxJ = 0;
