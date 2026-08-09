@@ -1,0 +1,10 @@
+{
+  "name": "croquembouche",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A 3D web game about stacking choux into a croquembouche, one at a time.",
+  "type": "module",
+  "scripts": {
+    "start": "node serve.mjs 8080"
+  }
+}
