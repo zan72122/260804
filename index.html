@@ -1,0 +1,1543 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,minimum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#2b1b12">
+<title>くるくるクルトシュ</title>
+<style>
+  html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#241610;
+    -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
+    -webkit-tap-highlight-color:transparent;overscroll-behavior:none;}
+  canvas{display:block;position:fixed;inset:0;touch-action:none;}
+  #snd{position:fixed;right:calc(env(safe-area-inset-right) + 10px);top:calc(env(safe-area-inset-top) + 10px);
+    width:46px;height:46px;border:0;border-radius:50%;background:rgba(255,255,255,.13);
+    display:flex;align-items:center;justify-content:center;padding:0;z-index:5;touch-action:manipulation;}
+  #snd svg{width:26px;height:26px;display:block}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<button id="snd" aria-label="sound">
+  <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 9v6h4l5 4V5L8 9H4z" fill="#fff"/>
+    <g id="wv"><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a8.5 8.5 0 0 1 0 12"/></g>
+    <g id="mx" style="display:none"><path d="M17 9l5 6M22 9l-5 6"/></g>
+  </svg>
+</button>
+<script>
+(function(){
+"use strict";
+
+/* ============================================================
+   くるくるクルトシュ  /  Kürtőskalács
+   ひもを ぐるぐる → さとう → やく → スポッ
+   Single finger, no text, no timer, no score.
+   ============================================================ */
+
+const TAU = Math.PI * 2;
+const clamp = (v,a,b)=> v<a?a:(v>b?b:v);
+const lerp  = (a,b,t)=> a+(b-a)*t;
+const smoothstep=(a,b,x)=>{const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t);};
+const easeOut=t=>1-Math.pow(1-t,3);
+const easeInOut=t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+
+/* ------------------------------------------------------------
+   Canvas
+   ------------------------------------------------------------ */
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d', {alpha:false});
+let W=0,H=0,DPR=1,UNIT=1;
+
+function resize(){
+  DPR = Math.min(window.devicePixelRatio||1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  cv.width = Math.round(W*DPR); cv.height = Math.round(H*DPR);
+  cv.style.width = W+'px'; cv.style.height = H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  UNIT = Math.min(W, H*1.30);
+  CAM.focal = UNIT*1.40;
+  CAM.ox = W*0.5+panX; CAM.oy = H*0.5+panY;
+}
+window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', ()=>setTimeout(resize,150));
+
+/* ------------------------------------------------------------
+   Camera  (fixed cinematic rig, no free orbit)
+   ------------------------------------------------------------ */
+const CAM = {
+  yaw:0.52, pitch:0.26, dist:12.4, tx:0, ty:0, tz:0,
+  focal:600, ox:0, oy:0, cy:1, sy:0, cp:1, sp:0
+};
+function camUpdate(){
+  CAM.cy=Math.cos(CAM.yaw); CAM.sy=Math.sin(CAM.yaw);
+  CAM.cp=Math.cos(CAM.pitch); CAM.sp=Math.sin(CAM.pitch);
+  // screen-space basis (world vectors)
+  CAM.rx=CAM.cy; CAM.ry=0; CAM.rz=-CAM.sy;
+  CAM.ux=-CAM.sy*CAM.sp; CAM.uy=CAM.cp; CAM.uz=-CAM.cy*CAM.sp;
+}
+const _p={x:0,y:0,z:0,s:1};
+function project(x,y,z,o){
+  o=o||_p;
+  const dx=x-CAM.tx, dy=y-CAM.ty, dz=z-CAM.tz;
+  const x1=dx*CAM.cy - dz*CAM.sy;
+  const z1=dx*CAM.sy + dz*CAM.cy;
+  const y1=dy*CAM.cp - z1*CAM.sp;
+  const z2=dy*CAM.sp + z1*CAM.cp;
+  let zc=CAM.dist - z2; if(zc<0.4) zc=0.4;
+  const s=CAM.focal/zc;
+  o.x=CAM.ox + x1*s; o.y=CAM.oy - y1*s; o.s=s; o.z=zc;
+  return o;
+}
+// camera goal blending
+const camGoal={yaw:0.52,pitch:0.26,dist:12.4,tx:0,ty:0,tz:0};
+function camTo(g,rate,dt){
+  const k=1-Math.pow(1-rate,dt*60);
+  CAM.yaw=lerp(CAM.yaw,g.yaw,k); CAM.pitch=lerp(CAM.pitch,g.pitch,k);
+  CAM.dist=lerp(CAM.dist,g.dist,k);
+  CAM.tx=lerp(CAM.tx,g.tx,k); CAM.ty=lerp(CAM.ty,g.ty,k); CAM.tz=lerp(CAM.tz,g.tz,k);
+}
+
+/* ------------------------------------------------------------
+   World constants
+   ------------------------------------------------------------ */
+const SPIT_R    = 0.72;
+const SPIT_X0   = -5.05, SPIT_X1 = 5.05;
+const TURNS     = 8;
+const PITCH     = 1.02;
+const WINDLEN   = TURNS*PITCH;          // 8.16
+const AX0       = -3.95;                // first turn axial pos
+const AX1       = AX0 + WINDLEN;        // 4.21
+const RD_RAW    = 0.340;
+const RD_ROLL   = 0.625;
+const CONTACT_TH= 0.62;                 // where new dough lands (top-front)
+const FIRE_TH   = Math.atan2(-1.55,-1); // heat rises from below/behind
+const PILE      = {x:-5.95, y:-2.15, z:3.30};
+const TABLE_Y   = -2.75;
+
+const LIGHT = (function(){ const v=[-0.34,0.86,0.38]; const l=Math.hypot(v[0],v[1],v[2]);
+  return [v[0]/l,v[1]/l,v[2]/l]; })();
+
+/* ------------------------------------------------------------
+   Colour LUT  (bake level x lambert)  — avoids per-frame string building
+   ------------------------------------------------------------ */
+const RAMP=[
+  [0.00, 235,214,172],
+  [0.20, 236,212,161],
+  [0.42, 231,192,127],
+  [0.62, 205,142, 71],
+  [0.80, 172, 97, 40],
+  [1.00, 121, 58, 24]
+];
+function rampColor(t){
+  t=clamp(t,0,1);
+  for(let i=0;i<RAMP.length-1;i++){
+    const a=RAMP[i], b=RAMP[i+1];
+    if(t<=b[0]){
+      const k=(t-a[0])/(b[0]-a[0]);
+      return [lerp(a[1],b[1],k), lerp(a[2],b[2],k), lerp(a[3],b[3],k)];
+    }
+  }
+  const l=RAMP[RAMP.length-1]; return [l[1],l[2],l[3]];
+}
+const BN=26, LN=14;
+const lutBase=new Array(BN*LN), lutSh=new Array(BN*LN), lutHi=new Array(BN*LN);
+(function buildLut(){
+  const cs=(r,g,b)=>'rgb('+(r|0)+','+(g|0)+','+(b|0)+')';
+  for(let b=0;b<BN;b++){
+    const c=rampColor(b/(BN-1));
+    for(let l=0;l<LN;l++){
+      const k=0.70+(l/(LN-1))*0.34;
+      const r=clamp(c[0]*k,0,255), g=clamp(c[1]*k,0,255), bl=clamp(c[2]*k,0,255);
+      lutBase[b*LN+l]=cs(r,g,bl);
+      lutSh[b*LN+l]=cs(r*0.74,g*0.70,bl*0.68);
+      lutHi[b*LN+l]=cs(clamp(r+(255-r)*0.30,0,255), clamp(g+(255-g)*0.24,0,255), clamp(bl+(255-bl)*0.15,0,255));
+    }
+  }
+})();
+function lutIdx(bake,ndl){
+  const b=clamp(Math.round(bake*(BN-1)),0,BN-1);
+  const l=clamp(Math.round((ndl*0.5+0.5)*(LN-1)),0,LN-1);
+  return b*LN+l;
+}
+
+/* ------------------------------------------------------------
+   Game state
+   ------------------------------------------------------------ */
+const DBG={hideSpit:false};
+const ST={INTRO:0,WIND:1,ROLL:2,SUGAR:3,BAKE:4,SLIDE:5,REVEAL:6};
+const G={
+  st:ST.INTRO, stT:0, time:0,
+  p:0, pTarget:0,            // winding progress
+  spin:0, spinV:0, spinPrev:0, spinSpeed:0,
+  merge:0, rollDir:0, rollStrokes:0,
+  sugar:0, shakeX:0, shakeTilt:0,
+  bake:null, bakeAvg:0,
+  slide:0, slideAuto:0, cakeLift:0, cakeSpin:0,
+  tipX:-5.4, tipY:-1.2, tipZ:2.6, snapT:0, near:0,
+  dragTotal:0,
+  idle:0, celebrate:0,
+  fire:0
+};
+let NSEG=0, DU=0;
+let SPT=20;                  // samples per turn (quality)
+
+// per-sample buffers
+const COILBUF={};
+let sHx,sHy;
+let sX,sY,sZ,sTh,sNx,sNy,sNz,sBx,sBy,sBz,sPx,sPy,sPz,sPs,sNdl;
+function allocSamples(){
+  NSEG = TURNS*SPT;
+  DU = 1/NSEG;
+  const n=NSEG+1;
+  sX=new Float32Array(n); sY=new Float32Array(n); sZ=new Float32Array(n); sTh=new Float32Array(n);
+  sNx=new Float32Array(n); sNy=new Float32Array(n); sNz=new Float32Array(n);
+  sBx=new Float32Array(n); sBy=new Float32Array(n); sBz=new Float32Array(n);
+  sPx=new Float32Array(n); sPy=new Float32Array(n); sPz=new Float32Array(n); sPs=new Float32Array(n);
+  sNdl=new Float32Array(n); sHx=new Float32Array(n); sHy=new Float32Array(n);
+  COILBUF.px=sPx; COILBUF.py=sPy; COILBUF.pz=sPz; COILBUF.ps=sPs; COILBUF.sh=sNdl; COILBUF.hx=sHx; COILBUF.hy=sHy;
+  const ob=G.bake;
+  G.bake=new Float32Array(n);
+  if(ob){ for(let i=0;i<n;i++) G.bake[i]=ob[Math.min(ob.length-1, Math.round(i/(n-1)*(ob.length-1)))]; }
+}
+allocSamples();
+
+function rd(){ return lerp(RD_RAW, RD_ROLL, G.merge); }
+function shakeY(){ return rcen()+rd()+1.95; }
+function rcen(){ return SPIT_R + rd()*0.86; }
+
+/* grains: flour + sugar, stuck to the dough surface */
+const grains=[];      // {u,phi,sz,kind}  kind 0=flour 1=sugar
+function seedFlour(){
+  grains.length=0;
+  for(let i=0;i<130;i++)
+    grains.push({u:Math.random(), phi:Math.random()*TAU, sz:0.5+Math.random()*0.9, kind:0});
+}
+seedFlour();
+
+const sugarFall=[];   // falling sugar particles (world)
+const puffs=[];       // 2d screen particles
+const embers=[];      // fire embers (world)
+const steam=[];
+
+/* ------------------------------------------------------------
+   Reset
+   ------------------------------------------------------------ */
+function reset(){
+  G.st=ST.INTRO; G.stT=0;
+  G.p=0; G.pTarget=0; G.spin=CONTACT_TH; G.spinV=0; G.spinPrev=CONTACT_TH; G.spinSpeed=0;
+  G.merge=0; G.rollStrokes=0; G.rollDir=0;
+  G.sugar=0; G.shakeX=(AX0+AX1)/2; G.shakeTilt=0; G.slide=0; G.slideAuto=0; G.slideOff=0; G.cakeLift=0; G.cakeSpin=0;
+  G.bake.fill(0); G.bakeAvg=0;
+  G.tipX=PILE.x+1.15; G.tipY=TABLE_Y+1.45; G.tipZ=PILE.z+0.35; G.snapT=0;
+  G.dragTotal=0; G.idle=0; G.celebrate=0; G.fire=0; G.near=0; lastTickTurn=0;
+  seedFlour(); sugarFall.length=0; puffs.length=0; steam.length=0;
+}
+
+/* ------------------------------------------------------------
+   Audio  (tiny synth, starts on first touch)
+   ------------------------------------------------------------ */
+const SND={
+  ac:null, master:null, on:true, sizGain:null, sizSrc:null, noiseBuf:null,
+  init(){
+    if(this.ac) return;
+    const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return;
+    try{ this.ac=new AC(); }catch(e){ return; }
+    this.master=this.ac.createGain(); this.master.gain.value=this.on?0.5:0; this.master.connect(this.ac.destination);
+    const n=this.ac.sampleRate*1.2, b=this.ac.createBuffer(1,n,this.ac.sampleRate), d=b.getChannelData(0);
+    for(let i=0;i<n;i++) d[i]=Math.random()*2-1;
+    this.noiseBuf=b;
+  },
+  resume(){ if(this.ac&&this.ac.state==='suspended') this.ac.resume(); },
+  setOn(v){ this.on=v; if(this.master) this.master.gain.setTargetAtTime(v?0.5:0, this.ac.currentTime, 0.05); },
+  tone(f,dur,type,gain,slide){
+    if(!this.ac||!this.on) return;
+    const t=this.ac.currentTime, o=this.ac.createOscillator(), g=this.ac.createGain();
+    o.type=type||'sine'; o.frequency.setValueAtTime(f,t);
+    if(slide) o.frequency.exponentialRampToValueAtTime(Math.max(40,slide), t+dur);
+    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(gain||0.2, t+0.012);
+    g.gain.exponentialRampToValueAtTime(0.0008, t+dur);
+    o.connect(g); g.connect(this.master); o.start(t); o.stop(t+dur+0.02);
+  },
+  noise(dur,f,q,gain,sweep){
+    if(!this.ac||!this.on||!this.noiseBuf) return;
+    const t=this.ac.currentTime, s=this.ac.createBufferSource(); s.buffer=this.noiseBuf;
+    const bp=this.ac.createBiquadFilter(); bp.type='bandpass'; bp.frequency.setValueAtTime(f,t); bp.Q.value=q||1;
+    if(sweep) bp.frequency.exponentialRampToValueAtTime(Math.max(80,sweep), t+dur);
+    const g=this.ac.createGain(); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(gain||0.15,t+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0008,t+dur);
+    s.connect(bp); bp.connect(g); g.connect(this.master); s.start(t); s.stop(t+dur+0.02);
+  },
+  pop(){ this.tone(620,0.16,'sine',0.28,180); this.noise(0.09,900,1.2,0.10); },
+  tick(k){ this.noise(0.055, 420+k*260, 3, 0.06); },
+  sprinkle(){ this.noise(0.07, 5200+Math.random()*3000, 2.5, 0.05); },
+  swoosh(){ this.noise(0.5, 300, 0.7, 0.22, 1800); },
+  twinkle(){ const s=[784,988,1175,1568]; s.forEach((f,i)=>setTimeout(()=>this.tone(f,0.35,'triangle',0.14),i*80)); },
+  startSizzle(){
+    if(!this.ac||this.sizSrc||!this.noiseBuf) return;
+    const s=this.ac.createBufferSource(); s.buffer=this.noiseBuf; s.loop=true;
+    const bp=this.ac.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=2600; bp.Q.value=0.8;
+    const g=this.ac.createGain(); g.gain.value=0;
+    s.connect(bp); bp.connect(g); g.connect(this.master); s.start();
+    this.sizSrc=s; this.sizGain=g;
+  },
+  setSizzle(v){ if(this.sizGain) this.sizGain.gain.setTargetAtTime(v*0.14, this.ac.currentTime, 0.12); },
+  stopSizzle(){ if(this.sizSrc){ try{this.sizSrc.stop();}catch(e){} this.sizSrc=null; this.sizGain=null; } }
+};
+const sndBtn=document.getElementById('snd');
+sndBtn.addEventListener('click',(e)=>{
+  e.stopPropagation(); SND.init(); SND.setOn(!SND.on);
+  document.getElementById('wv').style.display = SND.on?'':'none';
+  document.getElementById('mx').style.display = SND.on?'none':'';
+});
+
+/* ------------------------------------------------------------
+   Input  (single pointer)
+   ------------------------------------------------------------ */
+const IN={down:false,x:0,y:0,px:0,py:0,dx:0,dy:0,moved:0,t0:0};
+function localPt(e){ return {x:e.clientX, y:e.clientY}; }
+cv.addEventListener('pointerdown',e=>{
+  e.preventDefault();
+  SND.init(); SND.resume();
+  cv.setPointerCapture&&cv.setPointerCapture(e.pointerId);
+  const p=localPt(e);
+  IN.down=true; IN.x=IN.px=p.x; IN.y=IN.py=p.y; IN.dx=0; IN.dy=0; IN.moved=0; IN.t0=G.time;
+  G.idle=0;
+  onDown(p.x,p.y);
+},{passive:false});
+cv.addEventListener('pointermove',e=>{
+  if(!IN.down) return;
+  e.preventDefault();
+  const p=localPt(e);
+  IN.dx=p.x-IN.px; IN.dy=p.y-IN.py; IN.px=p.x; IN.py=p.y;
+  IN.moved+=Math.hypot(IN.dx,IN.dy);
+  G.idle=0;
+  onMove(p.x,p.y,IN.dx,IN.dy);
+},{passive:false});
+function endPtr(e){ if(!IN.down)return; IN.down=false; IN.dx=0;IN.dy=0; onUp(); }
+cv.addEventListener('pointerup',endPtr);
+cv.addEventListener('pointercancel',endPtr);
+cv.addEventListener('pointerleave',endPtr);
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+
+/* screen delta -> world delta at a given depth */
+function screenToWorld(sdx,sdy,depth,out){
+  const k=depth/CAM.focal;
+  out.x=(CAM.rx*sdx - CAM.ux*sdy)*k;
+  out.y=(CAM.ry*sdx - CAM.uy*sdy)*k;
+  out.z=(CAM.rz*sdx - CAM.uz*sdy)*k;
+  return out;
+}
+const _wd={x:0,y:0,z:0};
+
+function contactPoint(o){
+  const a=AX0+G.p*WINDLEN, r=rcen();
+  o.x=a; o.y=r*Math.cos(CONTACT_TH); o.z=r*Math.sin(CONTACT_TH);
+  return o;
+}
+const _cp={x:0,y:0,z:0};
+
+function onDown(x,y){
+  if(G.st===ST.REVEAL && G.stT>1.6){ reset(); SND.pop(); }
+}
+function onMove(x,y,dx,dy){
+  const px = Math.hypot(dx,dy);
+  G.dragTotal += px;
+  switch(G.st){
+    case ST.INTRO:{
+      const d=project(G.tipX,G.tipY,G.tipZ);
+      screenToWorld(dx,dy,d.z,_wd);
+      G.tipX=clamp(G.tipX+_wd.x,-8,6); G.tipY=clamp(G.tipY+_wd.y,-2.4,3.4); G.tipZ=clamp(G.tipZ+_wd.z,-2,6);
+      if(G.dragTotal>UNIT*1.15) snapToSpit();
+      break;
+    }
+    case ST.WIND:{
+      const gain=(0.82*Math.abs(dx)+0.34*Math.abs(dy))/(UNIT*3.4);
+      G.pTarget=clamp(G.pTarget+gain,0,1);
+      break;
+    }
+    case ST.ROLL:{
+      const dir=Math.sign(dx);
+      if(dir!==0 && dir!==G.rollDir){ G.rollDir=dir; G.rollStrokes++; SND.noise(0.18,240,0.8,0.08,520); }
+      G.merge=clamp(G.merge + (Math.abs(dx)+0.3*Math.abs(dy))/(UNIT*2.3),0,1);
+      G.spinV += dx*0.0018;
+      break;
+    }
+    case ST.SUGAR:{
+      const span=WINDLEN*0.60;
+      G.shakeX=clamp(G.shakeX + dx*(span/(0.34*W)), AX0-0.3, AX1+0.3);
+      G.shakeTilt=clamp(dx*0.02,-0.7,0.7);
+      if(sugarFall.length<150){
+        for(let i=0;i<2;i++)
+          sugarFall.push({x:G.shakeX+(Math.random()-.5)*1.5, y:shakeY()-0.35, z:(Math.random()-.5)*1.5,
+                          vy:-1.6-Math.random()*1.2, vx:(Math.random()-.5)*0.45, vz:(Math.random()-.5)*0.45,
+                          sz:0.6+Math.random()*0.8});
+        if(Math.random()<0.22) SND.sprinkle();
+      }
+      break;
+    }
+    case ST.BAKE:{
+      const h=project(SPIT_X0-0.55, G.cakeLift, 0);
+      const ax=x-h.x, ay=y-h.y, pxr=Math.hypot(ax,ay);
+      let dsp = dx*0.0115;
+      if(pxr>UNIT*0.06 && pxr<UNIT*0.55){
+        const a0=Math.atan2(IN.py-dy-h.y, IN.px-dx-h.x), a1=Math.atan2(ay,ax);
+        let da=a1-a0; while(da>Math.PI)da-=TAU; while(da<-Math.PI)da+=TAU;
+        dsp += da*0.85;
+      }
+      G.spinV += dsp*0.55;
+      G.spin += dsp*0.5;
+      break;
+    }
+    case ST.SLIDE:{
+      // drag along the projected +X axis
+      const a=project(0,0,0,{}), b=project(1,0,0,{});
+      let ax=b.x-a.x, ay=b.y-a.y; const l=Math.hypot(ax,ay)||1; ax/=l; ay/=l;
+      const along=(dx*ax+dy*ay);
+      G.slide=clamp(G.slide + Math.max(0,along)/(UNIT*0.95),0,1);
+      break;
+    }
+  }
+}
+function onUp(){ G.rollDir=0; }
+
+function snapToSpit(){
+  if(G.st!==ST.INTRO) return;
+  G.st=ST.WIND; G.stT=0; G.snapT=1; SND.pop();
+  const c=contactPoint({});
+  const s=project(c.x,c.y,c.z);
+  burst(s.x,s.y,14);
+}
+
+/* ------------------------------------------------------------
+   Particles
+   ------------------------------------------------------------ */
+function burst(x,y,n,col){
+  for(let i=0;i<n;i++){
+    const a=Math.random()*TAU, sp=(0.6+Math.random()*2.2)*UNIT*0.0016*60;
+    puffs.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-UNIT*0.02,life:1,r:UNIT*(0.006+Math.random()*0.012),c:col||SPR.white,g:UNIT*0.05});
+  }
+}
+function puffAt(x,y,n){
+  for(let i=0;i<n;i++){
+    const a=-Math.PI/2+(Math.random()-.5)*2.2, sp=(0.3+Math.random())*UNIT*0.03;
+    puffs.push({x:x+(Math.random()-.5)*UNIT*0.02,y:y+(Math.random()-.5)*UNIT*0.02,
+      vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:1,r:UNIT*(0.010+Math.random()*0.016),c:SPR.white,g:UNIT*0.012});
+  }
+}
+function updatePuffs(dt){
+  for(let i=puffs.length-1;i>=0;i--){
+    const p=puffs[i];
+    p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=p.g*dt*60*0.016; p.vx*=0.97; p.vy*=0.985;
+    p.life-=dt*1.5;
+    if(p.life<=0) puffs.splice(i,1);
+  }
+}
+function drawPuffs(){
+  for(let i=0;i<puffs.length;i++){
+    const p=puffs[i];
+    blit(p.c, p.x, p.y, p.r*(0.7+p.life*0.9), clamp(p.life,0,1)*0.75);
+  }
+}
+
+/* ------------------------------------------------------------
+   Draw item pool (painter's algorithm)
+   ------------------------------------------------------------ */
+const pool=[]; let poolN=0;
+const items=[];
+function it(){ let o=pool[poolN]; if(!o){ o={}; pool.push(o);} poolN++; return o; }
+function pushItem(o){ items.push(o); }
+function sortItems(){ items.sort((a,b)=>b.z-a.z); }
+
+/* ------------------------------------------------------------
+   Scene: background & table
+   ------------------------------------------------------------ */
+let bgGrad=null, bgKey='';
+function drawBackground(){
+  const heat=G.fire;
+  const key=W+'x'+H+'|'+Math.round(heat*10);
+  if(bgKey!==key){
+    bgKey=key;
+    const g=ctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0,    mixHex('#1b0f0a','#2a0f06',heat));
+    g.addColorStop(0.42, mixHex('#331c11','#4a1a09',heat));
+    g.addColorStop(0.72, mixHex('#4d2c19','#6e2c0e',heat));
+    g.addColorStop(1,    mixHex('#2a170e','#48190a',heat));
+    bgGrad=g;
+  }
+  ctx.fillStyle=bgGrad; ctx.fillRect(0,0,W,H);
+  const c=project(0,0.6,-2,{});
+  const rg=ctx.createRadialGradient(c.x,c.y,0,c.x,c.y,UNIT*1.05);
+  rg.addColorStop(0,'rgba(255,196,120,'+(0.20+heat*0.20)+')');
+  rg.addColorStop(0.55,'rgba(255,150,70,'+(0.07+heat*0.10)+')');
+  rg.addColorStop(1,'rgba(255,140,60,0)');
+  ctx.fillStyle=rg; ctx.fillRect(0,0,W,H);
+}
+function drawVignette(){
+  const g=ctx.createRadialGradient(CAM.ox,CAM.oy,Math.min(W,H)*0.22,CAM.ox,CAM.oy,Math.max(W,H)*0.70);
+  g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(0.55,'rgba(24,10,4,0.20)'); g.addColorStop(1,'rgba(18,7,3,0.80)');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+}
+function mixHex(a,b,t){
+  const pa=parseInt(a.slice(1),16), pb=parseInt(b.slice(1),16);
+  const r=lerp((pa>>16)&255,(pb>>16)&255,t)|0, g=lerp((pa>>8)&255,(pb>>8)&255,t)|0, bl=lerp(pa&255,pb&255,t)|0;
+  return 'rgb('+r+','+g+','+bl+')';
+}
+function drawTable(){
+  const y=TABLE_Y, zf=7.6, zb=-7;
+  const q=[[-13,y,zf],[13,y,zf],[13,y,zb],[-13,y,zb]].map(p=>project(p[0],p[1],p[2],{}));
+  ctx.beginPath();
+  q.forEach((v,i)=> i?ctx.lineTo(v.x,v.y):ctx.moveTo(v.x,v.y));
+  ctx.closePath();
+  const a=project(0,y,zf,{}), b=project(0,y,zb,{});
+  const g=ctx.createLinearGradient(a.x,a.y,b.x,b.y);
+  g.addColorStop(0, mixHex('#d9a86c','#e8a45c',G.fire));
+  g.addColorStop(0.45, mixHex('#b07e49','#c47b3c',G.fire));
+  g.addColorStop(1, mixHex('#5c3a20','#6d3312',G.fire));
+  ctx.fillStyle=g; ctx.fill();
+  // wood grain
+  ctx.save(); ctx.clip(); ctx.globalAlpha=0.055; ctx.strokeStyle='#3a2210';
+  for(let i=-6;i<=6;i++){
+    const p0=project(-13,y,i*1.3,{}), p1=project(13,y,i*1.3,{});
+    ctx.lineWidth=Math.max(1,UNIT*0.0035);
+    ctx.beginPath(); ctx.moveTo(p0.x,p0.y); ctx.lineTo(p1.x,p1.y); ctx.stroke();
+  }
+  ctx.restore(); ctx.globalAlpha=1;
+  // front edge
+  const e0=project(-13,y,zf,{}), e1=project(13,y,zf,{}),
+        e2=project(13,y-0.55,zf,{}), e3=project(-13,y-0.55,zf,{});
+  ctx.beginPath(); ctx.moveTo(e0.x,e0.y); ctx.lineTo(e1.x,e1.y); ctx.lineTo(e2.x,e2.y); ctx.lineTo(e3.x,e3.y); ctx.closePath();
+  ctx.fillStyle=mixHex('#6b4425','#7a3d18',G.fire); ctx.fill();
+}
+function drawShadow(){
+  const y=TABLE_Y+0.03;
+  const cxx=(AX0+AX1)/2 + G.slideOff;
+  const c=project(cxx,y,0,{});
+  const e=project(cxx+WINDLEN*0.62,y,0,{});
+  const rx=Math.abs(e.x-c.x)+UNIT*0.06, ry=rx*0.20;
+  ctx.save(); ctx.translate(c.x,c.y+UNIT*0.01); ctx.scale(1,ry/rx);
+  const g=ctx.createRadialGradient(0,0,0,0,0,rx);
+  g.addColorStop(0,'rgba(30,14,6,0.5)'); g.addColorStop(1,'rgba(30,14,6,0)');
+  ctx.fillStyle=g; ctx.beginPath(); ctx.arc(0,0,rx,0,TAU); ctx.fill(); ctx.restore();
+}
+
+/* ------------------------------------------------------------
+   Cake / coil geometry & drawing
+   ------------------------------------------------------------ */
+G.slideOff=0;
+
+let lightScrX=0, lightScrY=0;
+function computeLightScreen(){
+  const a=project(0,0,0,{}), b=project(LIGHT[0],LIGHT[1],LIGHT[2],{});
+  let dx=b.x-a.x, dy=b.y-a.y; const l=Math.hypot(dx,dy)||1;
+  lightScrX=dx/l; lightScrY=dy/l;
+}
+
+let visN=0;
+function buildCoil(){
+  const r=rcen(), R=rd();
+  const off=G.slideOff, lift=G.cakeLift, extra=G.cakeSpin;
+  const kt=TURNS*TAU;
+  const n=NSEG+1;
+  const upTo=Math.min(n-1, Math.floor(G.p*NSEG));
+  visN=upTo;
+  for(let i=0;i<=upTo;i++){
+    const u=i*DU;
+    const th=G.spin+extra+u*kt;
+    const c=Math.cos(th), s=Math.sin(th);
+    const x=AX0+u*WINDLEN+off, y=r*c+lift, z=r*s;
+    sX[i]=x; sY[i]=y; sZ[i]=z; sTh[i]=th;
+    sNx[i]=0; sNy[i]=c; sNz[i]=s;
+    // tangent
+    let tx=WINDLEN, ty=-r*kt*s, tz=r*kt*c;
+    const tl=Math.hypot(tx,ty,tz)||1; tx/=tl; ty/=tl; tz/=tl;
+    // binormal = t x n
+    sBx[i]=ty*s - tz*c; sBy[i]=tz*0 - tx*s; sBz[i]=tx*c - ty*0;
+    const bl=Math.hypot(sBx[i],sBy[i],sBz[i])||1; sBx[i]/=bl; sBy[i]/=bl; sBz[i]/=bl;
+    const q=project(x,y,z,_p);
+    sPx[i]=q.x; sPy[i]=q.y; sPz[i]=q.z; sPs[i]=q.s;
+    let nd=sNy[i]*LIGHT[1]+sNz[i]*LIGHT[2];
+    if(G.fire>0.02){
+      const f=Math.cos(th-FIRE_TH);
+      if(f>0) nd=nd*0.88 + G.fire*Math.pow(f,1.4)*0.62;
+    }
+    sNdl[i]=clamp(nd,-1,1);
+    // screen direction of the lit side of the tube cross-section
+    const Ln=LIGHT[0]*sNx[i]+LIGHT[1]*sNy[i]+LIGHT[2]*sNz[i];
+    const Lb=LIGHT[0]*sBx[i]+LIGHT[1]*sBy[i]+LIGHT[2]*sBz[i];
+    let hx=Ln*sNx[i]+Lb*sBx[i], hy=Ln*sNy[i]+Lb*sBy[i], hz=Ln*sNz[i]+Lb*sBz[i];
+    const hl=Math.hypot(hx,hy,hz)||1; hx/=hl; hy/=hl; hz/=hl;
+    const q2=project(x+hx*R*0.6, y+hy*R*0.6, z+hz*R*0.6, {});
+    let ex=q2.x-q.x, ey=q2.y-q.y; const el=Math.hypot(ex,ey)||1;
+    sHx[i]=ex/el; sHy[i]=ey/el;
+  }
+}
+
+/* --- tube renderer -------------------------------------------
+   The dough is stroked as depth-sorted *runs* of the curve, each
+   run a continuous polyline, so the tube stays smooth instead of
+   breaking into per-segment scales.                              */
+const RB={px:[],py:[],pz:[],ps:[],sh:[],n:0};
+function rbReset(){ RB.n=0; }
+function rbAdd(x,y,z,shade){
+  const q=project(x,y,z,_p);
+  RB.px[RB.n]=q.x; RB.py[RB.n]=q.y; RB.pz[RB.n]=q.z; RB.ps[RB.n]=q.s; RB.sh[RB.n]=shade;
+  return RB.n++;
+}
+function pushRuns(buf,i0,i1,maxLen,alpha){
+  const P = buf===0?COILBUF:RB;
+  if(i1-i0<1) return;
+  let start=i0, prevDir=0;
+  for(let i=i0+1;i<=i1;i++){
+    const d=P.pz[i]-P.pz[i-1];
+    const dir=d>0?1:(d<0?-1:prevDir);
+    const turn = (prevDir!==0 && dir!==prevDir && i-start>=2);
+    if(turn || i-start>=maxLen){ addRun(buf,start,i,alpha); start=i; }
+    prevDir=dir;
+  }
+  if(i1>start) addRun(buf,start,i1,alpha);
+}
+function addRun(buf,i0,i1,alpha){
+  const P = buf===0?COILBUF:RB;
+  const o=it(); o.k=1; o.buf=buf; o.i0=i0; o.i1=i1; o.al=alpha;
+  let zs=0; for(let i=i0;i<=i1;i++) zs+=P.pz[i];
+  o.z=zs/(i1-i0+1);
+  pushItem(o);
+}
+function drawRun(o){
+  const coil = o.buf===0;
+  const P = coil?COILBUF:RB;
+  const R = coil?rd():RD_RAW;
+  const C = 3;
+  const glossBase = coil ? smoothstep(0.30,0.86,G.bakeAvg)*clamp(G.sugar*1.2,0,1) : 0;
+  const frost = coil ? G.sugar*0.26*(1-smoothstep(0.18,0.62,G.bakeAvg)) : 0;
+  const shAlpha = (coil? (0.92-0.55*G.merge) : 0.80)*o.al;
+  ctx.lineCap='round'; ctx.lineJoin='round';
+  const ORDER = frost>0.02 ? (glossBase>0.05?[0,4,1,2,3]:[0,4,1,2]) : (glossBase>0.05?[0,1,2,3]:[0,1,2]);
+  for(let pi=0; pi<ORDER.length; pi++){
+    const pass=ORDER[pi];
+    let pnx=0,pny=0;
+    for(let i=o.i0;i<o.i1;i+=C){
+      const j=Math.min(o.i1,i+C);
+      const mid=(i+j)>>1;
+      let nx,ny;
+      if(coil){ nx=-P.hx[mid]; ny=-P.hy[mid]; }       // points AWAY from the light
+      else{
+        let dx=P.px[j]-P.px[i], dy=P.py[j]-P.py[i]; const l=Math.hypot(dx,dy)||1;
+        nx=-dy/l; ny=dx/l;
+        if(pnx||pny){ if(nx*pnx+ny*pny<0){ nx=-nx; ny=-ny; } }
+        else if(nx*lightScrX+ny*lightScrY>0){ nx=-nx; ny=-ny; }
+        pnx=nx; pny=ny;
+      }
+      const w=Math.max(1.6, 2*R*P.ps[mid]);
+      const idx = coil ? lutIdx(G.bake[mid], sNdl[mid]) : lutIdx(0, P.sh[mid]);
+      let col,lw,ox,oy,al;
+      if(pass===0){ col=lutBase[idx]; lw=w; ox=0; oy=0; al=o.al; }
+      else if(pass===4){ col='#fffaf0'; lw=w*0.96; ox=0; oy=0; al=frost*o.al; }
+      else if(pass===1){ const k=1-0.25*(coil?G.merge:0); col=lutSh[idx]; lw=w*0.48*k; ox=nx*w*0.26*k; oy=ny*w*0.26*k; al=shAlpha; }
+      else if(pass===2){ col=lutHi[idx]; lw=w*0.30; ox=-nx*w*0.25; oy=-ny*w*0.25; al=(0.80-0.20*(coil?G.merge:0))*o.al; }
+      else { col='#fff8ea'; lw=Math.max(0.9,w*0.10); ox=-nx*w*0.30; oy=-ny*w*0.30;
+             al=glossBase*0.6*clamp(sNdl[mid]*0.7+0.4,0,1)*o.al; }
+      if(al<=0.02) continue;
+      ctx.globalAlpha=al; ctx.strokeStyle=col; ctx.lineWidth=lw;
+      ctx.beginPath(); ctx.moveTo(P.px[i]+ox,P.py[i]+oy);
+      for(let k=i+1;k<=j;k++) ctx.lineTo(P.px[k]+ox,P.py[k]+oy);
+      ctx.stroke();
+    }
+  }
+  ctx.globalAlpha=1;
+}
+function pushCoilItems(){
+  if(visN<1) return;
+  pushRuns(0,0,visN,Math.max(3,(SPT>>2)),1);
+}
+
+/* grains stuck to the surface */
+function drawGrains(){
+  const R=rd()*1.02;
+  const caram=smoothstep(0.32,0.8,G.bakeAvg);
+  for(let i=0;i<grains.length;i++){
+    const g=grains[i];
+    if(g.u>G.p-0.004) continue;
+    const si=Math.min(visN, Math.round(g.u*NSEG));
+    const cph=Math.cos(g.phi), sph=Math.sin(g.phi);
+    const x=sX[si]+R*(cph*sNx[si]+sph*sBx[si]);
+    const y=sY[si]+R*(cph*sNy[si]+sph*sBy[si]);
+    const z=sZ[si]+R*(cph*sNz[si]+sph*sBz[si]);
+    const q=project(x,y,z,_p);
+    if(q.z>sPz[si]+0.02) continue;              // back side
+    const fade=clamp((sPz[si]-q.z)/(R*0.7),0,1);
+    let a,col;
+    if(g.kind===0){ a=fade*0.55*(1-G.merge*0.5)*(1-caram*0.9); col='#fdf6e8'; }
+    else{
+      const melt=caram;
+      a=fade*(0.9-melt*0.45);
+      col= melt>0.5 ? 'rgba(255,205,120,'+a.toFixed(2)+')' : 'rgba(255,252,246,'+a.toFixed(2)+')';
+      ctx.fillStyle=col;
+      const s=Math.max(1.1,g.sz*q.s*0.042*(1+melt*0.25));
+      ctx.fillRect(q.x-s*0.5,q.y-s*0.5,s,s);
+      continue;
+    }
+    ctx.globalAlpha=a; ctx.fillStyle=col;
+    const s=Math.max(1,g.sz*q.s*0.032);
+    ctx.fillRect(q.x-s*0.5,q.y-s*0.5,s,s);
+    ctx.globalAlpha=1;
+  }
+  ctx.globalAlpha=1;
+}
+
+/* hollow tunnel at the free end of the cake — the reveal */
+function pushTunnel(){
+  const xe=AX1+G.slideOff;
+  const exposed=xe-SPIT_X1;
+  if(exposed<0.15) return;
+  const o=it(); o.k=2; o.xe=xe; o.deep=Math.min(exposed, 3.0);
+  const q=project(xe,G.cakeLift,0,_p); o.z=q.z+0.002;
+  pushItem(o);
+}
+function circlePath(x,r,rev){
+  const N=26;
+  for(let i=0;i<=N;i++){
+    const t=(rev? -i:i)/N*TAU;
+    const q=project(x, G.cakeLift+r*Math.cos(t), r*Math.sin(t), _p);
+    i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y);
+  }
+  ctx.closePath();
+}
+function drawTunnel(o){
+  const r=SPIT_R*0.99, xb=o.xe-o.deep;
+  ctx.save();
+  ctx.beginPath(); circlePath(o.xe,r,false); ctx.clip();
+  const near=project(o.xe,G.cakeLift,0,{});
+  const far =project(xb,G.cakeLift,0,{});
+  // deep end: the shadowed bottom of the hole
+  ctx.beginPath(); circlePath(xb,r*0.99,false);
+  const dg=ctx.createRadialGradient(far.x,far.y,0,far.x,far.y,Math.max(2,r*far.s));
+  dg.addColorStop(0,'#160b04'); dg.addColorStop(1,'#291509');
+  ctx.fillStyle=dg; ctx.fill();
+  // inner wall: the ring between the opening and the deep end
+  ctx.beginPath(); circlePath(o.xe,r,false); circlePath(xb,r*0.99,true);
+  const rad=Math.max(3,r*near.s);
+  const wg=ctx.createLinearGradient(near.x,near.y-rad,near.x,near.y+rad);
+  wg.addColorStop(0,'#2c1708');
+  wg.addColorStop(0.45,'#5c3315');
+  wg.addColorStop(1,'#9c5c2c');
+  ctx.fillStyle=wg; ctx.fill('evenodd');
+  // lit lip just inside the opening
+  ctx.save();
+  ctx.beginPath(); circlePath(o.xe,r,false); ctx.clip();
+  ctx.beginPath(); circlePath(o.xe-o.deep*0.16,r*0.985,false);
+  ctx.strokeStyle='rgba(255,206,140,0.30)'; ctx.lineWidth=Math.max(1,rad*0.10); ctx.stroke();
+  ctx.restore();
+  // soft contact shadow right at the rim
+  ctx.beginPath(); circlePath(o.xe,r,false);
+  const sg=ctx.createRadialGradient(near.x,near.y,rad*0.55,near.x,near.y,rad*1.02);
+  sg.addColorStop(0,'rgba(0,0,0,0)'); sg.addColorStop(1,'rgba(24,10,3,0.55)');
+  ctx.fillStyle=sg; ctx.fill();
+  ctx.restore();
+}
+
+/* ------------------------------------------------------------
+   Spit (metal) + handle
+   ------------------------------------------------------------ */
+const SPIT_SLICES=18;
+function pushSpit(){
+  const step=(SPIT_X1-SPIT_X0)/SPIT_SLICES;
+  for(let i=0;i<SPIT_SLICES;i++){
+    const a0=SPIT_X0+i*step, a1=a0+step*1.06;
+    const o=it(); o.k=3; o.a0=a0; o.a1=a1;
+    const q=project((a0+a1)*0.5,0,0,_p); o.z=q.z;
+    pushItem(o);
+  }
+}
+function drawSpitSlice(o){
+  const p0=project(o.a0,0,0,{}), p1=project(o.a1,0,0,{});
+  let dx=p1.x-p0.x, dy=p1.y-p0.y; const l=Math.hypot(dx,dy)||1;
+  const nx=-dy/l, ny=dx/l;
+  const w0=SPIT_R*p0.s, w1=SPIT_R*p1.s;
+  ctx.beginPath();
+  ctx.moveTo(p0.x+nx*w0,p0.y+ny*w0);
+  ctx.lineTo(p1.x+nx*w1,p1.y+ny*w1);
+  ctx.lineTo(p1.x-nx*w1,p1.y-ny*w1);
+  ctx.lineTo(p0.x-nx*w0,p0.y-ny*w0);
+  ctx.closePath();
+  const mx=(p0.x+p1.x)*0.5, my=(p0.y+p1.y)*0.5, mw=(w0+w1)*0.5;
+  const g=ctx.createLinearGradient(mx+nx*mw,my+ny*mw,mx-nx*mw,my-ny*mw);
+  const hot=G.fire*0.55;
+  g.addColorStop(0, mixHex('#2c3138','#4a2a1c',hot));
+  g.addColorStop(0.33, mixHex('#9aa4ae','#b98a6a',hot));
+  g.addColorStop(0.5, mixHex('#e8eef4','#ffe0bd',hot));
+  g.addColorStop(0.68, mixHex('#8d97a2','#ad7f61',hot));
+  g.addColorStop(1, mixHex('#3a4048','#54301f',hot));
+  ctx.fillStyle=g; ctx.fill();
+}
+function drawSpitCap(x){
+  const c=project(x,0,0,{});
+  const r=SPIT_R*c.s;
+  ctx.save(); ctx.translate(c.x,c.y);
+  ctx.beginPath();
+  for(let i=0;i<26;i++){
+    const t=i/26*TAU;
+    const q=project(x, SPIT_R*Math.cos(t), SPIT_R*Math.sin(t), _p);
+    i?ctx.lineTo(q.x-c.x,q.y-c.y):ctx.moveTo(q.x-c.x,q.y-c.y);
+  }
+  ctx.closePath();
+  const g=ctx.createRadialGradient(-r*0.3,-r*0.3,r*0.05,0,0,r*1.1);
+  g.addColorStop(0,'#9fa9b4'); g.addColorStop(1,'#3a4048');
+  ctx.fillStyle=g; ctx.fill(); ctx.restore();
+}
+function drawHandle(){
+  const bx=SPIT_X0-0.05;
+  // shaft
+  const a=project(bx,0,0,{}), b=project(bx-0.85,0,0,{});
+  ctx.lineCap='round'; ctx.lineWidth=SPIT_R*0.55*a.s; ctx.strokeStyle='#6d7681';
+  ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+  // crank arm rotating with the spit
+  const th=G.spin+G.cakeSpin;
+  const ax=bx-0.85, ay=1.05*Math.cos(th), az=1.05*Math.sin(th);
+  const c=project(ax,ay,az,{});
+  ctx.lineWidth=SPIT_R*0.42*a.s; ctx.strokeStyle='#8b949f';
+  ctx.beginPath(); ctx.moveTo(b.x,b.y); ctx.lineTo(c.x,c.y); ctx.stroke();
+  // knob
+  const d=project(ax-0.5,ay,az,{});
+  ctx.lineWidth=SPIT_R*0.72*d.s; ctx.strokeStyle='#8a5a34';
+  ctx.beginPath(); ctx.moveTo(c.x,c.y); ctx.lineTo(d.x,d.y); ctx.stroke();
+  const g=ctx.createRadialGradient(d.x-6,d.y-6,2,d.x,d.y,SPIT_R*0.8*d.s);
+  g.addColorStop(0,'#c98d55'); g.addColorStop(1,'#6d4222');
+  ctx.fillStyle=g; ctx.beginPath(); ctx.arc(d.x,d.y,SPIT_R*0.62*d.s,0,TAU); ctx.fill();
+}
+
+/* ------------------------------------------------------------
+   Free dough rope (the not-yet-wound part) + dough pile
+   ------------------------------------------------------------ */
+const tailPts=[];
+function buildTail(){
+  tailPts.length=0;
+  const rem=1-G.p;
+  if(G.st>ST.WIND || rem<=0.001) return;
+  const c = (G.st===ST.INTRO) ? {x:G.tipX,y:G.tipY,z:G.tipZ} : contactPoint({});
+  const end=coilPile(1, Math.pow(clamp(rem,0,1),0.40));
+  const nrm = (G.st===ST.INTRO)?0.35:1;
+  // the free length dives forward and under the cake so it never
+  // hides the helix the player is building
+  const c1={x:c.x+0.55*nrm, y:c.y-1.35*nrm, z:c.z+1.25*nrm};
+  const c2={x:lerp(c.x,end.x,0.5), y:TABLE_Y+0.70, z:3.55};
+  const c3={x:end.x+1.15,y:end.y+0.35,z:end.z+0.85};
+  const P=[c,c1,c2,c3,end];
+  const N=26;
+  for(let i=0;i<=N;i++){
+    const t=i/N;
+    const p=bez4(P,t);
+    const w=Math.sin(t*7.5+G.time*2.1)*0.10*t;
+    p.y+=w*0.7; p.z+=w;
+    tailPts.push(p);
+  }
+}
+function bez4(P,t){
+  // cubic through P[0],P[1],P[2],P[4] using P[1..3] as controls
+  const p0=P[0],p1=P[1],p2=P[2],p3=P[3],p4=P[4];
+  // two chained quadratics for a soft look
+  const q0=qbez(p0,p1,p2,clamp(t*1.6,0,1));
+  const q1=qbez(p2,p3,p4,clamp((t-0.55)/0.45,0,1));
+  const k=smoothstep(0.45,0.72,t);
+  return {x:lerp(q0.x,q1.x,k), y:lerp(q0.y,q1.y,k), z:lerp(q0.z,q1.z,k)};
+}
+function qbez(a,b,c,t){
+  const m=1-t;
+  return {x:m*m*a.x+2*m*t*b.x+t*t*c.x, y:m*m*a.y+2*m*t*b.y+t*t*c.y, z:m*m*a.z+2*m*t*b.z+t*t*c.z};
+}
+function pushTail(){
+  const alpha=clamp((0.97-G.p)/0.09,0,1);
+  if(alpha<=0.01 || G.st>ST.WIND) return;
+  rbReset();
+  // the length still lying free, drawn from the spit back to the coil
+  let i0=RB.n;
+  for(let i=0;i<tailPts.length;i++){
+    const t=tailPts[i];
+    rbAdd(t.x,t.y,t.z, 0.42+0.24*Math.cos(i*0.5));
+  }
+  pushRuns(1,i0,RB.n-1,5,alpha);
+  // the rest of the rope, coiled flat on the table
+  const rem=Math.pow(clamp(1-G.p,0,1),0.40);
+  if(rem>0.06){
+    const N=64; i0=RB.n;
+    for(let i=0;i<=N;i++){
+      const t=i/N, c=coilPile(t,rem);
+      rbAdd(c.x,c.y,c.z, 0.40+0.32*Math.cos(c.a+1.1));
+    }
+    pushRuns(1,i0,RB.n-1,6,alpha);
+  }
+}
+/* the not-yet-used rope, coiled into a little tower on the table */
+const PILE_LOOPS=3.1;
+function coilPile(t,rem){
+  const R0=1.12*rem+0.24, R1=0.42*rem+0.14;
+  const hgt=1.05*rem+0.10;
+  const a=-0.9 - t*PILE_LOOPS*TAU;
+  const r=lerp(R0,R1,t*t*0.6+t*0.4);
+  return {x:PILE.x+Math.cos(a)*r, y:TABLE_Y+RD_RAW*0.95+t*hgt, z:PILE.z+Math.sin(a)*r, a:a};
+}
+
+/* ------------------------------------------------------------
+   Rolling board
+   ------------------------------------------------------------ */
+let boardX=0;
+function quad3(a,b,c,d,fill){
+  const p0=project(a[0],a[1],a[2],{}),p1=project(b[0],b[1],b[2],{}),
+        p2=project(c[0],c[1],c[2],{}),p3=project(d[0],d[1],d[2],{});
+  ctx.beginPath(); ctx.moveTo(p0.x,p0.y); ctx.lineTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.lineTo(p3.x,p3.y); ctx.closePath();
+  ctx.fillStyle=fill; ctx.fill();
+  return [p0,p1,p2,p3];
+}
+function drawBoard(){
+  const t=easeOut(clamp(G.stT/0.55,0,1));
+  const press=Math.abs(Math.sin(G.time*6))*0.05*(IN.down?1:0);
+  const yb=rcen()+rd()+0.06 - press + (1-t)*3.4;
+  const th=0.40, x0=AX0-0.5+boardX, x1=AX1+0.5+boardX, z0=-1.5, z1=0.55;
+  const q=quad3([x0,yb+th,z0],[x1,yb+th,z0],[x1,yb+th,z1],[x0,yb+th,z1],'#0000');
+  const g=ctx.createLinearGradient(q[0].x,q[0].y,q[3].x,q[3].y);
+  g.addColorStop(0,'#e6bd85'); g.addColorStop(0.55,'#d3a468'); g.addColorStop(1,'#b3834a');
+  ctx.fillStyle=g; ctx.fill();
+  quad3([x0,yb+th,z1],[x1,yb+th,z1],[x1,yb,z1],[x0,yb,z1],'#8c6034');
+  quad3([x1,yb+th,z0],[x1,yb+th,z1],[x1,yb,z1],[x1,yb,z0],'#a2723f');
+  // grip knob so it reads as a tool, not a plank
+  const k=project((x0+x1)/2, yb+th+0.30, (z0+z1)/2, {});
+  const kg=ctx.createRadialGradient(k.x-6,k.y-8,2,k.x,k.y,Math.max(6,0.42*k.s));
+  kg.addColorStop(0,'#e8c491'); kg.addColorStop(1,'#8a5c2f');
+  ctx.fillStyle=kg; ctx.beginPath(); ctx.ellipse(k.x,k.y,Math.max(6,0.55*k.s),Math.max(4,0.32*k.s),0,0,TAU); ctx.fill();
+}
+
+/* ------------------------------------------------------------
+   Fire, embers, steam  (sprite/gradient based, mobile friendly)
+   ------------------------------------------------------------ */
+function makeSprite(r,g,b){
+  const S=64, cvs=document.createElement('canvas'); cvs.width=cvs.height=S;
+  const c=cvs.getContext('2d');
+  const gr=c.createRadialGradient(S/2,S/2,0,S/2,S/2,S/2);
+  gr.addColorStop(0,   'rgba('+r+','+g+','+b+',1)');
+  gr.addColorStop(0.35,'rgba('+r+','+g+','+b+',0.55)');
+  gr.addColorStop(1,   'rgba('+r+','+g+','+b+',0)');
+  c.fillStyle=gr; c.fillRect(0,0,S,S);
+  return cvs;
+}
+const SPR={};
+function initSprites(){
+  SPR.white=makeSprite(255,252,244);
+  SPR.warm =makeSprite(255,196,110);
+  SPR.flame=makeSprite(255,150,40);
+  SPR.core =makeSprite(255,238,180);
+}
+initSprites();
+function blit(spr,x,y,r,a){
+  if(a<=0.004) return;
+  ctx.globalAlpha=a;
+  ctx.drawImage(spr,x-r,y-r,r*2,r*2);
+  ctx.globalAlpha=1;
+}
+const FIRE_Y=-2.34, FIRE_Z=-1.55;
+function drawFire(){
+  const I=G.fire; if(I<0.02) return;
+  // ember bed
+  ctx.save(); ctx.globalAlpha=clamp(I*1.7,0,1);
+  const t0=project(-4.5,FIRE_Y-0.30,FIRE_Z-0.62,{}), t1=project(4.5,FIRE_Y-0.30,FIRE_Z-0.62,{}),
+        t2=project(4.5,FIRE_Y-0.10,FIRE_Z+0.62,{}), t3=project(-4.5,FIRE_Y-0.10,FIRE_Z+0.62,{});
+  ctx.beginPath(); ctx.moveTo(t0.x,t0.y); ctx.lineTo(t1.x,t1.y); ctx.lineTo(t2.x,t2.y); ctx.lineTo(t3.x,t3.y); ctx.closePath();
+  const tg=ctx.createLinearGradient(t0.x,t0.y,t3.x,t3.y);
+  tg.addColorStop(0,'#2a150c'); tg.addColorStop(1,'#4d1e0a');
+  ctx.fillStyle=tg; ctx.fill();
+  ctx.restore();
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  // coals
+  for(let i=0;i<12;i++){
+    const x=-4.1+i*0.75, q=project(x,FIRE_Y-0.16,FIRE_Z,{});
+    const f=0.45+0.55*Math.sin(G.time*3.1+i*1.9);
+    blit(SPR.warm,q.x,q.y,Math.max(3,0.34*q.s),(0.30+0.30*f)*I);
+  }
+  // flame tongues: stacks of soft sprites, no hard silhouettes
+  for(let i=0;i<9;i++){
+    const x=-3.9+i*0.97;
+    const ph=G.time*3.1+i*2.3;
+    const h=(0.95+0.42*Math.sin(ph)+0.20*Math.sin(ph*2.7))*I;
+    const sway=Math.sin(ph*1.4)*0.34;
+    for(let k=0;k<8;k++){
+      const t=k/7;
+      const q=project(x+sway*t*t, FIRE_Y+0.05+5.4*h*t*(1.04-0.18*t), FIRE_Z+0.45*h*t, {});
+      const r=Math.max(3, (0.66-0.34*t)*q.s*(0.88+0.22*Math.sin(ph*1.15+k*0.7)));
+      blit(t<0.34?SPR.core:SPR.flame, q.x, q.y, r, (0.30-0.030*k)*I);
+    }
+  }
+  // embers
+  for(let i=0;i<embers.length;i++){
+    const e=embers[i], q=project(e.x,e.y,e.z,{});
+    blit(SPR.warm,q.x,q.y,Math.max(1.5,0.10*q.s),e.life*0.55*I);
+  }
+  ctx.restore();
+}
+/* a few tongues + glow in front of the cake, kept faint so the
+   crust stays readable */
+function drawFireFront(){
+  const I=G.fire; if(I<0.02) return;
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  for(let i=0;i<5;i++){
+    const x=-3.2+i*1.6, ph=G.time*3.6+i*1.7;
+    const h=(0.55+0.35*Math.sin(ph))*I;
+    const b=project(x,FIRE_Y+0.05,FIRE_Z+1.15,{});
+    const m=project(x+Math.sin(ph)*0.2, FIRE_Y+0.9*h, FIRE_Z+1.05,{});
+    blit(SPR.flame,b.x,b.y,Math.max(4,0.55*b.s),0.16*I);
+    blit(SPR.core,m.x,m.y,Math.max(3,0.30*m.s),0.14*I);
+  }
+  const gl=project(0,-1.4,FIRE_Z+1.1,{});
+  blit(SPR.warm, gl.x, gl.y, UNIT*0.34, 0.09*I);
+  ctx.restore();
+}
+function updateEmbers(dt){
+  if(G.fire>0.2 && embers.length<34 && Math.random()<0.5)
+    embers.push({x:-4.2+Math.random()*8.4, y:FIRE_Y+0.1, z:FIRE_Z+(Math.random()-.5)*0.7,
+                 vy:0.9+Math.random()*1.3, vx:(Math.random()-.5)*0.4, life:1});
+  for(let i=embers.length-1;i>=0;i--){
+    const e=embers[i];
+    e.y+=e.vy*dt; e.x+=e.vx*dt; e.life-=dt*0.45;
+    if(e.life<=0) embers.splice(i,1);
+  }
+}
+
+function updateSteam(dt){
+  if(G.st>=ST.SLIDE && G.bakeAvg>0.4 && steam.length<15 && Math.random()<0.30){
+    steam.push({x:AX0+Math.random()*WINDLEN+G.slideOff, y:rcen()+rd()*0.6+G.cakeLift, z:(Math.random()-.5)*1.2,
+                vy:0.5+Math.random()*0.45, life:1, ph:Math.random()*TAU});
+  }
+  for(let i=steam.length-1;i>=0;i--){
+    const s=steam[i]; s.y+=s.vy*dt; s.life-=dt*0.40; if(s.life<=0) steam.splice(i,1);
+  }
+}
+function drawSteam(){
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  for(let i=0;i<steam.length;i++){
+    const s=steam[i];
+    const q=project(s.x+Math.sin(G.time*1.4+s.ph)*0.3, s.y, s.z, _p);
+    blit(SPR.white, q.x, q.y, Math.max(3,(0.14+(1-s.life)*0.40)*q.s), s.life*(1-s.life)*0.62);
+  }
+  ctx.restore();
+}
+
+/* plate for the reveal */
+function drawPlate(){
+  const a=clamp((G.stT-0.4)/0.8,0,1); if(a<=0) return;
+  const y=TABLE_Y+0.05, cxx=(AX0+AX1)/2+G.slideOff, RX=5.6, RZ=2.5, N=36;
+  ctx.save(); ctx.globalAlpha=a;
+  const path=(k)=>{
+    ctx.beginPath();
+    for(let i=0;i<=N;i++){
+      const t=i/N*TAU;
+      const q=project(cxx+Math.cos(t)*RX*k, y, Math.sin(t)*RZ*k, _p);
+      i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y);
+    }
+    ctx.closePath();
+  };
+  const c=project(cxx,y,0,{}), e=project(cxx+RX,y,0,{});
+  const rr=Math.max(6,Math.abs(e.x-c.x));
+  path(1);
+  const g=ctx.createLinearGradient(c.x,c.y-rr*0.5,c.x,c.y+rr*0.5);
+  g.addColorStop(0,'#fdf5e8'); g.addColorStop(0.6,'#eaddc7'); g.addColorStop(1,'#c3ab8c');
+  ctx.fillStyle=g; ctx.fill();
+  path(0.82);
+  ctx.strokeStyle='rgba(150,120,88,.40)'; ctx.lineWidth=Math.max(1,rr*0.018); ctx.stroke();
+  ctx.restore(); ctx.globalAlpha=1;
+}
+
+/* ------------------------------------------------------------
+   Hints (no text — hand + arrow)
+   ------------------------------------------------------------ */
+function drawHand(x,y,scale,alpha){
+  // a fingertip: solid dot plus an expanding ripple
+  const r=UNIT*0.030*scale;
+  const ph=(G.time*0.9)%1;
+  ctx.save(); ctx.globalAlpha=alpha*(1-ph)*0.55;
+  ctx.strokeStyle='#fff'; ctx.lineWidth=Math.max(2,UNIT*0.006);
+  ctx.beginPath(); ctx.arc(x,y,r*(1+ph*1.15),0,TAU); ctx.stroke();
+  ctx.restore();
+  ctx.save(); ctx.globalAlpha=alpha;
+  ctx.strokeStyle='rgba(255,255,255,.85)'; ctx.lineWidth=Math.max(2,UNIT*0.007);
+  ctx.beginPath(); ctx.arc(x,y,r,0,TAU); ctx.stroke();
+  const g=ctx.createRadialGradient(x-r*0.35,y-r*0.4,r*0.1,x,y,r);
+  g.addColorStop(0,'rgba(255,255,255,.98)'); g.addColorStop(1,'rgba(255,240,215,.80)');
+  ctx.fillStyle=g; ctx.beginPath(); ctx.arc(x,y,r*0.68,0,TAU); ctx.fill();
+  ctx.restore(); ctx.globalAlpha=1;
+}
+function drawArrow(x0,y0,x1,y1,alpha,width){
+  const dx=x1-x0, dy=y1-y0, l=Math.hypot(dx,dy)||1;
+  const ux=dx/l, uy=dy/l;
+  ctx.save(); ctx.globalAlpha=alpha;
+  ctx.strokeStyle='rgba(255,255,255,.9)'; ctx.lineCap='round';
+  ctx.lineWidth=width; ctx.setLineDash([width*1.7,width*1.5]); ctx.lineDashOffset=-(G.time*width*7)%(width*3.2);
+  ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1-ux*width*1.6,y1-uy*width*1.6); ctx.stroke();
+  ctx.setLineDash([]);
+  const hs=width*2.4;
+  ctx.beginPath();
+  ctx.moveTo(x1,y1);
+  ctx.lineTo(x1-ux*hs+ -uy*hs*0.62, y1-uy*hs + ux*hs*0.62);
+  ctx.lineTo(x1-ux*hs*0.55, y1-uy*hs*0.55);
+  ctx.lineTo(x1-ux*hs - -uy*hs*0.62, y1-uy*hs - ux*hs*0.62);
+  ctx.closePath(); ctx.fillStyle='rgba(255,255,255,.9)'; ctx.fill();
+  ctx.restore(); ctx.globalAlpha=1;
+}
+function drawCircleArrow(cx,cy,r,alpha){
+  ctx.save(); ctx.globalAlpha=alpha;
+  ctx.strokeStyle='rgba(255,255,255,.75)'; ctx.lineWidth=Math.max(2.5,UNIT*0.009); ctx.lineCap='round';
+  const a0=-1.9+G.time*1.6, a1=a0+3.9;
+  ctx.beginPath(); ctx.arc(cx,cy,r,a0,a1); ctx.stroke();
+  const ex=cx+Math.cos(a1)*r, ey=cy+Math.sin(a1)*r;
+  const tx=-Math.sin(a1), ty=Math.cos(a1);
+  const hs=Math.max(7,UNIT*0.028);
+  ctx.beginPath();
+  ctx.moveTo(ex+tx*hs,ey+ty*hs);
+  ctx.lineTo(ex-tx*hs*0.35+Math.cos(a1)*hs*0.8, ey-ty*hs*0.35+Math.sin(a1)*hs*0.8);
+  ctx.lineTo(ex-tx*hs*0.35-Math.cos(a1)*hs*0.8, ey-ty*hs*0.35-Math.sin(a1)*hs*0.8);
+  ctx.closePath(); ctx.fillStyle='rgba(255,255,255,.9)'; ctx.fill();
+  ctx.restore(); ctx.globalAlpha=1;
+}
+function drawHints(){
+  const showAfter = 0.9;
+  let a = clamp((G.idle-showAfter)/0.7,0,1)*0.9;
+  if(IN.down) a*=0.35;
+  if(a<=0.02) return;
+  const pulse=0.5+0.5*Math.sin(G.time*3.2);
+  const hs=1.0;
+  switch(G.st){
+    case ST.INTRO:{
+      const t=project(G.tipX,G.tipY,G.tipZ,{});
+      const c=contactPoint({}); const q=project(c.x,c.y,c.z,{});
+      drawArrow(t.x+UNIT*0.03,t.y-UNIT*0.02,q.x-UNIT*0.02,q.y+UNIT*0.03,a,Math.max(3,UNIT*0.014));
+      drawHand(t.x, t.y+UNIT*0.045, hs*(1+pulse*0.10), a);
+      break;
+    }
+    case ST.WIND:{
+      const c=contactPoint({}); const q=project(c.x,c.y,c.z,{});
+      const y=q.y+UNIT*0.13;
+      const x0=q.x-UNIT*0.16, x1=q.x+UNIT*0.16;
+      drawArrow(x0,y+UNIT*0.02,x1,y-UNIT*0.01,a,Math.max(3,UNIT*0.014));
+      drawHand(lerp(x0,x1,(Math.sin(G.time*2.2)*0.5+0.5)), y+UNIT*0.03, hs*(1+pulse*0.08), a);
+      break;
+    }
+    case ST.ROLL:{
+      const q=project(0,rcen()+rd()+1.5,0.4,{});
+      drawArrow(q.x-UNIT*0.14,q.y,q.x+UNIT*0.14,q.y,a,Math.max(3,UNIT*0.013));
+      drawArrow(q.x+UNIT*0.14,q.y+UNIT*0.05,q.x-UNIT*0.14,q.y+UNIT*0.05,a,Math.max(3,UNIT*0.013));
+      drawHand(lerp(q.x-UNIT*0.12,q.x+UNIT*0.12,(Math.sin(G.time*3)*0.5+0.5)), q.y+UNIT*0.085, hs*(1+pulse*0.08), a);
+      break;
+    }
+    case ST.SUGAR:{
+      const q=project(G.shakeX, shakeY()+0.9, 0.4,{});
+      drawArrow(q.x-UNIT*0.11,q.y,q.x+UNIT*0.11,q.y,a*0.85,Math.max(3,UNIT*0.012));
+      drawHand(q.x+Math.sin(G.time*4.0)*UNIT*0.09, q.y+UNIT*0.055, 1*(1+pulse*0.08), a);
+      break;
+    }
+    case ST.BAKE:{
+      const h=project(SPIT_X0-0.9,0,0,{});
+      drawCircleArrow(h.x,h.y,UNIT*0.10,a);
+      const ang=G.time*1.6+2.0;
+      drawHand(h.x+Math.cos(ang)*UNIT*0.10, h.y+Math.sin(ang)*UNIT*0.10, hs, a);
+      break;
+    }
+    case ST.SLIDE:{
+      const A=project(AX1-1.2,rcen()+rd()+0.7,0.5,{});
+      const Bp=project(AX1+2.6,rcen()+rd()+0.7,0.5,{});
+      drawArrow(A.x,A.y,Bp.x,Bp.y,a,Math.max(4,UNIT*0.018));
+      const k=(Math.sin(G.time*1.8)*0.5+0.5);
+      drawHand(lerp(A.x,Bp.x,k), lerp(A.y,Bp.y,k)+UNIT*0.03, hs*(1+pulse*0.09), a);
+      break;
+    }
+    case ST.REVEAL:{
+      if(G.stT>1.6){
+        const x=W*0.5, y=H-Math.max(84,UNIT*0.22);
+        const r=UNIT*0.052*(1+pulse*0.16);
+        ctx.save(); ctx.globalAlpha=a*0.9;
+        ctx.strokeStyle='rgba(255,255,255,.85)'; ctx.lineWidth=Math.max(2.5,UNIT*0.008);
+        ctx.beginPath(); ctx.arc(x,y,r,0,TAU); ctx.stroke();
+        // circular restart arrow
+        ctx.lineCap='round';
+        ctx.beginPath(); ctx.arc(x,y,r*0.52,-2.5,1.5); ctx.stroke();
+        const ex=x+Math.cos(1.5)*r*0.52, ey=y+Math.sin(1.5)*r*0.52, hsz=r*0.20;
+        ctx.beginPath(); ctx.moveTo(ex-hsz,ey-hsz*0.2); ctx.lineTo(ex+hsz*0.5,ey+hsz*0.4); ctx.lineTo(ex-hsz*0.2,ey+hsz*1.2);
+        ctx.strokeStyle='rgba(255,255,255,.85)'; ctx.stroke();
+        ctx.restore(); ctx.globalAlpha=1;
+      }
+      break;
+    }
+  }
+}
+
+/* progress ring feedback (no numbers, just a filling arc of dough colour) */
+function drawStageDots(){
+  const n=5, r=UNIT*0.011, gap=UNIT*0.042;
+  const done=[G.st>ST.WIND?1:G.p, G.st>ST.ROLL?1:(G.st===ST.ROLL?G.merge:0),
+              G.st>ST.SUGAR?1:(G.st===ST.SUGAR?G.sugar:0),
+              G.st>ST.BAKE?1:(G.st===ST.BAKE?clamp(G.bakeAvg/0.74,0,1):0),
+              G.st>=ST.REVEAL?1:(G.st===ST.SLIDE?G.slide:0)];
+  const x0=W*0.5-(n-1)*gap*0.5, y=H-Math.max(26,UNIT*0.075);
+  for(let i=0;i<n;i++){
+    const x=x0+i*gap;
+    ctx.beginPath(); ctx.arc(x,y,r,0,TAU);
+    ctx.fillStyle='rgba(255,255,255,.18)'; ctx.fill();
+    if(done[i]>0){
+      ctx.beginPath(); ctx.moveTo(x,y); ctx.arc(x,y,r,-Math.PI/2,-Math.PI/2+TAU*clamp(done[i],0,1)); ctx.closePath();
+      ctx.fillStyle= done[i]>=1?'#ffd79a':'#ffeccd'; ctx.fill();
+    }
+  }
+}
+
+/* ------------------------------------------------------------
+   Stage logic
+   ------------------------------------------------------------ */
+/* --- auto-framing rig -------------------------------------
+   Each stage lists the world points that must stay in frame;
+   the rig derives distance + pan, so portrait and landscape
+   both compose themselves.                                    */
+const CAMS={};
+CAMS[ST.INTRO] ={yaw:0.46,pitch:0.26,pw:1.0};
+CAMS[ST.WIND]  ={yaw:0.46,pitch:0.28,pw:1.0};
+CAMS[ST.ROLL]  ={yaw:0.48,pitch:0.32,pw:1.0};
+CAMS[ST.SUGAR] ={yaw:0.44,pitch:0.34,pw:0.9};
+CAMS[ST.BAKE]  ={yaw:0.40,pitch:0.22,pw:1.0};
+CAMS[ST.SLIDE] ={yaw:0.70,pitch:0.20,pw:0.7};
+CAMS[ST.REVEAL]={yaw:1.10,pitch:0.15,pw:0.2};
+/* portrait trades cylinder length for depth so the cake stays chunky */
+function yawBoost(){ return clamp((H/W-1.05)*0.30, 0, 0.16); }
+
+const FP=[];
+function focusSet(){
+  FP.length=0;
+  const R=rcen()+rd(), off=G.slideOff, lift=G.cakeLift;
+  const P=(x,y,z)=>{FP.push(x,y,z);};
+  /* a cylinder's silhouette also spreads sideways with z, so box
+     corners (not just the z=0 slice) decide the real framing */
+  const BOX=(x0,x1,y0,y1,z0,z1)=>{
+    P(x0,y0,z0);P(x1,y0,z0);P(x0,y1,z0);P(x1,y1,z0);
+    P(x0,y0,z1);P(x1,y0,z1);P(x0,y1,z1);P(x1,y1,z1);
+  };
+  switch(G.st){
+    case ST.INTRO:
+      BOX(SPIT_X0-1.9,SPIT_X1+0.3,-SPIT_R-0.7,SPIT_R+0.7,-SPIT_R,SPIT_R);
+      BOX(PILE.x-1.8,PILE.x+1.8,TABLE_Y,TABLE_Y+0.6,PILE.z-1.5,PILE.z+1.5);
+      break;
+    case ST.WIND:{
+      const cx=AX0+G.p*WINDLEN;
+      BOX(AX0-1.0, Math.max(AX0+6.4, cx+2.4), -R-0.5, R+0.5, -R, R);
+      P(cx-1.0,TABLE_Y+0.9,2.0);
+      break;}
+    case ST.ROLL:
+      BOX(AX0-1.4,AX1+1.4,-R-0.7,R+2.0,-R,R);
+      break;
+    case ST.SUGAR:
+      BOX(AX0-1.2,AX1+1.2,-R-0.7,shakeY()+1.1,-R,R);
+      break;
+    case ST.BAKE:
+      BOX(SPIT_X0-2.0,SPIT_X1+0.4,-R-1.3,R+0.9,-R,R);
+      P(-3.4,-0.9,1.3); P(3.4,-0.9,1.3);
+      break;
+    case ST.SLIDE:
+      BOX(SPIT_X0-0.6,AX1+off+1.3,-R-0.9,R+0.9,-R,R);
+      break;
+    case ST.REVEAL:
+      BOX(AX0+off-1.0,AX1+off+1.0,lift-R-1.0,lift+R+0.9,-R,R);
+      break;
+  }
+}
+let panX=0, panY=0;
+function autoFrame(){
+  focusSet();
+  const n=FP.length/3; if(!n) return;
+  let mx=0,my=0,mz=0;
+  for(let i=0;i<FP.length;i+=3){ mx+=FP[i]; my+=FP[i+1]; mz+=FP[i+2]; }
+  mx/=n; my/=n; mz/=n;
+  camGoal.tx=mx; camGoal.ty=my*0.55; camGoal.tz=mz*0.45;
+  let a=1e9,b=-1e9,c=1e9,d=-1e9;
+  for(let i=0;i<FP.length;i+=3){
+    const q=project(FP[i],FP[i+1],FP[i+2],_p);
+    if(q.x<a)a=q.x; if(q.x>b)b=q.x; if(q.y<c)c=q.y; if(q.y>d)d=q.y;
+  }
+  const availW=W*0.93, availH=H*0.80;
+  const k=Math.max((b-a)/availW, (d-c)/availH);
+  camGoal.dist=clamp(CAM.dist*k, 5.5, 46);
+  const anchorX=W*0.5, anchorY=H*(H>W?0.47:0.50);
+  panX=clamp(panX+(anchorX-(a+b)*0.5)*0.14, -W*0.26, W*0.26);
+  panY=clamp(panY+(anchorY-(c+d)*0.5)*0.14, -H*0.24, H*0.24);
+  CAM.ox=W*0.5+panX; CAM.oy=H*0.5+panY;
+}
+
+function setStage(s){
+  G.st=s; G.stT=0;
+  if(s===ST.BAKE){ SND.startSizzle(); }
+  else SND.setSizzle(0);
+}
+function stageComplete(next){
+  G.celebrate=1;
+  const c=project((AX0+AX1)/2+G.slideOff, rcen()+rd()+0.2, 0.6,{});
+  burst(c.x,c.y,22,SPR.warm);
+  SND.twinkle();
+  setStage(next);
+}
+
+let lastTickTurn=0;
+function update(dt){
+  G.time+=dt; G.stT+=dt;
+  if(!IN.down) G.idle+=dt;
+  G.celebrate=Math.max(0,G.celebrate-dt*0.8);
+
+  // camera goal (with a little follow during winding)
+  const g=CAMS[G.st];
+  camGoal.yaw=g.yaw + yawBoost()*g.pw; camGoal.pitch=g.pitch;
+  camTo(camGoal, 0.055, dt);
+  camUpdate();
+  autoFrame();
+  computeLightScreen();
+
+  // spin damping + measured turn speed
+  G.spinV*=Math.pow(G.st===ST.BAKE?0.45:0.03, dt);
+  if(G.st!==ST.WIND) G.spin+=G.spinV*dt*60*0.5;
+  const raw=Math.abs(G.spin-G.spinPrev)/Math.max(dt,1e-4);
+  G.spinSpeed=lerp(G.spinSpeed, raw, 1-Math.pow(0.02,dt));
+  G.spinPrev=G.spin;
+
+  switch(G.st){
+    case ST.INTRO:{
+      if(!IN.down) G.tipY += Math.sin(G.time*2.2)*0.0035;
+      // the dough end is magnetic: get near the spit and it snaps on
+      contactPoint(_cp);
+      const dx=_cp.x-G.tipX, dy=_cp.y-G.tipY, dz=_cp.z-G.tipZ;
+      const d=Math.hypot(dx,dy,dz);
+      G.near=clamp(1-(d-1.2)/2.6,0,1);
+      if(d<3.8){
+        const k=(1-Math.pow(0.06,dt))*(0.25+0.75*G.near);
+        G.tipX+=dx*k; G.tipY+=dy*k; G.tipZ+=dz*k;
+      }
+      if(d<1.5) snapToSpit();
+      break;
+    }
+    case ST.WIND:{
+      const before=G.p;
+      G.p=lerp(G.p,G.pTarget,1-Math.pow(0.0009,dt));
+      if(G.p>0.9995) G.p=1;
+      G.spin = CONTACT_TH - G.p*TURNS*TAU;
+      const dp=G.p-before;
+      if(dp>0.00015){
+        const tn=Math.floor(G.p*TURNS*4);
+        if(tn!==lastTickTurn){ lastTickTurn=tn; SND.tick((tn%4)/4); }
+        if(Math.random()<clamp(dp*160,0,0.9)){
+          const c=contactPoint({}); const q=project(c.x,c.y,c.z,{});
+          puffAt(q.x,q.y,1);
+        }
+      }
+      if(G.p>=1 && G.pTarget>=1 && G.stT>0.4){ stageComplete(ST.ROLL); }
+      break;
+    }
+    case ST.ROLL:{
+      boardX = lerp(boardX, IN.down? clamp((IN.px-W*0.5)/(UNIT*0.28),-1.4,1.4) : 0, 1-Math.pow(0.001,dt));
+      if(G.merge>=1) stageComplete(ST.SUGAR);
+      break;
+    }
+    case ST.SUGAR:{
+      // falling sugar
+      for(let i=sugarFall.length-1;i>=0;i--){
+        const s=sugarFall[i];
+        s.vy-=9.0*dt; s.x+=s.vx*dt; s.z+=s.vz*dt; s.y+=s.vy*dt;
+        const rr=Math.hypot(s.y-G.cakeLift, s.z);
+        const onCake = s.x>AX0-0.4 && s.x<AX1+0.4 && rr < rcen()+rd()*0.98;
+        if(onCake){
+          stickSugar(s); sugarFall.splice(i,1); continue;
+        }
+        if(s.y<TABLE_Y){ sugarFall.splice(i,1); }
+      }
+      if(G.sugar>=1 && G.stT>0.6) stageComplete(ST.BAKE);
+      break;
+    }
+    case ST.BAKE:{
+      G.fire=lerp(G.fire,1,1-Math.pow(0.02,dt));
+      // baking is driven by turning, not by waiting
+      const act=clamp(G.spinSpeed/1.8,0,1.5);
+      SND.setSizzle(clamp(0.28+act*0.55,0,1));
+      const rate=0.050+0.200*act;
+      let sum=0; const n=visN+1;
+      for(let i=0;i<n;i++){
+        const d=Math.cos(sTh[i]-FIRE_TH);
+        const heat=0.30 + (d>0?Math.pow(d,1.6):0)*0.85;
+        G.bake[i]=Math.min(0.94, G.bake[i]+heat*rate*dt);
+        sum+=G.bake[i];
+      }
+      G.bakeAvg=sum/n;
+      // a puff of aroma each time a hot patch swings past the flames
+      if(act>0.25 && Math.random()<act*dt*7){
+        const q=project(-3.4+Math.random()*7, -0.4, 0.2, {});
+        puffAt(q.x,q.y,1);
+      }
+      if(G.bakeAvg>0.74) stageComplete(ST.SLIDE);
+      break;
+    }
+    case ST.SLIDE:{
+      G.fire=lerp(G.fire,0.55,1-Math.pow(0.15,dt));
+      SND.setSizzle(0.1);
+      if(G.slide>0.30 && !G.slideAuto){ G.slideAuto=1; SND.swoosh(); }
+      if(G.slideAuto){ G.slide=Math.min(1, G.slide + dt*0.95); }
+      G.slideOff = easeOut(G.slide)*6.6;
+      G.cakeLift = Math.sin(G.slide*Math.PI)*0.12;
+      if(G.slide>=1) stageComplete(ST.REVEAL);
+      break;
+    }
+    case ST.REVEAL:{
+      G.fire=lerp(G.fire,0.0,1-Math.pow(0.35,dt));
+      SND.setSizzle(0);
+      G.slideOff = lerp(G.slideOff, 7.3, 1-Math.pow(0.05,dt));
+      G.cakeLift = lerp(G.cakeLift, -0.88, 1-Math.pow(0.06,dt));
+      G.cakeSpin += dt*0.42;
+      if(G.stT<1.2 && Math.random()<0.25){
+        const q=project((AX0+AX1)/2+G.slideOff+(Math.random()-.5)*4, G.cakeLift+(Math.random()-.5)*2.2, (Math.random()-.5)*2,{});
+        burst(q.x,q.y,3,SPR.warm);
+      }
+      break;
+    }
+  }
+  updatePuffs(dt); updateEmbers(dt); updateSteam(dt);
+}
+
+function stickSugar(s){
+  // find nearest sample by axial position, then the angle around the tube
+  const u=clamp((s.x-AX0)/WINDLEN,0,1);
+  const i=Math.min(visN, Math.round(u*NSEG));
+  // desired outward direction = from the axis to the impact point
+  let dy=s.y-G.cakeLift, dz=s.z; const dl=Math.hypot(dy,dz)||1; dy/=dl; dz/=dl;
+  const cn=dy*sNy[i]+dz*sNz[i];
+  const cb=dy*sBy[i]+dz*sBz[i];
+  const phi=Math.atan2(cb,cn);
+  for(let k=0;k<3;k++)
+    grains.push({u:clamp(u+(Math.random()-.5)*0.03,0,1), phi:phi+(Math.random()-.5)*0.75,
+                 sz:0.55+Math.random()*0.75, kind:1});
+  G.sugar=clamp(G.sugar+1/70,0,1);
+  if(grains.length>320) grains.splice(0,3);
+}
+
+/* ------------------------------------------------------------
+   Render
+   ------------------------------------------------------------ */
+function render(){
+  drawBackground();
+  if(!DBG.hideSpit) drawTable();
+  if(G.st===ST.REVEAL) drawPlate();
+  drawShadow();
+
+  if(G.fire>0.02) drawFire();
+  buildCoil();
+  buildTail();
+
+  poolN=0; items.length=0;
+  if(!DBG.hideSpit) pushSpit();
+  pushCoilItems();
+  pushTail();
+  pushTunnel();
+  sortItems();
+
+  let capDrawn=false;
+  for(let i=0;i<items.length;i++){
+    const o=items[i];
+    switch(o.k){
+      case 1: drawRun(o); break;
+      case 2: drawTunnel(o); break;
+      case 3:
+        drawSpitSlice(o);
+        if(o.a0<=SPIT_X0+0.001) drawSpitCap(SPIT_X0);
+        if(o.a1>=SPIT_X1-0.001) drawSpitCap(SPIT_X1);
+        break;
+    }
+  }
+  if(!DBG.hideSpit) drawHandle();
+
+  drawGrains();
+
+  // free dough tip marker in INTRO
+  if(G.st===ST.INTRO){
+    const q=project(G.tipX,G.tipY,G.tipZ,{});
+    const pulse=0.5+0.5*Math.sin(G.time*4);
+    ctx.save();
+    ctx.globalAlpha=0.26+0.24*pulse+0.35*G.near;
+    ctx.fillStyle= G.near>0.5?'#fff8e0':'#ffeec4';
+    ctx.beginPath(); ctx.arc(q.x,q.y,Math.max(8,UNIT*0.045*(0.9+0.18*pulse)),0,TAU); ctx.fill();
+    ctx.restore();
+    const g2=ctx.createRadialGradient(q.x-4,q.y-5,2,q.x,q.y,Math.max(6,RD_RAW*q.s*1.35));
+    g2.addColorStop(0,'#fdf3dd'); g2.addColorStop(1,'#d8bd8c');
+    ctx.fillStyle=g2; ctx.beginPath(); ctx.arc(q.x,q.y,Math.max(5,RD_RAW*q.s*1.2),0,TAU); ctx.fill();
+  }
+
+  if(G.st===ST.ROLL) drawBoard();
+  if(G.st===ST.SUGAR){ drawShaker(); drawFallingSugar(); }
+  drawFireFront();
+  drawSteam();
+  drawPuffs();
+  drawVignette();
+  drawHints();
+  drawStageDots();
+}
+function drawShaker(){
+  if(G.st!==ST.SUGAR) return;
+  const t=easeOut(clamp(G.stT/0.5,0,1));
+  const y=shakeY()+ (1-t)*3.0;
+  const c=project(G.shakeX, y, 0.25, {});
+  const w=Math.max(8, 0.62*c.s), h=Math.max(11, 0.95*c.s);
+  ctx.save(); ctx.translate(c.x,c.y); ctx.rotate(G.shakeTilt*0.5);
+  // body
+  const g=ctx.createLinearGradient(-w,0,w,0);
+  g.addColorStop(0,'#8f99a5'); g.addColorStop(0.4,'#e9eef4'); g.addColorStop(1,'#7d8792');
+  ctx.fillStyle=g;
+  ctx.beginPath();
+  if(ctx.roundRect) ctx.roundRect(-w*0.5,-h*0.5,w,h,w*0.22); else ctx.rect(-w*0.5,-h*0.5,w,h);
+  ctx.fill();
+  // cap
+  ctx.fillStyle='#c8d0d9';
+  ctx.beginPath();
+  if(ctx.roundRect) ctx.roundRect(-w*0.58,h*0.30,w*1.16,h*0.26,w*0.12); else ctx.rect(-w*0.58,h*0.30,w*1.16,h*0.26);
+  ctx.fill();
+  ctx.fillStyle='rgba(50,60,70,.55)';
+  for(let i=-1;i<=1;i++) ctx.fillRect(i*w*0.26-w*0.045, h*0.40, w*0.09, w*0.09);
+  ctx.restore();
+}
+function drawFallingSugar(){
+  ctx.fillStyle='#fffaf0';
+  for(let i=0;i<sugarFall.length;i++){
+    const s=sugarFall[i];
+    const q=project(s.x,s.y,s.z,_p);
+    const sz=Math.max(1.2, s.sz*q.s*0.020);
+    ctx.fillRect(q.x-sz*0.5,q.y-sz*0.5,sz,sz);
+  }
+}
+
+/* ------------------------------------------------------------
+   Main loop + adaptive quality
+   ------------------------------------------------------------ */
+let last=performance.now(), slow=0, fast=0;
+function frame(now){
+  let dt=(now-last)/1000; last=now;
+  if(dt>0.05) dt=0.05;
+  if(dt<=0) dt=0.0001;
+  // adaptive quality
+  if(dt>0.028){ slow++; fast=0; } else if(dt<0.019){ fast++; slow=0; }
+  if(slow>45 && SPT>12){ SPT=12; allocSamples(); slow=0; fast=0; }
+  else if(fast>600 && SPT<20){ SPT=20; allocSamples(); slow=0; fast=0; }
+  update(dt);
+  render();
+  requestAnimationFrame(frame);
+}
+document.addEventListener('visibilitychange',()=>{ last=performance.now(); });
+
+resize();
+camUpdate();
+reset();
+requestAnimationFrame(frame);
+
+// debug handle (dev only; harmless in play)
+window.KURTOS={G,ST,setStage,reset,CAM,DBG};
+
+})();
+</script>
+</body>
+</html>
