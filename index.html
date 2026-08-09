@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>バーをくみたてて、あそぶ</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#101a26">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23101a26'/><rect x='4' y='11' width='24' height='4' rx='2' fill='%232ec5ff'/><rect x='4' y='19' width='24' height='4' rx='2' fill='%23ffb020'/></svg>">
+</head>
+<body>
+<canvas id="view"></canvas>
+
+<div id="ui" data-mode="build" data-orient="portrait">
+  <div class="dock left">
+    <button id="btn-capsule" class="big" aria-label="capsule">
+      <svg viewBox="0 0 100 100" aria-hidden="true">
+        <defs>
+          <linearGradient id="gcap" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#cfe6f5"/>
+          </linearGradient>
+        </defs>
+        <rect x="10" y="34" width="80" height="32" rx="16" fill="url(#gcap)" stroke="#0e2233" stroke-width="4"/>
+        <path d="M34 34v32M50 34v32M66 34v32" stroke="#ff4f8b" stroke-width="9" stroke-linecap="round"/>
+        <circle cx="50" cy="50" r="7" fill="#ffe14d" stroke="#0e2233" stroke-width="3"/>
+      </svg>
+    </button>
+    <button id="btn-box" class="big" aria-label="box">
+      <svg viewBox="0 0 100 100" aria-hidden="true">
+        <path d="M16 38l34-16 34 16-34 16z" fill="#8ff08f" stroke="#0e2233" stroke-width="4" stroke-linejoin="round"/>
+        <path d="M16 38v26l34 16V54z" fill="#4bd44b" stroke="#0e2233" stroke-width="4" stroke-linejoin="round"/>
+        <path d="M84 38v26L50 80V54z" fill="#33a833" stroke="#0e2233" stroke-width="4" stroke-linejoin="round"/>
+        <circle cx="33" cy="59" r="7" fill="#ffffff"/>
+      </svg>
+    </button>
+  </div>
+
+  <div class="dock right">
+    <button id="btn-play" class="big accent" aria-label="play">
+      <svg viewBox="0 0 100 100" aria-hidden="true">
+        <rect x="14" y="14" width="72" height="8" rx="4" fill="#cfd9e3" stroke="#0e2233" stroke-width="3"/>
+        <rect x="46" y="22" width="8" height="16" fill="#cfd9e3" stroke="#0e2233" stroke-width="3"/>
+        <path d="M30 40h40l-8 14H38z" fill="#e8eef4" stroke="#0e2233" stroke-width="4" stroke-linejoin="round"/>
+        <path d="M36 54l-6 26M64 54l6 26" stroke="#e8eef4" stroke-width="9" stroke-linecap="round"/>
+        <path d="M36 54l-6 26M64 54l6 26" stroke="#0e2233" stroke-width="3.5" stroke-linecap="round" fill="none" opacity=".55"/>
+      </svg>
+    </button>
+    <button id="btn-build" class="big accent" aria-label="build">
+      <svg viewBox="0 0 100 100" aria-hidden="true">
+        <path d="M69 18a18 18 0 0 0-24 22L20 65a9 9 0 0 0 13 13l25-25a18 18 0 0 0 22-24L69 41 59 31z"
+              fill="#e8eef4" stroke="#0e2233" stroke-width="4" stroke-linejoin="round"/>
+        <rect x="8" y="80" width="84" height="9" rx="4.5" fill="#2ec5ff" stroke="#0e2233" stroke-width="3"/>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<div id="fallback" hidden>WebGL2</div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
