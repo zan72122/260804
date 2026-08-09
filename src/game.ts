@@ -96,7 +96,7 @@ export class Game {
   }
   private poseAim(): CamPose {
     const lx = clamp(this.clawX * 0.3, -0.8, 0.8);
-    return { pos: v3(lx + 0.5, 6.1, 8.3), look: v3(lx, 1.75, 0), halfWidth: 3.95 };
+    return { pos: v3(lx + 0.5, 6.6, 7.9), look: v3(lx, 1.7, 0), halfWidth: 3.95 };
   }
   private poseContact(cx: number): CamPose {
     return { pos: v3(cx + 0.55, 3.5, 3.9), look: v3(cx + 0.4, 2.2, 0), halfWidth: 1.9 };
@@ -473,17 +473,26 @@ export class Game {
       (beam.material as THREE.MeshBasicMaterial).opacity = near ? 0.2 : 0.11;
     }
 
-    // ghost hint until the first push (and again when idle)
+    // hint until the first push (and again when idle): a ghost claw beside the
+    // capsule, plus a pulsing ring right at the contact point so the cue stays
+    // visible even when the real claw is already parked at the ideal spot
     const ghost = this.stage.ghostClaw;
-    const showGhost = this.state === 'aim' && (!this.hadFirstPush || this.idleTime > 10);
-    ghost.visible = showGhost;
-    if (showGhost) {
-      const pulse = (Math.sin(this.t * 3.2) + 1) / 2;
+    const ring = this.stage.hintRing;
+    const showHint = this.state === 'aim' && (!this.hadFirstPush || this.idleTime > 6);
+    const pulse = (Math.sin(this.t * 3.2) + 1) / 2;
+    ghost.visible = showHint && Math.abs(this.clawX - this.idealClawX()) > 0.6;
+    if (ghost.visible) {
       ghost.position.set(this.idealClawX(), CLAW.pushY + 0.25 + pulse * 0.22, 0);
       ghost.traverse(o => {
         const m = (o as THREE.Mesh).material as THREE.MeshBasicMaterial | undefined;
-        if (m && m.transparent) m.opacity = 0.25 + pulse * 0.35;
+        if (m && m.transparent) m.opacity = 0.3 + pulse * 0.4;
       });
+    }
+    ring.visible = showHint;
+    if (ring.visible) {
+      ring.position.set(this.capX - CAPSULE_R - 0.06, capsuleRestY(this.capX), 0.1);
+      ring.scale.setScalar(0.5 + pulse * 0.35);
+      (ring.material as THREE.SpriteMaterial).opacity = 0.4 + pulse * 0.4;
     }
 
     // warm floor glow breathes

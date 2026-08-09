@@ -25,6 +25,7 @@ export interface StageRefs {
   claw: ClawRig;
   capsule: CapsuleRig;
   ghostClaw: THREE.Group;
+  hintRing: THREE.Sprite;
   aimBeam: THREE.Mesh;
   dropGlow: THREE.Mesh;
   outletGlow: THREE.PointLight;
@@ -402,7 +403,7 @@ export function buildStage(scene: THREE.Scene): StageRefs {
     g.group.traverse(o => {
       if (o instanceof THREE.Mesh) {
         o.material = new THREE.MeshBasicMaterial({
-          color: 0xffc95e, transparent: true, opacity: 0.5, depthWrite: false
+          color: 0xffb02e, transparent: true, opacity: 0.55, depthWrite: false
         });
         o.castShadow = false;
       }
@@ -410,6 +411,15 @@ export function buildStage(scene: THREE.Scene): StageRefs {
     ghostClaw.add(g.group);
   }
   root.add(ghostClaw);
+
+  // pulsing marker at the contact point — visible even when the real claw
+  // is already parked at the ideal spot
+  const hintRing = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: radialGlowTexture('rgba(255,176,46,0.95)', 'rgba(255,176,46,0)'),
+    transparent: true, opacity: 0.7, depthTest: false
+  }));
+  hintRing.scale.setScalar(0.7);
+  root.add(hintRing);
 
   // ---- capsule ----
   const capsule = buildCapsule();
@@ -444,5 +454,5 @@ export function buildStage(scene: THREE.Scene): StageRefs {
   fill.position.set(-4, 5, -3);
   scene.add(fill);
 
-  return { root, claw, capsule, ghostClaw, aimBeam, dropGlow, outletGlow, sparkles, sparkleMat };
+  return { root, claw, capsule, ghostClaw, hintRing, aimBeam, dropGlow, outletGlow, sparkles, sparkleMat };
 }
