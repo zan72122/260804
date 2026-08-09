@@ -11,13 +11,27 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { clampToBog, type FieldVariant } from './layout';
-import { clamp, damp } from '../core/math';
+import { clamp, damp, smoothstep } from '../core/math';
+
+/**
+ * How close the machine may get to the fingertip before it stops steering.
+ * Roughly its own half-length: past this the bearing to the finger is not
+ * meaningful any more, it is just noise.
+ */
+const DEAD_ZONE = 1.6;
 
 export class Reel {
   readonly group = new THREE.Group();
   readonly pos = new THREE.Vector2(0, 0);
   /** Heading in radians (0 = +Z). */
   heading = 0;
+  /**
+   * A lazier copy of the heading for the chase camera to sit behind. Keeping
+   * these separate means the machine can answer the finger immediately while
+   * the frame still swings gently — which is the whole trick to a follow cam
+   * a small child can watch without feeling sick.
+   */
+  viewHeading = 0;
   /** Metres per second right now. */
   speed = 0;
   /** Reel rotation, radians. */
@@ -28,6 +42,12 @@ export class Reel {
   private readonly hull = new THREE.Group();
   private bob = 0;
   private roll = 0;
+  /** Angular velocity actually applied, rad/s — drives the hull lean. */
+  private turnRate = 0;
+  /** Smoothed flotation height, so the hull cannot buzz vertically. */
+  private floatY = Number.NaN;
+  /** True while the machine is actively chasing the finger. */
+  private engaged = false;
 
   /** World-space centre of the churn, a little behind the drums. */
   readonly churn = new THREE.Vector3();
@@ -175,39 +195,74 @@ export class Reel {
     this.heading = heading;
     this.speed = 0;
     this.spin = 0;
+    this.turnRate = 0;
+    this.roll = 0;
+    this.floatY = Number.NaN;
+    this.engaged = false;
+    this.viewHeading = heading;
   }
 
   /**
    * Steer toward a world-space target.
-   * `throttle` 0..1 comes from how fast the finger is moving; turning is
-   * rate-limited so a four-year-old's flick cannot spin the machine.
+   *
+   * The dead zone is the important part. Without it the machine drives at
+   * the fingertip, overshoots it, and the bearing to the finger then swings
+   * wildly as it crosses over — heading jitters, the hull rocks, and because
+   * the chase camera is anchored to the heading the whole picture shakes.
+   * Inside DEAD_ZONE the machine simply holds its heading and coasts to a
+   * stop under the finger, which is also what a child expects to happen.
+   *
+   * The threshold is hysteretic because the chase camera turns a *held*
+   * fingertip into a slowly moving world target: without it the machine
+   * would sit on the boundary steering on and off forever.
    */
   steerTo(target: THREE.Vector2, throttle: number, dt: number): void {
     const dx = target.x - this.pos.x;
     const dz = target.y - this.pos.y;
     const dist = Math.hypot(dx, dz);
-    if (dist > 0.05) {
+
+    const threshold = this.engaged ? DEAD_ZONE : DEAD_ZONE * 1.7;
+    this.engaged = dist > threshold;
+
+    if (this.engaged) {
       const want = Math.atan2(dx, dz);
       let diff = want - this.heading;
       while (diff > Math.PI) diff -= Math.PI * 2;
       while (diff < -Math.PI) diff += Math.PI * 2;
+      // ease the turn down as the bearing error shrinks, so the last few
+      // degrees are approached rather than bounced between
       const maxTurn = 2.1 * dt;
-      this.heading += clamp(diff, -maxTurn, maxTurn);
-      this.roll = damp(this.roll, clamp(diff, -0.5, 0.5) * 0.35, 5, dt);
+      const turn = clamp(diff * 0.6, -maxTurn, maxTurn);
+      this.heading += turn;
+      this.turnRate = damp(this.turnRate, turn / Math.max(dt, 1e-3), 7, dt);
     } else {
-      this.roll = damp(this.roll, 0, 5, dt);
+      this.turnRate = damp(this.turnRate, 0, 6, dt);
     }
-    // it never overshoots the finger, and it never stops dead
-    const want = clamp(throttle, 0, 1) * 3.0 * clamp(dist / 1.4, 0, 1);
-    this.speed = damp(this.speed, want, 3.0, dt);
+
+    // Lean into the turn the machine is *actually* making, never into the
+    // raw bearing error — that error changes sign far too readily.
+    this.roll = damp(this.roll, clamp(this.turnRate * 0.16, -0.22, 0.22), 5, dt);
+
+    // Speed reaches zero *at* the dead zone, not inside it. If the machine
+    // were still creeping where it has stopped steering it would sail past
+    // the finger, re-acquire, turn back, and orbit forever.
+    const reach = this.engaged ? smoothstep((dist - DEAD_ZONE) / 1.8) : 0;
+    this.speed = damp(this.speed, clamp(throttle, 0, 1) * 3.0 * reach, 3.0, dt);
   }
 
   coast(dt: number): void {
+    this.engaged = false;
     this.speed = damp(this.speed, 0, 2.2, dt);
+    this.turnRate = damp(this.turnRate, 0, 4, dt);
     this.roll = damp(this.roll, 0, 4, dt);
   }
 
   update(dt: number, waterHeight: (x: number, z: number) => number): void {
+    let lag = this.heading - this.viewHeading;
+    while (lag > Math.PI) lag -= Math.PI * 2;
+    while (lag < -Math.PI) lag += Math.PI * 2;
+    this.viewHeading = damp(this.viewHeading + lag, this.heading, 2.4, dt);
+
     this.pos.x += Math.sin(this.heading) * this.speed * dt;
     this.pos.y += Math.cos(this.heading) * this.speed * dt;
     clampToBog(this.v, this.pos, 2.0);
@@ -219,8 +274,10 @@ export class Reel {
     this.drums[1].rotation.x = -this.spin * 1.15 + 0.4;
 
     this.bob += dt * (2.4 + this.speed);
-    const wh = waterHeight(this.pos.x, this.pos.y);
-    this.group.position.set(this.pos.x, wh - 0.22 + Math.sin(this.bob) * 0.035, this.pos.y);
+    // A hull has mass: it follows the surface, it does not snap to it.
+    const wh = waterHeight(this.pos.x, this.pos.y) - 0.22;
+    this.floatY = Number.isNaN(this.floatY) ? wh : damp(this.floatY, wh, 6, dt);
+    this.group.position.set(this.pos.x, this.floatY + Math.sin(this.bob) * 0.035, this.pos.y);
     this.group.rotation.y = this.heading;
     this.hull.rotation.z = this.roll;
     this.hull.rotation.x = Math.sin(this.bob * 0.7) * 0.02 - this.speed * 0.015;

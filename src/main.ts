@@ -213,6 +213,7 @@ declare global {
       step(): number;
       stepTime(): number;
       suction(): number;
+      reel(): { x: number; z: number; heading: number; view: number; speed: number };
       water(): number;
       floating(): number;
       bed(): number;
@@ -229,6 +230,13 @@ window.__game = {
   step: () => game.currentStep as number,
   stepTime: () => game.elapsedInStep,
   suction: () => game.suctionProgress,
+  reel: () => ({
+    x: game.world.reel.pos.x,
+    z: game.world.reel.pos.y,
+    heading: game.world.reel.heading,
+    view: game.world.reel.viewHeading,
+    speed: game.world.reel.speed,
+  }),
   water: () => game.world.water.level,
   floating: () => game.world.berries.floatingCount,
   bed: () => game.world.berries.bedCount,

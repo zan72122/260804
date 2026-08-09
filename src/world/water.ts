@@ -14,7 +14,7 @@
 
 import * as THREE from 'three';
 import { WATER_DRY, WATER_FULL, type FieldVariant } from './layout';
-import { clamp, damp } from '../core/math';
+import { clamp, damp, smoothstep } from '../core/math';
 
 const MAX_DISTURB = 4;
 
@@ -39,6 +39,10 @@ const VERT = /* glsl */ `
     return h * uAmp;
   }
 
+  // A wake rings *outward* from whatever is stirring the water. The
+  // smoothstep is what makes the centre calm: without it every disturber is
+  // a piston under its own source, and the reel, the nozzle and the boom
+  // buoys all buzz vertically on their own ripples.
   float rippleAt(vec2 p) {
     float r = 0.0;
     for (int i = 0; i < ${MAX_DISTURB}; i++) {
@@ -46,7 +50,8 @@ const VERT = /* glsl */ `
       if (d.z <= 0.001) continue;
       float dist = distance(p, d.xy);
       float fall = exp(-(dist * dist) / max(d.w * d.w, 0.0001));
-      r += d.z * fall * sin(dist * 5.2 - uTime * 8.5);
+      float birth = smoothstep(0.0, max(d.w * 0.32, 0.35), dist);
+      r += d.z * fall * birth * sin(dist * 5.2 - uTime * 8.5);
     }
     return r;
   }
@@ -220,7 +225,9 @@ export class Water {
       if (d.z <= 0.001) continue;
       const dist = Math.hypot(x - d.x, z - d.y);
       const fall = Math.exp(-(dist * dist) / Math.max(d.w * d.w, 1e-4));
-      rip += d.z * fall * Math.sin(dist * 5.2 - t * 8.5);
+      // must mirror rippleAt() in the shader, including the calm centre
+      const birth = smoothstep(dist / Math.max(d.w * 0.32, 0.35));
+      rip += d.z * fall * birth * Math.sin(dist * 5.2 - t * 8.5);
     }
     return this.level + h * this.amp + rip;
   }

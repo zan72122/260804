@@ -704,11 +704,11 @@ export class Game {
         const r = w.reel;
         // three-quarters behind, close enough that the paddles fill the frame
         s.target.set(
-          r.pos.x + Math.sin(r.heading) * 2.0,
+          r.pos.x + Math.sin(r.viewHeading) * 2.0,
           w.water.level + 0.5,
-          r.pos.y + Math.cos(r.heading) * 2.0,
+          r.pos.y + Math.cos(r.viewHeading) * 2.0,
         );
-        s.yaw = r.heading + Math.PI + (portrait ? 0.22 : 0.36);
+        s.yaw = r.viewHeading + Math.PI + (portrait ? 0.22 : 0.36);
         s.pitch = portrait ? 0.52 : 0.3;
         s.dist = portrait ? 15.5 : 10.5;
         s.fov = portrait ? 58 : 52;
@@ -725,7 +725,7 @@ export class Game {
         if (this.revealPhase === 0) {
           // down to the waterline, right behind the machine, no cut
           s.target.set(w.reel.churn.x, w.water.level + 0.15, w.reel.churn.z);
-          s.yaw = w.reel.heading + Math.PI + 0.95;
+          s.yaw = w.reel.viewHeading + Math.PI + 0.95;
           s.pitch = 0.08;
           s.dist = 6.6;
           s.fov = portrait ? 66 : 58;
@@ -736,7 +736,7 @@ export class Game {
           const t = clamp((this.stepTime - diveEnd) / riseLen, 0, 1);
           const e = smoothstep(t);
           s.target.set(c.x * 0.5, w.water.level, c.y * 0.5);
-          s.yaw = w.reel.heading + Math.PI + 0.95 - e * 0.6;
+          s.yaw = w.reel.viewHeading + Math.PI + 0.95 - e * 0.6;
           s.pitch = lerp(0.05, portrait ? 1.05 : 0.88, e);
           s.dist = lerp(6.6, wide * (portrait ? 2.1 : 1.7), e);
           s.fov = lerp(portrait ? 66 : 58, fovBase, e);
@@ -842,7 +842,7 @@ export class Game {
       case Step.Sandbox: {
         const r = w.reel;
         s.target.set(r.pos.x, w.water.level + 0.5, r.pos.y);
-        s.yaw = r.heading + Math.PI + 0.4;
+        s.yaw = r.viewHeading + Math.PI + 0.4;
         s.pitch = portrait ? 0.58 : 0.44;
         s.dist = portrait ? 18 : 14;
         s.fov = portrait ? 62 : 52;
