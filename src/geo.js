@@ -15,7 +15,7 @@ function hash3(i, j, k, seed) {
 // quintic fade: a cubic one leaves visible creases along the noise cell walls
 const fade = (t) => t * t * t * (t * (t * 6 - 15) + 10);
 
-export function noise3(x, y, z, seed = 0) {
+function noise3(x, y, z, seed = 0) {
   const i = Math.floor(x), j = Math.floor(y), k = Math.floor(z);
   const fx = fade(x - i), fy = fade(y - j), fz = fade(z - k);
   let r = 0;
@@ -36,17 +36,6 @@ const fbm = (x, y, z, seed) =>
   noise3(x, y, z, seed) * 0.62 + noise3(x * 2.3, y * 2.3, z * 2.3, seed + 17) * 0.26 +
   noise3(x * 4.9, y * 4.9, z * 4.9, seed + 41) * 0.12;
 
-// small seeded PRNG so a rebuilt tower looks the same shape family every time
-export function rng(seed) {
-  let s = (seed | 0) || 1;
-  return () => {
-    s ^= s << 13; s |= 0;
-    s ^= s >>> 17;
-    s ^= s << 5; s |= 0;
-    return ((s >>> 0) % 1000000) / 1000000;
-  };
-}
-
 // ---------------------------------------------------------------------------
 // choux pastry blob
 //
@@ -64,7 +53,7 @@ function chouxDisplace(nx, ny, nz, seed) {
     0.034 * Math.sin(3.0 * Math.atan2(nz, nx) + seed * 1.7) * (0.5 + 0.5 * ny) +
     0.020 * Math.cos(2.0 * Math.atan2(nz, nx) - seed * 0.9);
   // baked crust wrinkles
-  const wrinkle = (fbm(nx * 2.05 + seed, ny * 2.05, nz * 2.05, seed * 7) - 0.5) * 0.20;
+  const wrinkle = (fbm(nx * 2.05 + seed, ny * 2.05, nz * 2.05, seed * 7) - 0.5) * 0.145;
   const fine = (noise3(nx * 7.5, ny * 7.5, nz * 7.5, seed * 3 + 5) - 0.5) * 0.035;
   // little piped nub on the crown
   const up = Math.max(0, ny);
@@ -86,7 +75,7 @@ export function makeChouxGeometry(seed) {
       const sv = Math.sin(v), cv = Math.cos(v);
       const nx = sv * Math.cos(u), ny = cv, nz = sv * Math.sin(u);
       const d = chouxDisplace(nx, ny, nz, seed);
-      let x = nx * d * 1.03, y = ny * d * 0.96, z = nz * d * 1.03;
+      let x = nx * d * 1.03, y = ny * d * 0.98, z = nz * d * 1.03;
       // soft flat-ish bottom so it can rest and be dipped
       if (y < -0.52) y = -0.52 + (y + 0.52) * 0.46;
       col.push(new THREE.Vector3(x, y, z));

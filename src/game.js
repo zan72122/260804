@@ -561,7 +561,7 @@ class Game {
     }
 
     const slot = (c.aimSlot && !c.aimSlot.filled) ? c.aimSlot : this.openSlots()[0];
-    if (!slot) return;
+    if (!slot) { this._removeChoux(c); return; }   // no seat left: nothing to hold on to
     this._attach(c, slot);
   }
 
@@ -865,24 +865,33 @@ class Game {
 
   // ------------------------------------------------------------- camera
 
+  // Everything the frame must hold. Round props are sampled all the way round —
+  // four cardinal points would let a corner of the bowl slide off screen.
   _framePoints() {
     const pts = [];
-    const R = LAYOUT.plateR;
     const add = (x, y, z) => pts.push(new THREE.Vector3(x, y, z));
+    const ring = (cx, cz, r, y, n = 8) => {
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2;
+        add(cx + Math.cos(a) * r, y, cz + Math.sin(a) * r);
+      }
+    };
+
+    ring(0, 0, LAYOUT.plateR, 0.02);
+    // the widest ring of choux sits above the plate, not on it
+    ring(0, 0, LAYOUT.layers[0].r + LAYOUT.chouxR, LAYOUT.layers[0].y + LAYOUT.chouxR * 0.5);
 
     if (this.phase === 'place') {
-      add(R, 0.02, 0); add(-R, 0.02, 0); add(0, 0.02, R); add(0, 0.02, -R);
-      add(LAYOUT.pot.x - LAYOUT.potR, 0.04, LAYOUT.pot.z);
-      add(LAYOUT.pot.x, 0.36, LAYOUT.pot.z + LAYOUT.potR * 0.9);
-      add(LAYOUT.tray.x + LAYOUT.trayR, 0.04, LAYOUT.tray.z);
-      add(LAYOUT.tray.x, 1.25, LAYOUT.tray.z + LAYOUT.trayR * 0.9);
+      ring(LAYOUT.pot.x, LAYOUT.pot.z, LAYOUT.potR, 0.04);
+      add(LAYOUT.pot.x, 0.40, LAYOUT.pot.z);
+      ring(LAYOUT.tray.x, LAYOUT.tray.z, LAYOUT.trayR, 0.04);
+      // headroom for the choux waiting above the bowl
+      ring(LAYOUT.tray.x, LAYOUT.tray.z, LAYOUT.chouxR * 1.1, 1.30, 4);
       // keep some sky above the tower from the very first choux, so the frame
       // settles instead of lurching upward every ring
-      add(0, Math.max(this.towerTopY() + 0.34, TOWER_TOP_Y * 0.62), 0);
+      add(0, Math.max(this.towerTopY() + 0.34, TOWER_TOP_Y * 0.50), 0);
     } else {
       // the tower has the stage to itself from the crown onward
-      add(R * 1.1, 0, 0); add(-R * 1.1, 0, 0);
-      add(0, 0, R * 1.1); add(0, 0, -R * 1.1);
       add(0, TOWER_TOP_Y + 0.30, 0);
       add(0, -0.05, 0);
     }
@@ -920,7 +929,7 @@ class Game {
     const hHalf = Math.atan(Math.tan(vHalf) * this.camera.aspect);
     // how much of the frustum the scene is allowed to fill
     const fill = this.phase === 'finale' ? 0.68
-      : (this.phase === 'place' ? (this.benchPortrait ? 0.92 : 0.86) : 0.82);
+      : (this.phase === 'place' ? (this.benchPortrait ? 0.95 : 0.88) : 0.84);
     const tanH = Math.tan(hHalf) * fill;
     const tanV = Math.tan(vHalf) * fill;
 
@@ -987,7 +996,7 @@ class Game {
     this.camera.aspect = w / Math.max(1, h);
     // A much wider lens in portrait: a narrow frame otherwise pushes the camera
     // so far back that the tower stops reading as tall.
-    this.camera.fov = h > w ? 54 : 40;
+    this.camera.fov = h > w ? 56 : 40;
     this.camera.updateProjectionMatrix();
     this._applyBench(h > w);
 

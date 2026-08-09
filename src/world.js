@@ -15,7 +15,7 @@ export const LAYOUT = {
   // side by side in landscape, pulled toward the viewer in portrait.
   bench: {
     landscape: { pot: new THREE.Vector3(-1.90, 0, 1.02), tray: new THREE.Vector3(1.92, 0, 1.12) },
-    portrait: { pot: new THREE.Vector3(-0.86, 0, 1.98), tray: new THREE.Vector3(0.92, 0, 2.08) },
+    portrait: { pot: new THREE.Vector3(-0.88, 0, 1.92), tray: new THREE.Vector3(0.94, 0, 2.00) },
   },
   pot: new THREE.Vector3(-1.90, 0, 1.02),
   tray: new THREE.Vector3(1.92, 0, 1.12),
@@ -100,7 +100,7 @@ export function buildWorld(renderer) {
   scene.add(table);
 
   // ---- shared geometry + materials --------------------------------------
-  const VARIANTS = 5;
+  const VARIANTS = 7;
   const chouxGeos = [];
   const coatGeos = [];
   for (let i = 0; i < VARIANTS; i++) {
