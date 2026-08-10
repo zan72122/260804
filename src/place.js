@@ -15,6 +15,10 @@ const STAR_BASE_SCALE = 0.32;
 const STAR_POP_DUR = 0.4;
 const STAR_PULSE_SPEED = 3.0;
 const STAR_PULSE_AMP = 0.12;
+// ヒントグロー（min未達の間、置き場所を光らせて誘導する）
+const HINT_BASE_SCALE = 0.35;
+const HINT_IDLE_AFTER = 7;   // 秒：これ以上操作がないとパルスを強める
+const HINT_IDLE_BOOST = 1.6;
 
 // ---------- 星ボタンの見た目（canvas 2D） ----------
 
@@ -73,6 +77,7 @@ export class FreePlace {
   constructor({ scene, camera, glowTex, audio }) {
     this.scene = scene;
     this.camera = camera;
+    this.glowTex = glowTex;
     this.audio = audio;
     // audio は { tap(), pop(), place(i), chimeSuccess() } を持つ。
     // tap() は「外れ演出」用で呼び出し側（main.js）の責務のためここでは呼ばない。
@@ -102,6 +107,11 @@ export class FreePlace {
     this._active = false;
     this._starShown = false;   // 星が一度でも表示されたか（ポップ演出の起点）
     this._starVisibleSince = null; // ポップ演出の基準時刻（update()のtimeで設定）
+
+    // ヒントグロー（min未達の間、suggest()の各点を光らせて誘導する）
+    this._hints = []; // {sprite, phase}[]
+    this._lastCountSeen = 0;
+    this._lastInteractTime = null; // 無操作時間の起点（update()のtimeで設定）
   }
 
   get active() { return this._active; }
@@ -124,6 +134,28 @@ export class FreePlace {
     this._starSprite.scale.setScalar(STAR_BASE_SCALE);
     this._glowSprite.scale.setScalar(STAR_BASE_SCALE * 1.8);
     this.scene.add(this._starGroup);
+
+    // ヒントグロー：suggest()の各ワールド座標に置き場所を光らせる誘導マーカーを出す
+    this._lastCountSeen = 0;
+    this._lastInteractTime = null;
+    this._clearHints();
+    const pts = config.suggest ? config.suggest() : [];
+    for (const p of pts) {
+      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: this.glowTex, color: 0xffe9a8, transparent: true,
+        blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false,
+      }));
+      sprite.scale.setScalar(HINT_BASE_SCALE);
+      sprite.position.copy(p);
+      this.scene.add(sprite);
+      this._hints.push({ sprite, phase: Math.random() * 6.28 });
+    }
+  }
+
+  // ヒントグローを全部消してシーンから除去
+  _clearHints() {
+    for (const h of this._hints) this.scene.remove(h.sprite);
+    this._hints = [];
   }
 
   end() {
@@ -132,6 +164,7 @@ export class FreePlace {
     this.scene.remove(this._starGroup);
     this._starSprite.visible = false;
     this._glowSprite.visible = false;
+    this._clearHints();
     this._active = false;
     this._config = null;
   }
@@ -164,12 +197,18 @@ export class FreePlace {
         this._config.onPlace(placement, this._count);
         this._count++;
         this.audio.place(this._count);
+        // ヒントグローを1つ消す（末尾から）
+        if (this._hints.length) {
+          const h = this._hints.pop();
+          this.scene.remove(h.sprite);
+        }
         if (this._count >= this._config.min && !this._starShown) {
           this._starShown = true;
           this._starVisibleSince = null; // 次のupdate()で起点を打刻
           this._starSprite.visible = true;
           this._glowSprite.visible = true;
           this.audio.pop();
+          this._clearHints(); // 残りがあっても星にバトンタッチ
         }
         if (this._count >= this._config.cap) {
           this.audio.chimeSuccess();
@@ -186,6 +225,22 @@ export class FreePlace {
 
   update(time) {
     if (!this._active) return;
+
+    // 無操作時間を計測（配置があるたびにリセット）。7秒以上でパルスを強める
+    if (this._lastInteractTime === null) this._lastInteractTime = time;
+    if (this._count !== this._lastCountSeen) {
+      this._lastCountSeen = this._count;
+      this._lastInteractTime = time;
+    }
+    const idleBoost = (time - this._lastInteractTime > HINT_IDLE_AFTER) ? HINT_IDLE_BOOST : 1;
+
+    // ヒントグローのパルス（旧main.jsのupdateMarkersと同様のsin方式）
+    for (const h of this._hints) {
+      const s = HINT_BASE_SCALE * (1 + 0.25 * idleBoost * Math.sin(time * 3.2 + h.phase));
+      h.sprite.scale.setScalar(s);
+      h.sprite.material.opacity = 0.55 + 0.35 * Math.sin(time * 3.2 + h.phase) * idleBoost * 0.5 + 0.2;
+    }
+
     // 星ボタンはカメラ右下1.2m地点に常時追従
     this._raycaster.setFromCamera(STAR_NDC, this.camera);
     this._raycaster.ray.at(STAR_DIST, this._starGroup.position);
