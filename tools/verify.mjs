@@ -27,6 +27,7 @@ const st = () => page.evaluate(() => window.__flower ? {
 
 const seen = new Set();
 let shotIdx = 0;
+let tapCount = 0;
 async function shotOnce(tag) {
   if (seen.has(tag)) return;
   seen.add(tag);
@@ -66,7 +67,7 @@ while (Date.now() - t0 < LIMIT) {
   await shotOnce(s.phase);
   const onScreen = s.targets.filter((t) => t.x > 8 && t.x < W - 8 && t.y > 8 && t.y < H - 8);
   if (!onScreen.length) { console.log('WARN: no on-screen targets', JSON.stringify(s.targets)); break; }
-  const t = onScreen[0];
+  const t = onScreen[tapCount++ % onScreen.length];
   // targets() の要素には星ボタン用に next:true が混ざることがあるが、
   // 星ボタンも通常ターゲットと同様に {x,y} をタップするだけでよいのでロジック変更は不要。
   if (t.drag && t.dropX !== undefined) {
@@ -87,7 +88,7 @@ while (Date.now() - t0 < LIMIT) {
 await page.waitForTimeout(6000);
 await shotOnce('party-late');
 // ゲスト入場・着席が進んだ状態
-await page.waitForTimeout(8000);
+await page.waitForTimeout(16000);
 await shotOnce('party-guests');
 // パーティー中のタップ（花びらバースト）
 await page.mouse.click(W / 2, H / 2);

@@ -1287,7 +1287,7 @@ function startReveal() {
   });
 
   // ゲスト入場：大扉から歩いてきて席で踊る
-  schedule(4.4, () => {
+  schedule(3.4, () => {
     guests.spawnParty(world.seatSpots, chosen.type, chosenColor(), 0);
   });
 

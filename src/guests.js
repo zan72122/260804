@@ -21,12 +21,12 @@ export class Guests {
     for (let i = 0; i < n; i++) {
       const g = this._makeGuest(i);
       const lane = (i % 2 === 0) ? -1.0 : 1.0;
-      g.group.position.set(lane + (Math.random() - 0.5) * 0.3, 0, 12.5 + (i >> 1) * 1.1);
+      g.group.position.set(lane + (Math.random() - 0.5) * 0.3, 0, 11.3 + (i >> 1) * 0.8);
       g.state = 'wait';
-      g.delay = startDelay + i * 0.55;
+      g.delay = startDelay + i * 0.32;
       g.lane = lane;
       g.seat = seats[i];
-      g.walkSpeed = 1.5 + Math.random() * 0.4;
+      g.walkSpeed = 2.1 + Math.random() * 0.5;
       this.scene.add(g.group);
       // 髪に選んだ色の小さな花
       const fl = this.flowers.add(flowerType, colorHex, {
