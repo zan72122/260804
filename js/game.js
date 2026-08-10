@@ -1007,7 +1007,7 @@ window.Game = (function () {
       const sy0 = y + s * 0.28;
       const w = Math.max(10, glassW * 0.34) * (0.75 + 0.25 * Math.min(1, pourRate() / (1.7 * paceK())));
       const end = surfaceWorld(top);
-      emitStream(c, 'cloud', { x, y: sy0 - 1 }, pourVis, w, top.x, end.y);
+      emitStream(c, 'cloud', { x, y: sy0 - 1 }, pourVis, w, top.x, end.y, cloudTint);
     }
 
     // tappable affordance while the water is off
@@ -1130,7 +1130,7 @@ window.Game = (function () {
     const py = tableY + 6;
     c.save();
     c.globalAlpha = Math.min(0.75, 0.25 + pool * 0.15);
-    c.fillStyle = liquidGradient(c, py - 6, py + 8);
+    c.fillStyle = tintGradient(c, poolTint, py - 6, py + 8);
     c.beginPath();
     c.ellipse(towerCx, py, pw, Math.max(5, glassW * 0.16), 0, 0, TAU);
     c.fill();
@@ -1223,8 +1223,6 @@ window.Game = (function () {
     const c = ctx;
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
     streamSegs = [];
-    buildStreamSprite();
-    buildLiquidSprite();
 
     let t = profOn ? performance.now() : 0;
     drawBackground(c);
