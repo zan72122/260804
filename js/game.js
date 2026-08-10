@@ -868,16 +868,27 @@ window.Game = (function () {
   }
 
   // ---------- streams ----------
-  function drawStream(c, key, x0, y0, x1, y1, w, intensity, ctrl) {
+  // a painted stream shows the mixed colour, not the source glass's own tint —
+  // this is the moment the player sees a red pulse race down a white waterfall
+  function streamDisplayTint(base, key) {
+    const grab = key ? grabs.get(key) : null;
+    if (grab && grab.d.paint && grab.str >= REROUTE_STR) {
+      return Tint.mix(base, 0.3, grab.d.paint, 0.7);
+    }
+    return base;
+  }
+
+  function drawStream(c, key, x0, y0, x1, y1, w, intensity, ctrl, tint) {
     if (intensity < 0.03) return;
+    const spr = LiquidArt.streamSprite(streamDisplayTint(tint || Tint.WHITE, key), TIER[tier].core);
     const a = Math.min(1, 0.55 + clamp(intensity, 0, 1) * 0.45);
     const wig = 0.88 + 0.12 * Math.sin(time * 22 + x0 * 0.3);
     if (ctrl) {
       // bent by a finger: two blits through the control point
-      drawStraight(c, x0, y0, ctrl.x, ctrl.y, w * wig, a);
-      drawStraight(c, ctrl.x, ctrl.y, x1, y1, w * wig, a);
+      drawStraight(c, x0, y0, ctrl.x, ctrl.y, w * wig, a, spr);
+      drawStraight(c, ctrl.x, ctrl.y, x1, y1, w * wig, a, spr);
     } else {
-      drawStraight(c, x0, y0, x1, y1, w * wig, a);
+      drawStraight(c, x0, y0, x1, y1, w * wig, a, spr);
     }
     if (key) {
       streamSegs.push({ key, x0, y0,
@@ -892,7 +903,7 @@ window.Game = (function () {
     }
   }
 
-  function drawStraight(c, x0, y0, x1, y1, w, alpha) {
+  function drawStraight(c, x0, y0, x1, y1, w, alpha, spr) {
     const dx = x1 - x0, dy = y1 - y0;
     const len = Math.sqrt(dx * dx + dy * dy);
     if (len < 1.5) return;
@@ -900,7 +911,7 @@ window.Game = (function () {
     c.translate(x0, y0);
     c.rotate(Math.atan2(dy, dx) - Math.PI / 2);
     c.globalAlpha = alpha;
-    c.drawImage(streamSpr, -w * 0.75, -2, w * 1.5, len + 4);
+    c.drawImage(spr, -w * 0.75, -2, w * 1.5, len + 4);
     c.restore();
   }
 
@@ -909,30 +920,32 @@ window.Game = (function () {
     for (let k = 0; k < glasses.length; k++) {
       const g = glasses[k];
       if (g.streamL < 0.03 && g.streamR < 0.03) continue;
+      // R3 pass-through: a locked glass shows what is flowing through it now
+      const srcTint = g.tintLock ? g.inTint : g.tint;
       const pl = rimPoint(g, -g.w * 0.47);
       const pr = rimPoint(g, g.w * 0.47);
       if (g.r < rows - 1) {
         const L = glassAt(g.r + 1, g.i), R = glassAt(g.r + 1, g.i + 1);
-        emitStream(c, k + ':L', pl, g.streamL, sw, L.x + L.w * 0.1, L.y + 2);
-        emitStream(c, k + ':R', pr, g.streamR, sw, R.x - R.w * 0.1, R.y + 2);
+        emitStream(c, k + ':L', pl, g.streamL, sw, L.x + L.w * 0.1, L.y + 2, srcTint);
+        emitStream(c, k + ':R', pr, g.streamR, sw, R.x - R.w * 0.1, R.y + 2, srcTint);
       } else {
-        drawStream(c, null, pl.x, pl.y + 1, pl.x - g.w * 0.06, tableY + 3, sw * 0.9, g.streamL);
-        drawStream(c, null, pr.x, pr.y + 1, pr.x + g.w * 0.06, tableY + 3, sw * 0.9, g.streamR);
+        drawStream(c, null, pl.x, pl.y + 1, pl.x - g.w * 0.06, tableY + 3, sw * 0.9, g.streamL, null, srcTint);
+        drawStream(c, null, pr.x, pr.y + 1, pr.x + g.w * 0.06, tableY + 3, sw * 0.9, g.streamR, null, srcTint);
       }
     }
   }
 
-  function emitStream(c, key, from, intensity, sw, defX, defY) {
+  function emitStream(c, key, from, intensity, sw, defX, defY, tint) {
     if (intensity < 0.03) return;
     const grab = grabs.get(key);
     let ex = defX, ey = defY;
     if (!grab || grab.targetIdx == null) {
-      drawStream(c, key, from.x, from.y + 1, ex, ey, sw, intensity);
+      drawStream(c, key, from.x, from.y + 1, ex, ey, sw, intensity, null, tint);
       return;
     }
     if (grab.str >= REROUTE_STR) {
       if (grab.d.sprayT > 0) {                    // fast swipe shatters the flow
-        drawStream(c, key, from.x, from.y + 1, grab.d.x, grab.d.y, sw, intensity);
+        drawStream(c, key, from.x, from.y + 1, grab.d.x, grab.d.y, sw, intensity, null, tint);
         spawnSpray(grab.d.x, grab.d.y, grab.d.vx >= 0 ? 1 : -1);
         return;
       }
@@ -942,22 +955,38 @@ window.Game = (function () {
     drawStream(c, key, from.x, from.y + 1, ex, ey, sw, intensity, {
       x: lerp((from.x + ex) / 2, grab.d.x, grab.str),
       y: lerp((from.y + ey) / 2, grab.d.y, grab.str),
-    });
+    }, tint);
   }
 
-  // the finger, rendered as a transparent spoon catching the flow
+  // the finger, rendered as a transparent spoon catching the flow — armed
+  // fingers glow in the brush colour instead of plain white
   function drawDeflectors(c) {
     if (!deflectors.size) return;
     c.save();
     c.globalCompositeOperation = 'lighter';
     const R = deflectRadius();
     for (const d of deflectors.values()) {
-      c.globalAlpha = 0.13;
-      c.drawImage(radialSpr, d.x - R, d.y - R, R * 2, R * 2);
-      c.globalAlpha = 0.6;
-      c.drawImage(radialSpr, d.x - 20, d.y - 20, 40, 40);
+      if (d.paint) {
+        const g1 = c.createRadialGradient(d.x, d.y, 2, d.x, d.y, R);
+        g1.addColorStop(0, Tint.css(d.paint, 0.85));
+        g1.addColorStop(1, 'rgba(0,0,0,0)');
+        c.globalAlpha = 0.16;
+        c.fillStyle = g1;
+        c.beginPath(); c.arc(d.x, d.y, R, 0, TAU); c.fill();
+        const g2 = c.createRadialGradient(d.x, d.y, 1, d.x, d.y, 20);
+        g2.addColorStop(0, Tint.css(d.paint, 0.9));
+        g2.addColorStop(1, 'rgba(0,0,0,0)');
+        c.globalAlpha = 0.65;
+        c.fillStyle = g2;
+        c.beginPath(); c.arc(d.x, d.y, 20, 0, TAU); c.fill();
+      } else {
+        c.globalAlpha = 0.13;
+        c.drawImage(radialSpr, d.x - R, d.y - R, R * 2, R * 2);
+        c.globalAlpha = 0.6;
+        c.drawImage(radialSpr, d.x - 20, d.y - 20, 40, 40);
+      }
       c.globalAlpha = 0.85;
-      c.strokeStyle = 'rgba(255,255,255,0.95)';
+      c.strokeStyle = d.paint ? Tint.css(d.paint, 0.9) : 'rgba(255,255,255,0.95)';
       c.lineWidth = 2.5;
       c.beginPath();
       c.arc(d.x, d.y + 4, 12, Math.PI * 0.08, Math.PI * 0.92);
