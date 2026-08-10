@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>ぬいぐるみクレーン</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#2b2340">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="description" content="ぬいぐるみをつかむ、モバイル向けクレーンゲーム。">
+<link rel="stylesheet" href="./styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🧸</text></svg>">
+</head>
+<body data-mode="play" data-orient="portrait">
+
+<canvas id="gl"></canvas>
+
+<!-- ============ play HUD ============ -->
+<div id="play-ui" class="layer">
+
+  <div class="topbar">
+    <button id="btn-room" class="round-btn" aria-label="おへや">
+      <svg viewBox="0 0 48 48" aria-hidden="true">
+        <path class="fill-a" d="M24 7 6 21v19a3 3 0 0 0 3 3h30a3 3 0 0 0 3-3V21z"/>
+        <path class="stroke-d" d="M3 22 24 5.5 45 22"/>
+        <path class="fill-c" d="M24 25.5c-2.3-3-6.6-1.6-6.6 2 0 3.4 4.3 6 6.6 8.2 2.3-2.2 6.6-4.8 6.6-8.2 0-3.6-4.3-5-6.6-2z"/>
+      </svg>
+      <span class="btn-label">おへや</span>
+    </button>
+
+    <div id="count" class="badge">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path class="fill-c" d="M12 20.5C6.5 16.8 3 14 3 10.2 3 7.3 5.3 5 8.1 5c1.7 0 3.1.8 3.9 2 .8-1.2 2.2-2 3.9-2C18.7 5 21 7.3 21 10.2c0 3.8-3.5 6.6-9 10.3z"/>
+      </svg>
+      <span id="count-value">0</span>
+    </div>
+  </div>
+
+  <!-- drag hint: a finger sliding sideways, no words needed -->
+  <div id="hint">
+    <svg viewBox="0 0 120 80" aria-hidden="true">
+      <path class="hint-track" d="M18 46h84"/>
+      <path class="hint-arrow" d="M14 46l10-7v14zM106 46l-10-7v14z"/>
+      <g class="hint-hand">
+        <path class="fill-hand" d="M60 20c-2.6 0-4.6 2-4.6 4.6v16.6l-3.4-3.6c-1.7-1.8-4.5-1.8-6.2 0-1.6 1.7-1.6 4.3 0 6l10.4 12c1.9 2.2 4.6 3.4 7.5 3.4h6.9c5 0 9-4 9-9V32.8c0-2.3-1.9-4.2-4.2-4.2-.9 0-1.7.3-2.4.8-.3-2-2-3.5-4.1-3.5-1 0-2 .4-2.7 1-.6-1.7-2.2-2.9-4.1-2.9-.8 0-1.5.2-2.1.6v-.1c0-2.5-2-4.5-4.6-4.5z"/>
+      </g>
+    </svg>
+  </div>
+
+  <div class="grabwrap">
+    <button id="btn-grab" class="grab-btn" aria-label="つかむ">
+      <span class="grab-ring"></span>
+      <svg viewBox="0 0 64 64" aria-hidden="true">
+        <path class="stroke-m" d="M32 4v13"/>
+        <rect class="fill-m" x="24" y="16" width="16" height="8" rx="3"/>
+        <path class="stroke-m2" d="M25 24c-6 3-9 9-9 16"/>
+        <path class="stroke-m2" d="M39 24c6 3 9 9 9 16"/>
+        <path class="stroke-m2" d="M32 24v18"/>
+        <circle class="fill-tip" cx="16" cy="42" r="4"/>
+        <circle class="fill-tip" cx="48" cy="42" r="4"/>
+        <circle class="fill-tip" cx="32" cy="44" r="4"/>
+        <ellipse class="fill-plush" cx="32" cy="52" rx="13" ry="10"/>
+        <circle class="fill-plush2" cx="22" cy="45" r="4.6"/>
+        <circle class="fill-plush2" cx="42" cy="45" r="4.6"/>
+        <circle class="fill-eye" cx="27" cy="51" r="1.9"/>
+        <circle class="fill-eye" cx="37" cy="51" r="1.9"/>
+      </svg>
+      <span class="btn-label big">つかむ</span>
+    </button>
+  </div>
+</div>
+
+<!-- ============ reveal ============ -->
+<div id="reveal-ui" class="layer hidden">
+  <div class="reveal-top">
+    <div class="reveal-burst">
+      <span id="reveal-name">うさぎ</span>
+      <small>ゲット！</small>
+    </div>
+  </div>
+  <div class="reveal-actions">
+    <button id="btn-again" class="action-btn primary" aria-label="もういちど">
+      <svg viewBox="0 0 64 64" aria-hidden="true">
+        <path class="stroke-m" d="M32 6v12"/>
+        <rect class="fill-m" x="24" y="17" width="16" height="8" rx="3"/>
+        <path class="stroke-m2" d="M25 25c-6 3-9 9-9 16"/>
+        <path class="stroke-m2" d="M39 25c6 3 9 9 9 16"/>
+        <path class="stroke-m2" d="M32 25v18"/>
+        <circle class="fill-tip" cx="16" cy="43" r="4"/>
+        <circle class="fill-tip" cx="48" cy="43" r="4"/>
+        <circle class="fill-tip" cx="32" cy="45" r="4"/>
+      </svg>
+      <span class="btn-label big">もういちど</span>
+    </button>
+    <button id="btn-toroom" class="action-btn" aria-label="おへやへ">
+      <svg viewBox="0 0 48 48" aria-hidden="true">
+        <path class="fill-a" d="M24 7 6 21v19a3 3 0 0 0 3 3h30a3 3 0 0 0 3-3V21z"/>
+        <path class="stroke-d" d="M3 22 24 5.5 45 22"/>
+        <path class="fill-c" d="M24 25.5c-2.3-3-6.6-1.6-6.6 2 0 3.4 4.3 6 6.6 8.2 2.3-2.2 6.6-4.8 6.6-8.2 0-3.6-4.3-5-6.6-2z"/>
+      </svg>
+      <span class="btn-label big">おへや</span>
+    </button>
+  </div>
+</div>
+
+<!-- ============ collection room ============ -->
+<div id="room-ui" class="layer hidden">
+  <div class="topbar">
+    <div class="badge wide">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path class="fill-c" d="M12 20.5C6.5 16.8 3 14 3 10.2 3 7.3 5.3 5 8.1 5c1.7 0 3.1.8 3.9 2 .8-1.2 2.2-2 3.9-2C18.7 5 21 7.3 21 10.2c0 3.8-3.5 6.6-9 10.3z"/>
+      </svg>
+      <span>おへや</span>
+    </div>
+  </div>
+  <div id="room-empty" class="room-empty hidden">
+    <svg viewBox="0 0 64 64" aria-hidden="true">
+      <ellipse class="fill-plush" cx="32" cy="40" rx="16" ry="13"/>
+      <circle class="fill-plush2" cx="20" cy="27" r="6.5"/>
+      <circle class="fill-plush2" cx="44" cy="27" r="6.5"/>
+      <circle class="fill-eye" cx="26" cy="38" r="2.4"/>
+      <circle class="fill-eye" cx="38" cy="38" r="2.4"/>
+    </svg>
+    <p>ここに あつまるよ</p>
+  </div>
+  <div class="backwrap">
+    <button id="btn-back" class="action-btn primary" aria-label="あそぶ">
+      <svg viewBox="0 0 64 64" aria-hidden="true">
+        <path class="stroke-m" d="M32 6v12"/>
+        <rect class="fill-m" x="24" y="17" width="16" height="8" rx="3"/>
+        <path class="stroke-m2" d="M25 25c-6 3-9 9-9 16"/>
+        <path class="stroke-m2" d="M39 25c6 3 9 9 9 16"/>
+        <path class="stroke-m2" d="M32 25v18"/>
+        <circle class="fill-tip" cx="16" cy="43" r="4"/>
+        <circle class="fill-tip" cx="48" cy="43" r="4"/>
+        <circle class="fill-tip" cx="32" cy="45" r="4"/>
+      </svg>
+      <span class="btn-label big">あそぶ</span>
+    </button>
+  </div>
+</div>
+
+<!-- ============ boot ============ -->
+<div id="boot">
+  <div class="boot-inner">
+    <div class="boot-plush"></div>
+    <div class="boot-bar"><i></i></div>
+  </div>
+</div>
+
+<noscript><p style="color:#fff;text-align:center;padding:2rem">JavaScript をオンにしてください。</p></noscript>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
