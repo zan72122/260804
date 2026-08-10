@@ -4,7 +4,8 @@ import * as THREE from '../../vendor/three.module.js';
 import { createStream, createPitcher, createDecoration, createConfetti, createSparkles, createDrips } from '../cake.js';
 import { tween, ease, clamp, lerp, glowTexture } from '../util.js';
 import {
-  MOLD_R, MOLD_H, MOUSSE_R, LAYER_H, GLAZE_R, RIGHT_THETA, LEFT_THETA,
+  MOLD_R, MOLD_H, MOUSSE_R, LAYER_H, GLAZE_R,
+  FRONT_THETA_CYL, BACK_THETA_CYL, FRONT_THETA_TOP, BACK_THETA_TOP,
   createMold, createMousseLayer, createPourSurface, createCapPlane,
   createGlazeSide, createGlazeTop, createKnife, createFrostParticles, createFrostShell,
   createGoldBit, createFlowerDeco, createContactShadow, paintCapCanvas, createEdgeChamfer,
@@ -18,8 +19,8 @@ const GLAZE_COLORS = {
   choco: { a: 0xcf9a5c, b: 0x5a3417, drip: 0x5a3417 },
   rainbow: { a: 0xffe3f2, b: 0xbfe0ff, drip: 0xf2a6dc },
 };
-// 天面かざりの置き場所（半分ごとの左右振り分けに x の符号を使う）
-const DECO_SLOTS = [[0.02, 0], [-0.02, 0], [0.03, 0.03], [-0.03, 0.03], [0.02, -0.035], [-0.02, -0.035]];
+// 天面かざりの置き場所（[x, z]。半分ごとの前後振り分けに z の符号を使う）
+const DECO_SLOTS = [[0, 0.02], [0, -0.02], [0.03, 0.03], [0.03, -0.03], [-0.035, 0.02], [-0.035, -0.02]];
 
 export function createRecipe(ctx) {
   const { scene } = ctx;
@@ -63,28 +64,34 @@ export function createRecipe(ctx) {
   const mold = createMold();
   cakeRoot.add(mold.group);
 
-  function buildHalf(thetaStart) {
+  // thetaCyl: ムース層/グレーズ側面/霜シェル/面取りリング用（CylinderGeometryの角度規約）
+  // thetaTop: グレーズ天面/液面（CircleGeometry→天面に寝かせたもの用の角度規約）
+  // ジオメトリの展開式が異なるため、同じ「前/後」でも数値が異なる（glazeObjects.js参照）。
+  // 断面キャップ・グレーズ天面・その半分の飾りを含め、この半分に属する全パーツを
+  // 1つのTHREE.Groupの子にする（宙に浮く部品を作らない）。
+  function buildHalf(thetaCyl, thetaTop) {
     const group = new THREE.Group();
-    const layers = [0, 1, 2].map(i => createMousseLayer(thetaStart, i));
+    const layers = [0, 1, 2].map(i => createMousseLayer(thetaCyl, i));
     layers.forEach(l => group.add(l.mesh));
-    const surface = createPourSurface(thetaStart);
+    const surface = createPourSurface(thetaTop);
     group.add(surface.mesh);
-    const frost = createFrostShell(thetaStart);
+    const frost = createFrostShell(thetaCyl);
     group.add(frost.mesh);
-    const chamfer = createEdgeChamfer(thetaStart);
+    const chamfer = createEdgeChamfer(thetaCyl);
     group.add(chamfer.mesh);
-    const glazeSide = createGlazeSide(thetaStart, scene.environment);
+    const glazeSide = createGlazeSide(thetaCyl, scene.environment);
     group.add(glazeSide.mesh);
-    const glazeTop = createGlazeTop(thetaStart, scene.environment);
+    const glazeTop = createGlazeTop(thetaTop, scene.environment);
     group.add(glazeTop.mesh);
     const cap = createCapPlane();
     group.add(cap.mesh);
     cakeRoot.add(group);
     return { group, layers, surface, frost, chamfer, glazeSide, glazeTop, cap, decos: [] };
   }
-  const rightHalf = buildHalf(RIGHT_THETA);
-  const leftHalf = buildHalf(LEFT_THETA);
-  const halves = [rightHalf, leftHalf];
+  // halfFront = z>=0側（カメラに近い）/ halfBack = z<=0側（カメラから遠い、CUTで動かさない）
+  const halfFront = buildHalf(FRONT_THETA_CYL, FRONT_THETA_TOP);
+  const halfBack = buildHalf(BACK_THETA_CYL, BACK_THETA_TOP);
+  const halves = [halfFront, halfBack];
 
   // ムースを注ぐストリーム + 注ぎ口（cake.js のピッチャーを再利用）
   const mousseStream = createStream(0xffb3c6, { radius: 0.009 });
@@ -112,6 +119,11 @@ export function createRecipe(ctx) {
   const coldLight = new THREE.PointLight(0x8fd8ff, 0, 0.6, 2);
   coldLight.position.set(0, ctx.STAND_TOP + MOLD_H * 0.6, 0);
   scene.add(coldLight);
+
+  // CUTで開いた半分（特に手前に回り込む断面/艶側）が主光源の向きによって
+  // 暗く沈まないよう、カメラ側からの補助フィルライトを用意（CUTでのみ点灯）
+  const cutFillLight = new THREE.PointLight(0xfff3e0, 0, 0.9, 2);
+  scene.add(cutFillLight);
 
   // 完成演出まわり
   const confetti = createConfetti();
@@ -216,7 +228,8 @@ export function createRecipe(ctx) {
           onUpdate: v => { deco.position.y = v; deco.scale.setScalar(lerp(0.8, 0.55, (surfaceY - v) / (surfaceY - endY || 1))); },
           onComplete: () => {
             scene.remove(deco);
-            const u = clamp(0.5 + oz / (MOUSSE_R * 2), 0.1, 0.9);
+            // 断面キャップは幅=X方向(左右)なので、水平位置は ox から決める
+            const u = clamp(0.5 + ox / (MOUSSE_R * 2), 0.1, 0.9);
             const v = clamp((endY - ctx.STAND_TOP) / MOLD_H, 0.08, 0.9);
             insertedFruits.push({ kind, u, v });
             state.insertCount++;
@@ -259,7 +272,7 @@ export function createRecipe(ctx) {
     else if (kind === 'flower') deco = createFlowerDeco();
     else { deco = createDecoration('candy'); deco.scale.setScalar(0.5); }
     const [sx, sz] = DECO_SLOTS[state.decoCount % DECO_SLOTS.length];
-    const half = sx >= 0 ? rightHalf : leftHalf;
+    const half = sz >= 0 ? halfFront : halfBack;
     const topY = MOLD_H + 0.006;
     deco.position.set(sx, topY + 0.05, sz);
     half.group.add(deco);
@@ -317,7 +330,9 @@ export function createRecipe(ctx) {
     } else if (next === 'CUT') {
       trayGdeco.hide();
       const cakeCenterY = ctx.STAND_TOP + MOLD_H * 0.5;
-      ctx.camPhase([0.04, cakeCenterY + 0.05, 0.2], [0, cakeCenterY, 0]);
+      ctx.camPhase([0.13, cakeCenterY + 0.09, 0.32], [0, cakeCenterY, 0]);
+      cutFillLight.position.set(0.13, cakeCenterY + 0.15, 0.34);
+      cutFillLight.intensity = 1.1;
       ctx.ui.setHint('ながおしで きってみよう', '🔪');
       ctx.ui.setFinger('hold');
       ctx.ui.setProgress(0);
@@ -493,23 +508,23 @@ export function createRecipe(ctx) {
 
   function openHalves() {
     const capTex = paintCapCanvas(mousseColorHex, insertedFruits);
-    for (const h of [rightHalf, leftHalf]) {
+    for (const h of halves) {
       h.cap.mat.map = capTex.map;
       h.cap.mat.roughnessMap = capTex.roughMap;
       h.cap.mat.needsUpdate = true;
       h.cap.mesh.visible = true;
     }
-    // 各半分は「ムース全層+グレーズ殻+断面キャップ+天面飾り」を1つの剛体として
-    // X移動+Y回転のみで開く（傾いたり倒れたりしない。皿に接地したまま）。
-    // 回転の向きは断面キャップがカメラ側(+Z)を向くように選ぶ（逆だと断面が奥へ隠れる）。
-    const OPEN_X = 0.07, OPEN_ROT = THREE.MathUtils.degToRad(30);
+    // 決定論的な開き方（指定構成）:
+    // halfBack はまったく動かさない（断面キャップの法線がもともと+Zでカメラ正面を向く）。
+    // halfFront だけを剛体のまま左手前へスライド+回転させ、断面キャップと側面の艶を
+    // 斜めからカメラへ見せる。どちらも接地(y移動なし)のまま倒れない。
+    const target = { x: -0.05, z: 0.05, rot: THREE.MathUtils.degToRad(-42) };
     tween({
       from: 0, to: 1, duration: 1.0, easing: ease.outCubic,
       onUpdate: v => {
-        rightHalf.group.position.x = v * OPEN_X;
-        rightHalf.group.rotation.y = v * OPEN_ROT;
-        leftHalf.group.position.x = -v * OPEN_X;
-        leftHalf.group.rotation.y = -v * OPEN_ROT;
+        halfFront.group.position.x = v * target.x;
+        halfFront.group.position.z = v * target.z;
+        halfFront.group.rotation.y = v * target.rot;
       },
     });
     // 入刀時に断面がきらめく演出
@@ -575,7 +590,9 @@ export function createRecipe(ctx) {
         doneTime += dt;
         const a = doneTime * 0.3;
         const r = 0.5, top = ctx.STAND_TOP + MOLD_H * 0.55;
-        ctx.camPhase([Math.sin(a) * r, top + r * 0.24, Math.cos(a) * r], [0, top, 0]);
+        const camX = Math.sin(a) * r, camZ = Math.cos(a) * r;
+        ctx.camPhase([camX, top + r * 0.24, camZ], [0, top, 0]);
+        cutFillLight.position.set(camX, top + r * 0.3, camZ);
         break;
       }
       default: break; // INSERT / DECO はトレイのタップだけで進む

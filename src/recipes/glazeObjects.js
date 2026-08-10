@@ -38,13 +38,16 @@ export const MOUSSE_R = 0.076;
 export const LAYER_H = MOLD_H / 3;
 export const GLAZE_R = MOUSSE_R + 0.005;
 
-// 半円柱の角度（右半分=x>=0 / 左半分=x<=0）。断面は常に x=0 の平面。
-// 注意: three.jsのCylinderGeometryは thetaStart を x=r*sin(theta), z=r*cos(theta) で
-// 展開する（x=r*cos, z=r*sinではない）。そのため thetaStart=0 を起点に半周させると
-// x>=0（右半分・断面は x=0, z∈[-r,r]）になる。以前 -PI/2 起点だったのは実質 z>=0/z<=0
-// の前後分割になってしまっていたバグで、カメラ(+Z)に対して断面が常に背を向けていた。
-export const RIGHT_THETA = 0;
-export const LEFT_THETA = Math.PI;
+// 半円柱の角度: 決定論的構成に合わせ、断面は z=0 の垂直面固定
+// （halfFront=z>=0側 / halfBack=z<=0側。カメラは常に+Z側から見る）。
+// 注意: ジオメトリごとに角度の展開式が異なるため、同じ「前/後」を表すのに異なる
+// thetaStartが要る（vendor/three.module.js を実測して確認済み）。
+//  - CylinderGeometry: x=r*sin(theta), z=r*cos(theta)
+//  - CircleGeometry(→rotateX(-PI/2)で天面に寝かせたもの): 世界z = -r*sin(theta)
+export const FRONT_THETA_CYL = -Math.PI / 2;  // cylinder: z∈[0,r]
+export const BACK_THETA_CYL = Math.PI / 2;    // cylinder: z∈[-r,0]
+export const FRONT_THETA_TOP = -Math.PI;      // circle(天面): z∈[0,r]
+export const BACK_THETA_TOP = 0;              // circle(天面): z∈[-r,0]
 export const HALF_LEN = Math.PI;
 
 // グレーズの見た目モード
@@ -235,12 +238,15 @@ export function createFrostShell(thetaStart) {
 }
 
 // =========================================================================
-// 断面キャップ（x=0 平面。層縞+フルーツ断面を描いた canvasTexture を貼る板）
+// 断面キャップ（z=0 平面。層縞+フルーツ断面を描いた canvasTexture を貼る板）
+// PlaneGeometryは既定でXY平面・法線+Zなので回転不要（幅=X方向=グレーズ径、高さ=Y）。
+// 両半分とも同じ向きのまま使う（material.side=DoubleSideなので裏面も描画され、
+// かつ開いた際にどちらの面がカメラを向くかは各グループの回転で決まるため、
+// ここで片方だけ180度反転させるとテクスチャが鏡像になってしまう）。
 // =========================================================================
 export function createCapPlane() {
   // 幅はグレーズ殻を含めた実際の断面直径(GLAZE_R*2)に一致させ、切断面へ密着させる
   const geo = new THREE.PlaneGeometry(GLAZE_R * 2, MOLD_H);
-  geo.rotateY(Math.PI / 2);
   geo.translate(0, MOLD_H / 2, 0);
   // 断面はしっとりしたムースの質感で、グレーズ殻のような強い艶は不要
   // （clearcoatを弱めに留め、強い正面光でも層縞のパステル色が白飛びしないようにする）
@@ -329,16 +335,25 @@ export function createGlazeSide(thetaStart, envMap) {
         vec3 V = normalize(cameraPosition - vWorld);
         vec3 R = reflect(-V, N);
         vec3 env = texture2D(uEnvMap, equirectUv(R)).rgb;
+        // 反射先が床側の暗い帯(環境マップ下部)を向くと艶面が丸ごと沈むため、
+        // 反射色が暗いときはミラー寄与を弱めてベース色寄りに戻す
+        float envLum = dot(env, vec3(0.299, 0.587, 0.114));
+        float envOk = smoothstep(0.06, 0.32, envLum);
         vec3 L = normalize(vec3(0.5, 0.85, 0.4));
-        float dif = 0.55 + 0.45*max(dot(N,L), 0.0);
+        // 拡散項の下限を引き上げ（回転で主光源から法線が外れても沈みすぎない）
+        float dif = 0.62 + 0.38*max(dot(N,L), 0.0);
         vec3 H = normalize(L+V);
         float spec = pow(max(dot(N,H), 0.0), 90.0 + uMirror*150.0);
         float fres = pow(1.0 - max(dot(N,V), 0.0), 2.2);
         vec3 col = base * dif * (1.0 - uMirror*0.4);
-        col = mix(col, env * uEnvIntensity, uMirror * (0.55 + fres*0.35));
+        col = mix(col, env * uEnvIntensity, uMirror * (0.55 + fres*0.35) * envOk);
         col += vec3(1.0) * spec * (0.65 + uMirror*0.9);
         col += vec3(1.0) * fres * (0.22 + uMirror*0.3);
         col += base * tip * 0.15;
+        // カメラ方向からの固定フィルライト（第2灯）: シーンのpointLightはこの自作
+        // ShaderMaterialに効かないため、法線がカメラを向いていれば常に底上げする
+        float camFill = max(dot(N, V), 0.0);
+        col += base * camFill * camFill * 0.4;
         gl_FragColor = vec4(col, 1.0);
       }
     `,
@@ -414,15 +429,22 @@ export function createGlazeTop(thetaStart, envMap) {
         vec3 V = normalize(cameraPosition - vWorld);
         vec3 R = reflect(-V, N);
         vec3 env = texture2D(uEnvMap, equirectUv(R)).rgb;
+        // 反射先が床側の暗い帯を向くと艶面が丸ごと沈むため、暗い反射のときはミラー寄与を弱める
+        float envLum = dot(env, vec3(0.299, 0.587, 0.114));
+        float envOk = smoothstep(0.06, 0.32, envLum);
         vec3 L = normalize(vec3(0.5, 0.85, 0.4));
-        float dif = 0.6 + 0.4*max(dot(N,L), 0.0);
+        // 拡散項の下限を引き上げ（回転で主光源から法線が外れても沈みすぎない）
+        float dif = 0.65 + 0.35*max(dot(N,L), 0.0);
         vec3 H = normalize(L+V);
         float spec = pow(max(dot(N,H), 0.0), 130.0 + uMirror*160.0);
         float fres = pow(1.0 - max(dot(N,V), 0.0), 2.5);
         vec3 col = base * dif * (1.0 - uMirror*0.45);
-        col = mix(col, env * uEnvIntensity, uMirror * (0.55 + fres*0.35));
+        col = mix(col, env * uEnvIntensity, uMirror * (0.55 + fres*0.35) * envOk);
         col += vec3(1.0) * spec * (0.55 + uMirror*0.9);
         col += vec3(1.0) * frontGlow * 0.55;
+        // カメラ方向からの固定フィルライト（第2灯）
+        float camFill = max(dot(N, V), 0.0);
+        col += base * camFill * camFill * 0.4;
         gl_FragColor = vec4(col, 1.0);
       }
     `,
@@ -582,14 +604,15 @@ export function paintCapCanvas(layerColors, fruits) {
     // フルーツの断面（艶あり: ハイライト+輪郭）
     const FRUIT_COLOR = { strawberry: '#e8354d', blueberry: '#4a5fb0', orange: '#ffa53d' };
     for (const f of fruits) {
-      const px = f.u * s, py = (1 - f.v) * s, r = s * 0.075;
+      const px = f.u * s, py = (1 - f.v) * s, r = s * 0.11;
       g.save();
       g.beginPath(); g.arc(px, py, r, 0, Math.PI * 2); g.clip();
       const fc = FRUIT_COLOR[f.kind] || '#e8354d';
+      // 断面がほぼ点に見えないよう、ひと回り大きく+彩度濃いめのグラデーションにする
       const rg = g.createRadialGradient(px - r * 0.3, py - r * 0.3, r * 0.1, px, py, r * 1.15);
-      rg.addColorStop(0, shade(fc, 0.35));
-      rg.addColorStop(0.55, fc);
-      rg.addColorStop(1, shade(fc, -0.25));
+      rg.addColorStop(0, shade(fc, 0.22));
+      rg.addColorStop(0.55, shade(fc, -0.05));
+      rg.addColorStop(1, shade(fc, -0.38));
       g.fillStyle = rg;
       g.fillRect(px - r, py - r, r * 2, r * 2);
       if (f.kind === 'strawberry') {
@@ -619,7 +642,7 @@ export function paintCapCanvas(layerColors, fruits) {
   const roughMap = canvasTexture(S, (g, s) => {
     g.fillStyle = '#9a9a9a'; g.fillRect(0, 0, s, s); // ムース部: 中程度のラフネス
     for (const f of fruits) {
-      const px = f.u * s, py = (1 - f.v) * s, r = s * 0.075;
+      const px = f.u * s, py = (1 - f.v) * s, r = s * 0.11;
       g.fillStyle = '#303030'; // フルーツ部: 低ラフネス=艶
       g.beginPath(); g.arc(px, py, r, 0, 7); g.fill();
     }
