@@ -357,34 +357,53 @@ window.Game = (function () {
     return best;
   }
 
-  // route a portion of flow: deflected → target (or spray), else default child
-  function deliver(portion, defIdx, key) {
+  // R1 — receiving: accumulate this-frame inflow (inTint/inVol) and, while
+  // the glass isn't locked, mix its own displayed tint too. Volume + tint are
+  // updated together so they can never drift apart.
+  function addTint(g, vol, tint) {
+    if (vol <= 0) return;
+    g.inTint = Tint.mix(g.inTint, g.inVol, tint, vol);
+    g.inVol += vol;
+    if (!g.tintLock) g.tint = Tint.mix(g.tint, g.amount, tint, vol);
+    g.amount += vol;
+  }
+
+  // route a portion of flow: deflected → target (or spray), else default child.
+  // `tint` is the colour carried by this portion (R3 pass-through decides it
+  // upstream); a magic-finger deflector with `d.paint` armed dyes it further.
+  function deliver(portion, defIdx, key, tint) {
     if (portion <= 0) return;
+    if (!tint) tint = Tint.WHITE;
     const grab = key ? grabs.get(key) : null;
     if (grab && grab.targetIdx != null && grab.str >= REROUTE_STR) {
       const t = glasses[grab.targetIdx];
+      const outTint = grab.d.paint
+        ? Tint.mix(tint, portion * 0.3, grab.d.paint, portion * 0.7)
+        : tint;
       if (grab.d.sprayT > 0) {
         const sibs = [];
         if (t.i > 0) sibs.push(glassAt(t.r, t.i - 1));
         if (t.i < t.r) sibs.push(glassAt(t.r, t.i + 1));
-        t.amount += portion * 0.45;
+        addTint(t, portion * 0.45, outTint);
         t.receive = Math.min(1, t.receive + portion * 2.5);
         for (const s of sibs) {
-          s.amount += portion * (0.45 / sibs.length);
+          addTint(s, portion * (0.45 / sibs.length), outTint);
           s.receive = Math.min(1, s.receive + portion * 2);
         }
+        poolTint = Tint.mix(poolTint, pool, outTint, portion * 0.1);
         pool = Math.min(pool + portion * 0.1, 8);
       } else {
-        t.amount += portion;
+        addTint(t, portion, outTint);
         t.receive = Math.min(1, t.receive + portion * 6);
       }
       return;
     }
     if (defIdx == null) {
+      poolTint = Tint.mix(poolTint, pool, tint, portion);
       pool = Math.min(pool + portion, 8);
     } else {
       const d = glasses[defIdx];
-      d.amount += portion;
+      addTint(d, portion, tint);
       d.receive = Math.min(1, d.receive + portion * 6);
     }
   }
@@ -435,6 +454,10 @@ window.Game = (function () {
     if (state !== 'play') autoPour = false;
     pouring = state === 'play' && (autoPour || simPour);
 
+    // this-frame inflow tracking must be cleared before ANY deliver() call
+    // this frame — R3 pass-through reads it later in this same update()
+    for (const g of glasses) { g.inTint = Tint.WHITE; g.inVol = 0; }
+
     rebuildGrabs(dt);
 
     // --- pouring from the cloud ---
@@ -444,7 +467,7 @@ window.Game = (function () {
       idleT = 0;
       const add = pourRate() * dt;
       totalPoured += add;
-      deliver(add, 0, 'cloud');
+      deliver(add, 0, 'cloud', cloudTint);
       pourVis += (1 - pourVis) * Math.min(1, dt * 8);
       if (Math.random() < 0.5 && !grabs.has('cloud')) {
         const sp = surfaceWorld(top);
@@ -491,6 +514,10 @@ window.Game = (function () {
         const excess = g.amount - capEff;
         const out = Math.min(excess, dt * (1.5 + excess * 3.5) * flowK);
         g.amount -= out;
+        // R3 — pass-through: a locked glass hands on what is flowing through
+        // it THIS frame, not its own frozen colour, so paint injected upstream
+        // still reaches lower rows after the top has filled and locked.
+        const outTint = g.tintLock ? g.inTint : g.tint;
         if (g.r === 0 && !topOverflowed && out > 0) {
           topOverflowed = true;
           overflowAt = time;
@@ -504,11 +531,12 @@ window.Game = (function () {
           let s = wl / (wl + wr);
           const b = g.bias;
           if (Math.abs(b) > 0.03) s = lerp(s, b > 0 ? 0 : 1, Math.min(1, Math.abs(b) * 1.15));
-          deliver(out * s, idxL, k + ':L');
-          deliver(out * (1 - s), idxR, k + ':R');
+          deliver(out * s, idxL, k + ':L', outTint);
+          deliver(out * (1 - s), idxR, k + ':R', outTint);
           flowL = (out * s) / Math.max(dt, 1e-4);
           flowR = (out * (1 - s)) / Math.max(dt, 1e-4);
         } else {
+          poolTint = Tint.mix(poolTint, pool, outTint, out);
           pool = Math.min(pool + out, 8);
           flowL = flowR = (out * 0.5) / Math.max(dt, 1e-4);
         }
@@ -534,9 +562,11 @@ window.Game = (function () {
 
       if (!g.full && g.amount >= CAP * 0.999) {
         g.full = true;
+        g.tintLock = true;          // R2 — colour freezes the moment it's full
         fullCount++;
         Sound.chime(fullCount - 1);
         spawnRing(g.x, g.y, g.w, theme.sparkle);
+        spawnRing(g.x, g.y, g.w * 0.8, Tint.css(g.tint, 0.8));   // bright flash in its own colour
         spawnStars(g.x, g.y, 4, g.w);
         let rowFull = true;
         for (let i = 0; i <= g.r; i++) if (!glassAt(g.r, i).full) rowFull = false;
@@ -1297,8 +1327,16 @@ window.Game = (function () {
       pointers.set(id, { role: 'none' });
       return;
     }
-    if (hitCloud(x, y)) {                       // the cloud is the on/off switch
-      setPour(!autoPour);
+    if (hitCloud(x, y)) {
+      // no brush armed: the cloud is a plain on/off switch (unchanged).
+      // brush armed: tapping the cloud dyes the pour and always starts it —
+      // it never stops the pour.
+      if (brush) {
+        cloudTint = brush;
+        if (!autoPour) setPour(true);
+      } else {
+        setPour(!autoPour);
+      }
       Sound.pop();
       pointers.set(id, { role: 'none' });
       idleT = 0;
@@ -1312,9 +1350,11 @@ window.Game = (function () {
       return;
     }
     // open water: always arm the magic finger; if nothing is flowing here
-    // yet, the same touch also starts the pour
+    // yet, the same touch also starts the pour. The finger carries whatever
+    // colour is armed at the moment of touch-down (d.paint), fixed for its
+    // whole gesture — never mutated later even if the brush changes.
     const wasDry = !streamsNear(x, y);
-    deflectors.set(id, { x, y, vx: 0, speed: 0, sprayT: 0,
+    deflectors.set(id, { x, y, vx: 0, speed: 0, sprayT: 0, paint: brush,
                          lastX: x, lastT: performance.now() });
     pointers.set(id, { role: 'deflect' });
     if (!wasDry) everDeflected = true;
