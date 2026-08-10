@@ -425,7 +425,10 @@ window.Game = (function () {
   // every stream inside a finger's field bends toward it — no aiming needed
   function rebuildGrabs(dt) {
     grabs.clear();
-    for (const d of deflectors.values()) d.sprayT = Math.max(0, d.sprayT - dt);
+    for (const d of deflectors.values()) {
+      d.sprayT = Math.max(0, d.sprayT - dt);
+      d.paintingNow = false;   // recomputed below, once per deflector per frame
+    }
     if (deflectors.size && streamSegs.length) {
       const R = deflectRadius(), R2 = R * R;
       for (const seg of streamSegs) {
@@ -440,11 +443,29 @@ window.Game = (function () {
           // only lean toward it — reads as a force field, not a magnet
           const str = clamp(1 - Math.sqrt(bd) / R, 0, 1);
           const ti = nearestCandidate(seg.key, bestD.x);
-          if (ti != null) grabs.set(seg.key, { d: bestD, targetIdx: ti, str });
+          if (ti != null) {
+            grabs.set(seg.key, { d: bestD, targetIdx: ti, str });
+            // matches the threshold deliver() uses to actually inject paint
+            if (bestD.paint && str >= REROUTE_STR) bestD.paintingNow = true;
+          }
         }
       }
     }
     for (const [k, v] of forcedGrabs) grabs.set(k, v);
+
+    // armed-finger "plop": a one-shot per injection *event*, not per frame —
+    // fires the instant a painted finger starts actually dyeing a stream,
+    // stays silent while it continues to (would otherwise machine-gun at
+    // 60Hz across every deflected stream), and re-arms itself the moment
+    // the finger stops injecting, so lifting and re-touching (or drifting
+    // off-stream and back) makes a fresh plop rather than none at all.
+    for (const d of deflectors.values()) {
+      if (d.paintingNow) {
+        if (!d.paintSounded) { Sound.paint(); d.paintSounded = true; }
+      } else {
+        d.paintSounded = false;
+      }
+    }
   }
 
   // ---------- simulation ----------
@@ -993,30 +1014,44 @@ window.Game = (function () {
   function drawDeflectors(c) {
     if (!deflectors.size) return;
     c.save();
-    c.globalCompositeOperation = 'lighter';
     const R = deflectRadius();
     for (const d of deflectors.values()) {
       if (d.paint) {
+        // coloured glow: normal blend so the hue reads as itself — additive
+        // ('lighter') over the dark sky bleaches any hue toward white, and
+        // high lightness collapses it further, so a child can't tell what
+        // colour is armed. A mid-lightness normal-composite wash keeps the
+        // hue obvious at a glance; only a small centre sparkle stays additive.
+        c.globalCompositeOperation = 'source-over';
         const g1 = c.createRadialGradient(d.x, d.y, 2, d.x, d.y, R);
-        g1.addColorStop(0, Tint.css(d.paint, 0.85));
+        g1.addColorStop(0, Tint.css(d.paint, 0.55));
         g1.addColorStop(1, 'rgba(0,0,0,0)');
-        c.globalAlpha = 0.16;
+        c.globalAlpha = 0.32;
         c.fillStyle = g1;
         c.beginPath(); c.arc(d.x, d.y, R, 0, TAU); c.fill();
         const g2 = c.createRadialGradient(d.x, d.y, 1, d.x, d.y, 20);
-        g2.addColorStop(0, Tint.css(d.paint, 0.9));
+        g2.addColorStop(0, Tint.css(d.paint, 0.55));
         g2.addColorStop(1, 'rgba(0,0,0,0)');
-        c.globalAlpha = 0.65;
+        c.globalAlpha = 0.85;
         c.fillStyle = g2;
         c.beginPath(); c.arc(d.x, d.y, 20, 0, TAU); c.fill();
+        c.globalCompositeOperation = 'lighter';
+        const g3 = c.createRadialGradient(d.x, d.y, 0, d.x, d.y, 8);
+        g3.addColorStop(0, 'rgba(255,255,255,0.85)');
+        g3.addColorStop(1, 'rgba(255,255,255,0)');
+        c.globalAlpha = 0.45;
+        c.fillStyle = g3;
+        c.beginPath(); c.arc(d.x, d.y, 8, 0, TAU); c.fill();
       } else {
+        c.globalCompositeOperation = 'lighter';
         c.globalAlpha = 0.13;
         c.drawImage(radialSpr, d.x - R, d.y - R, R * 2, R * 2);
         c.globalAlpha = 0.6;
         c.drawImage(radialSpr, d.x - 20, d.y - 20, 40, 40);
       }
+      c.globalCompositeOperation = d.paint ? 'source-over' : 'lighter';
       c.globalAlpha = 0.85;
-      c.strokeStyle = d.paint ? Tint.css(d.paint, 0.9) : 'rgba(255,255,255,0.95)';
+      c.strokeStyle = d.paint ? Tint.css(d.paint, 0.6) : 'rgba(255,255,255,0.95)';
       c.lineWidth = 2.5;
       c.beginPath();
       c.arc(d.x, d.y + 4, 12, Math.PI * 0.08, Math.PI * 0.92);
@@ -1355,7 +1390,8 @@ window.Game = (function () {
     // whole gesture — never mutated later even if the brush changes.
     const wasDry = !streamsNear(x, y);
     deflectors.set(id, { x, y, vx: 0, speed: 0, sprayT: 0, paint: brush,
-                         lastX: x, lastT: performance.now() });
+                         lastX: x, lastT: performance.now(),
+                         paintingNow: false, paintSounded: false });
     pointers.set(id, { role: 'deflect' });
     if (!wasDry) everDeflected = true;
     if (wasDry && !autoPour) setPour(true);

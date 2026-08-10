@@ -102,11 +102,20 @@ window.Tint = (function () {
   // hsl(H S% L%) — space-separated, no commas. White stays a near-neutral,
   // bright pearl (a whisper of cool blue-lavender) rather than a warm
   // khaki/tan cast, so the white swatch reads as "milk", not a muddy 7th
-  // colour among the candy-bright ones.
+  // colour among the candy-bright ones. Chroma-0 never takes the caller's
+  // `l` linearly: it is remapped into a high floor (~86-100%) so white
+  // stays bright milk everywhere `css()` is used (swatch, album beads,
+  // fingertip glow) instead of sliding down to a mid-grey — separation
+  // from a white ring/backdrop comes from the faint cool hue, not from
+  // darkening.
   function css(t, l) {
     const cc = clamp01(t.c);
-    const ll = Math.round(clamp01(l) * 100);
-    if (cc <= 0.02) return `hsl(216 14% ${ll}%)`;
+    const lFrac = clamp01(l);
+    if (cc <= 0.02) {
+      const wl = Math.round((0.86 + lFrac * 0.14) * 100); // 86-100%
+      return `hsl(216 14% ${wl}%)`;
+    }
+    const ll = Math.round(lFrac * 100);
     const hh = Math.round(norm360(t.h));
     const ss = Math.round(55 + cc * 40); // always candy-bright, 55-95%
     return `hsl(${hh} ${ss}% ${ll}%)`;
