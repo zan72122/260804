@@ -99,12 +99,14 @@ window.Tint = (function () {
     return 'h' + hBucket + 'c' + cBucket;
   }
 
-  // hsl(H S% L%) — space-separated, no commas. White stays a soft warm
-  // cream rather than flat grey so it still reads as milk, not concrete.
+  // hsl(H S% L%) — space-separated, no commas. White stays a near-neutral,
+  // bright pearl (a whisper of cool blue-lavender) rather than a warm
+  // khaki/tan cast, so the white swatch reads as "milk", not a muddy 7th
+  // colour among the candy-bright ones.
   function css(t, l) {
     const cc = clamp01(t.c);
     const ll = Math.round(clamp01(l) * 100);
-    if (cc <= 0.02) return `hsl(40 22% ${ll}%)`;
+    if (cc <= 0.02) return `hsl(216 14% ${ll}%)`;
     const hh = Math.round(norm360(t.h));
     const ss = Math.round(55 + cc * 40); // always candy-bright, 55-95%
     return `hsl(${hh} ${ss}% ${ll}%)`;
@@ -112,18 +114,20 @@ window.Tint = (function () {
 
   // Top-to-bottom gradient stops for a bowl of this tint. Coloured drinks
   // sweep from a near-white sparkle at the rim down to a deep candy pool.
-  // White gets its own curve: a faint multi-hue pearl sheen (cream -> pink
-  // -> blue-white -> cream -> warm shadow) so it glows instead of reading
-  // as flat grey milk.
+  // White gets its own curve: a faint cool pearl sheen (icy white -> soft
+  // pink -> blue-white -> lavender -> cool blue-grey shadow) that stays
+  // near-neutral top to bottom — never dipping into warm tan/khaki — so a
+  // thinly-filled glass (which only shows the bottom-most stops) still
+  // reads as pearlescent milk, not a beige puddle.
   function cssStops(t) {
     const cc = clamp01(t.c);
     if (cc <= 0.02) {
       return [
-        'hsl(48 40% 97%)',
-        'hsl(330 20% 92%)',
-        'hsl(200 16% 87%)',
-        'hsl(45 14% 79%)',
-        'hsl(38 12% 67%)',
+        'hsl(200 28% 97%)',
+        'hsl(320 16% 93%)',
+        'hsl(212 18% 88%)',
+        'hsl(255 12% 80%)',
+        'hsl(220 13% 71%)',
       ];
     }
     const h = Math.round(norm360(t.h));
