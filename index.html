@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>ベルベット ケーキやさん</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body {
+    width:100%; height:100%; overflow:hidden; position:fixed;
+    background:#2a2126;
+    font-family:-apple-system, "Hiragino Maru Gothic ProN", "Hiragino Sans", "BIZ UDGothic", sans-serif;
+    touch-action:none;
+    user-select:none; -webkit-user-select:none;
+  }
+  #app { position:fixed; inset:0; }
+  canvas { display:block; }
+
+  /* ---------- HUD ---------- */
+  #hud { position:fixed; inset:0; pointer-events:none; z-index:10; }
+
+  /* progress bar */
+  #meter {
+    position:absolute; top:calc(env(safe-area-inset-top, 0px) + 12px);
+    left:50%; transform:translateX(-50%);
+    width:min(72vw, 340px); height:34px;
+    background:rgba(255,252,247,.88);
+    border-radius:20px;
+    box-shadow:0 3px 12px rgba(60,30,10,.25), inset 0 0 0 3px rgba(122,74,42,.15);
+    overflow:visible;
+  }
+  #meterFill {
+    position:absolute; left:5px; top:5px; bottom:5px; width:0%;
+    max-width:calc(100% - 10px);
+    border-radius:14px;
+    background:linear-gradient(180deg, #8a5a34, #5d3a1e);
+    transition:width .25s ease-out, background .4s;
+  }
+  .star {
+    position:absolute; top:50%;
+    font-size:26px; transform:translate(-50%,-50%) scale(1);
+    filter:grayscale(1) opacity(.45);
+    transition:filter .3s, transform .3s;
+  }
+  .star.lit { filter:none; transform:translate(-50%,-50%) scale(1.25); animation:starpop .5s ease; }
+  @keyframes starpop {
+    0%{transform:translate(-50%,-50%) scale(.4) rotate(-30deg);}
+    60%{transform:translate(-50%,-50%) scale(1.6) rotate(10deg);}
+    100%{transform:translate(-50%,-50%) scale(1.25) rotate(0);}
+  }
+  #star1{left:35%;} #star2{left:70%;} #star3{left:96%;}
+
+  /* color palette */
+  #palette {
+    position:absolute; right:calc(env(safe-area-inset-right, 0px) + 10px);
+    top:50%; transform:translateY(-50%);
+    display:flex; flex-direction:column; gap:14px;
+    pointer-events:auto;
+  }
+  .swatch {
+    width:52px; height:52px; border-radius:50%;
+    border:none; position:relative;
+    box-shadow:0 3px 8px rgba(40,20,10,.4), inset 0 -6px 10px rgba(0,0,0,.28), inset 0 5px 8px rgba(255,255,255,.35);
+    transform:scale(.92);
+    transition:transform .18s;
+  }
+  .swatch.sel { transform:scale(1.12); }
+  .swatch.sel::after {
+    content:""; position:absolute; inset:-7px; border-radius:50%;
+    border:4px solid rgba(255,255,255,.95);
+    box-shadow:0 0 10px rgba(255,240,200,.8);
+  }
+
+  /* rotate buttons */
+  .rotBtn {
+    position:absolute; bottom:calc(env(safe-area-inset-bottom, 0px) + 16px);
+    width:76px; height:76px; border-radius:50%;
+    background:radial-gradient(circle at 50% 35%, #fffdf8, #f2e3cd);
+    border:none;
+    box-shadow:0 5px 14px rgba(60,30,10,.35), inset 0 -5px 8px rgba(160,110,60,.25);
+    pointer-events:auto;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .rotBtn:active { transform:scale(.92); }
+  #rotL { left:calc(env(safe-area-inset-left, 0px) + 16px); }
+  #rotR { right:calc(env(safe-area-inset-right, 0px) + 16px); }
+  .rotBtn svg { width:44px; height:44px; }
+
+  /* hint bubble */
+  #hint {
+    position:absolute; bottom:calc(env(safe-area-inset-bottom, 0px) + 108px);
+    left:50%; transform:translateX(-50%);
+    background:rgba(255,252,246,.94); color:#6a4326;
+    font-size:19px; font-weight:700; white-space:nowrap;
+    padding:12px 22px; border-radius:26px;
+    box-shadow:0 4px 12px rgba(60,30,10,.3);
+    animation:bob 1.6s ease-in-out infinite;
+    transition:opacity .5s;
+  }
+  #hint::after {
+    content:""; position:absolute; left:50%; bottom:-9px; transform:translateX(-50%);
+    border:10px solid transparent; border-top-color:rgba(255,252,246,.94); border-bottom:none;
+  }
+  @keyframes bob { 0%,100%{transform:translateX(-50%) translateY(0);} 50%{transform:translateX(-50%) translateY(-8px);} }
+
+  #toast {
+    position:absolute; top:calc(env(safe-area-inset-top, 0px) + 64px);
+    left:50%; transform:translateX(-50%);
+    background:rgba(70,45,80,.85); color:#fff;
+    font-size:18px; font-weight:700; white-space:nowrap;
+    padding:10px 22px; border-radius:22px;
+    opacity:0; transition:opacity .4s;
+  }
+
+  /* ---------- overlays ---------- */
+  .overlay {
+    position:fixed; inset:0; z-index:20;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; gap:18px;
+    transition:opacity .5s;
+  }
+  #startOv {
+    background:radial-gradient(120% 100% at 50% 20%, #5c3a52 0%, #33222e 70%, #201620 100%);
+  }
+  #startOv h1 {
+    color:#ffe9d0; font-size:min(11vw, 52px); letter-spacing:.04em;
+    text-shadow:0 4px 0 rgba(90,40,60,.8), 0 8px 24px rgba(0,0,0,.5);
+  }
+  #startOv p { color:#e8bfd0; font-size:min(5.4vw, 22px); font-weight:700; }
+  .bigBtn {
+    pointer-events:auto; border:none;
+    font-family:inherit; font-weight:800;
+    font-size:min(7.5vw, 30px); color:#fff;
+    padding:20px 54px; border-radius:44px;
+    background:linear-gradient(180deg, #ff9d76, #e0596b);
+    box-shadow:0 8px 0 #a53a52, 0 14px 26px rgba(0,0,0,.45);
+  }
+  .bigBtn:active { transform:translateY(6px); box-shadow:0 2px 0 #a53a52, 0 6px 14px rgba(0,0,0,.4); }
+  .cakeEmoji { font-size:min(22vw, 100px); animation:bob2 2.4s ease-in-out infinite; }
+  @keyframes bob2 { 0%,100%{transform:translateY(0) rotate(-3deg);} 50%{transform:translateY(-12px) rotate(3deg);} }
+
+  #finishOv { background:rgba(30,18,26,.0); pointer-events:none; opacity:0; }
+  #finishOv.show { opacity:1; }
+  #finishOv h1 {
+    color:#fff3da; font-size:min(13vw, 62px);
+    text-shadow:0 4px 0 rgba(120,50,70,.85), 0 10px 30px rgba(0,0,0,.6);
+    animation:pop .7s cubic-bezier(.2,1.6,.4,1);
+  }
+  @keyframes pop { 0%{transform:scale(0);} 100%{transform:scale(1);} }
+  #finishOv .row { display:flex; gap:16px; margin-top:8vh; }
+  #finishStars { font-size:min(12vw, 56px); letter-spacing:.1em; animation:pop .9s cubic-bezier(.2,1.6,.4,1); }
+
+  #err {
+    position:fixed; inset:0; z-index:50; display:none;
+    background:#2b2030; color:#ffd; padding:40px 24px;
+    font-size:16px; line-height:1.7;
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<div id="hud">
+  <div id="meter">
+    <div id="meterFill"></div>
+    <span class="star" id="star1">⭐</span>
+    <span class="star" id="star2">⭐</span>
+    <span class="star" id="star3">🌟</span>
+  </div>
+
+  <div id="palette"></div>
+
+  <button class="rotBtn" id="rotL" aria-label="ひだりにまわす">
+    <svg viewBox="0 0 48 48"><path d="M24 8 A16 16 0 1 0 40 24" fill="none" stroke="#8a5a34" stroke-width="6" stroke-linecap="round"/><path d="M18 2 L24 9 L15 13 Z" fill="#8a5a34"/></svg>
+  </button>
+  <button class="rotBtn" id="rotR" aria-label="みぎにまわす">
+    <svg viewBox="0 0 48 48"><path d="M24 8 A16 16 0 1 1 8 24" fill="none" stroke="#8a5a34" stroke-width="6" stroke-linecap="round"/><path d="M30 2 L24 9 L33 13 Z" fill="#8a5a34"/></svg>
+  </button>
+
+  <div id="hint">ゆびで シューッ してね 👆</div>
+  <div id="toast"></div>
+</div>
+
+<div class="overlay" id="startOv">
+  <div class="cakeEmoji">🍰</div>
+  <h1>ベルベット ケーキやさん</h1>
+  <p>シューッと ふきつけて ふわふわの ケーキに しよう！</p>
+  <button class="bigBtn" id="startBtn">はじめる</button>
+</div>
+
+<div class="overlay" id="finishOv">
+  <div id="finishStars">🌟🌟🌟</div>
+  <h1>できあがり！</h1>
+  <div class="row">
+    <button class="bigBtn" id="nextBtn">つぎの ケーキ 🎂</button>
+  </div>
+</div>
+
+<div id="err"></div>
+
+<script type="importmap">
+{ "imports": { "three": "./lib/three.module.js" } }
+</script>
+<script type="module" src="./main.js"></script>
+<script>
+  window.addEventListener('error', function(e){
+    var el = document.getElementById('err');
+    if (el && !window.__game_ok) { el.style.display='block'; el.textContent = 'よみこみエラー: ' + (e.message||e.type); }
+  }, true);
+</script>
+</body>
+</html>
