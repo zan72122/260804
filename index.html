@@ -7,14 +7,61 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>くるっ、キュッ、ポン！ヴァイオリン工房</title>
 <style>
-  html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#3a2a1c;
+  html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#241a10;
     -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
-    overscroll-behavior:none;position:fixed;width:100%;}
-  #c{display:block;width:100vw;height:100vh;touch-action:none;}
+    overscroll-behavior:none;position:fixed;width:100%;
+    font-family:-apple-system,"Hiragino Maru Gothic ProN",sans-serif;}
+  #gl{display:block;width:100vw;height:100vh;touch-action:none;}
+  /* ---- HUD only ---- */
+  #hud{position:fixed;inset:0;pointer-events:none;}
+  #dots{position:fixed;top:calc(env(safe-area-inset-top,0px) + 10px);left:0;right:0;
+    display:flex;justify-content:center;gap:9px;}
+  #dots i{width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,0.22);
+    box-shadow:0 1px 2px rgba(0,0,0,0.4);transition:all .3s;}
+  #dots i.done{background:#ffd97a;}
+  #dots i.cur{background:#fff3c0;transform:scale(1.35);}
+  #word{position:fixed;left:0;right:0;top:26%;text-align:center;
+    font-weight:800;color:#fff3d8;-webkit-text-stroke:1px rgba(60,30,8,0.6);
+    text-shadow:0 2px 14px rgba(0,0,0,0.55);opacity:0;font-size:min(9vw,52px);
+    transition:opacity .25s, transform .25s;transform:translateY(8px) scale(.96);}
+  #word.show{opacity:1;transform:translateY(0) scale(1);}
+  #finger{position:fixed;width:46px;height:46px;margin:-23px 0 0 -23px;border-radius:50%;
+    background:radial-gradient(circle at 40% 35%, rgba(255,240,205,0.95), rgba(255,214,150,0.55) 55%, rgba(255,214,150,0) 72%);
+    box-shadow:0 0 22px 6px rgba(255,220,150,0.35);opacity:0;transition:opacity .3s;}
+  #title{position:fixed;left:0;right:0;bottom:5%;text-align:center;opacity:0;transition:opacity .5s;}
+  #title .t1{font-size:min(8.4vw,58px);font-weight:800;color:#ffe9b0;
+    -webkit-text-stroke:1.5px rgba(58,32,10,0.8);text-shadow:0 3px 18px rgba(0,0,0,0.6);}
+  #title .t2{font-size:min(6vw,42px);font-weight:700;color:#ffd0e0;
+    -webkit-text-stroke:1.2px rgba(58,32,10,0.8);text-shadow:0 3px 14px rgba(0,0,0,0.6);margin-top:4px;}
+  #title.show{opacity:1;}
+  #galleryUI{position:fixed;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);
+    display:flex;justify-content:center;gap:14px;opacity:0;pointer-events:none;transition:opacity .4s;}
+  #galleryUI.show{opacity:1;pointer-events:auto;}
+  #galleryUI button{width:52px;height:52px;border-radius:50%;border:2px solid rgba(255,235,180,0.55);
+    background:rgba(30,20,10,0.72);backdrop-filter:blur(4px);font-size:24px;line-height:1;
+    display:flex;align-items:center;justify-content:center;color:#ffe9b0;
+    box-shadow:0 4px 14px rgba(0,0,0,0.5);}
+  #galleryUI button.sw{border-width:3px;}
+  #galleryUI button.sel{border-color:#fff3c0;box-shadow:0 0 14px rgba(255,230,150,0.55);}
+  #galleryUI .c{width:26px;height:26px;border-radius:50%;}
 </style>
 </head>
 <body>
-<canvas id="c"></canvas>
-<script src="game.js"></script>
+<canvas id="gl"></canvas>
+<div id="hud">
+  <div id="dots"></div>
+  <div id="word"></div>
+  <div id="finger"></div>
+  <div id="title"><div class="t1">くるっ、キュッ、ポン！</div><div class="t2">ヴァイオリンこうぼう</div></div>
+  <div id="galleryUI">
+    <button class="sw" data-v="amber"><span class="c" style="background:#c98a2a"></span></button>
+    <button class="sw" data-v="red"><span class="c" style="background:#8e3a18"></span></button>
+    <button class="sw" data-v="rose"><span class="c" style="background:#c06070"></span></button>
+    <button data-a="ribbon">🎀</button>
+    <button data-a="deco">✨</button>
+    <button data-a="again">↺</button>
+  </div>
+</div>
+<script type="module" src="js/main.js"></script>
 </body>
 </html>
