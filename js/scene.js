@@ -5,6 +5,43 @@ let cfg = null;
 let bgCanvas = null;      // cached background, redrawn only on resize
 let nestReady = false;    // transient: dessert halo on/off (nest:ready / nest:placed)
 
+// Static-geometry gradients: rebuilt only on resize (or init), reused every frame otherwise.
+// Animated ones (moving specular, pot pulse, dessert halo pulse) stay allocated per-frame.
+let ctxRef = null;
+let potBodyGrad = null;
+let dessertPlateGrad = null;
+let dessertDomeGrad = null;
+let anchorGlowGrads = null; // array parallel to state.layout.anchors, base-alpha 0.85 at stop 0
+
+function buildStaticGradients(state) {
+  if (!ctxRef || !state.layout) return;
+  const p = state.layout.pot;
+  const bodyGrad = ctxRef.createLinearGradient(0, -p.ry, 0, p.ry);
+  bodyGrad.addColorStop(0, '#603a1c');
+  bodyGrad.addColorStop(1, '#2a190c');
+  potBodyGrad = bodyGrad;
+
+  const d = state.layout.dessert;
+  const plateGrad = ctxRef.createLinearGradient(0, d.r * 0.1, 0, d.r * 0.7);
+  plateGrad.addColorStop(0, '#d9d0c2');
+  plateGrad.addColorStop(1, '#a89a86');
+  dessertPlateGrad = plateGrad;
+
+  const domeGrad = ctxRef.createRadialGradient(-d.r * 0.22, -d.r * 0.6, 2, 0, -d.r * 0.3, d.r * 0.9);
+  domeGrad.addColorStop(0, '#efe3cf');
+  domeGrad.addColorStop(0.6, '#d3c2a5');
+  domeGrad.addColorStop(1, '#b0a082');
+  dessertDomeGrad = domeGrad;
+
+  anchorGlowGrads = state.layout.anchors.map((a) => {
+    const g = ctxRef.createRadialGradient(a.x, a.y, 0, a.x, a.y, 11);
+    // base alpha 0.85; per-frame shimmer is applied via ctx.globalAlpha, not a rebuilt gradient.
+    g.addColorStop(0, 'rgba(255,214,150,0.85)');
+    g.addColorStop(1, 'rgba(255,214,150,0)');
+    return g;
+  });
+}
+
 // camera animation state (module-private; state.camera is the shared field we write)
 let camMode = 'idle';     // 'idle' | 'in' | 'drift' | 'out'
 let camT = 0;
@@ -59,12 +96,15 @@ function buildBackground(state) {
 
   const l = state.layout;
   if (l) {
+    // Subtle stage-light wash behind the span — soft and wide, never a visible disc.
+    // The amber threads themselves should carry the brightness, not this backdrop.
     const gx = (l.span.x0 + l.span.x1) / 2;
     const gy = l.span.y + (l.nestHome.y - l.span.y) * 0.5;
-    const gr = Math.max(l.span.x1 - l.span.x0, w * 0.4) * 0.68;
+    const gr = Math.max(l.span.x1 - l.span.x0, w * 0.6) * 1.1;
     const rg = bctx.createRadialGradient(gx, gy, 0, gx, gy, gr);
-    rg.addColorStop(0, 'rgba(255,190,120,0.16)');
-    rg.addColorStop(0.5, 'rgba(220,140,80,0.07)');
+    rg.addColorStop(0, 'rgba(255,200,140,0.065)');
+    rg.addColorStop(0.35, 'rgba(240,170,110,0.032)');
+    rg.addColorStop(0.7, 'rgba(220,140,80,0.012)');
     rg.addColorStop(1, 'rgba(220,140,80,0)');
     bctx.fillStyle = rg;
     bctx.fillRect(0, 0, w, h);
@@ -105,13 +145,15 @@ function drawAnchors(ctx, state) {
     ctx.quadraticCurveTo(midX, (baseY + a.y) / 2, a.x, a.y);
     ctx.stroke();
 
-    const glow = ctx.createRadialGradient(a.x, a.y, 0, a.x, a.y, 11);
-    glow.addColorStop(0, `rgba(255,214,150,${0.85 * shimmer})`);
-    glow.addColorStop(1, 'rgba(255,214,150,0)');
-    ctx.fillStyle = glow;
-    ctx.beginPath();
-    ctx.arc(a.x, a.y, 11, 0, Math.PI * 2);
-    ctx.fill();
+    // Cached gradient (geometry is static); shimmer animates via globalAlpha instead of a rebuild.
+    if (anchorGlowGrads && anchorGlowGrads[i]) {
+      ctx.globalAlpha = shimmer;
+      ctx.fillStyle = anchorGlowGrads[i];
+      ctx.beginPath();
+      ctx.arc(a.x, a.y, 11, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
 
     ctx.beginPath();
     ctx.fillStyle = `rgba(255,238,205,${shimmer})`;
@@ -137,13 +179,10 @@ function drawPot(ctx, state) {
   ctx.fillStyle = 'rgba(0,0,0,0.35)';
   ctx.fill();
 
-  // body: dark copper
-  const bodyGrad = ctx.createLinearGradient(0, -p.ry, 0, p.ry);
-  bodyGrad.addColorStop(0, '#603a1c');
-  bodyGrad.addColorStop(1, '#2a190c');
+  // body: dark copper (cached — geometry only changes on resize)
   ctx.beginPath();
   ctx.ellipse(0, 0, p.rx, p.ry, 0, 0, Math.PI * 2);
-  ctx.fillStyle = bodyGrad;
+  ctx.fillStyle = potBodyGrad || '#3a2210';
   ctx.fill();
   ctx.lineWidth = Math.max(2, p.rx * 0.06);
   ctx.strokeStyle = '#7d4a24';
@@ -212,27 +251,20 @@ function drawDessert(ctx, state) {
     ctx.fill();
   }
 
-  // plate
+  // plate (cached gradient — geometry only changes on resize)
   ctx.beginPath();
   ctx.ellipse(0, d.r * 0.42, d.r * 1.15, d.r * 0.38, 0, 0, Math.PI * 2);
-  const plateGrad = ctx.createLinearGradient(0, d.r * 0.1, 0, d.r * 0.7);
-  plateGrad.addColorStop(0, '#d9d0c2');
-  plateGrad.addColorStop(1, '#a89a86');
-  ctx.fillStyle = plateGrad;
+  ctx.fillStyle = dessertPlateGrad || '#a89a86';
   ctx.fill();
   ctx.strokeStyle = 'rgba(255,255,255,0.15)';
   ctx.lineWidth = 1;
   ctx.stroke();
 
-  // dessert dome (desaturated so a golden nest can shine on top)
-  const domeGrad = ctx.createRadialGradient(-d.r * 0.22, -d.r * 0.6, 2, 0, -d.r * 0.3, d.r * 0.9);
-  domeGrad.addColorStop(0, '#efe3cf');
-  domeGrad.addColorStop(0.6, '#d3c2a5');
-  domeGrad.addColorStop(1, '#b0a082');
+  // dessert dome (desaturated so a golden nest can shine on top; cached gradient)
   ctx.beginPath();
   ctx.ellipse(0, -d.r * 0.28, d.r * 0.7, d.r * 0.7, Math.PI, 0, Math.PI, true);
   ctx.closePath();
-  ctx.fillStyle = domeGrad;
+  ctx.fillStyle = dessertDomeGrad || '#d3c2a5';
   ctx.fill();
   ctx.beginPath();
   ctx.ellipse(0, -d.r * 0.26, d.r * 0.72, d.r * 0.2, 0, 0, Math.PI * 2);
@@ -293,13 +325,15 @@ function onReset(state) {
 
 // ---------- module ----------
 export default {
-  init({ bus, state, config }) {
+  init({ ctx, bus, state, config }) {
     cfg = config;
+    ctxRef = ctx;
     state.layout = computeLayout(state.w, state.h);
     state.camera.x = state.w / 2;
     state.camera.y = state.h / 2;
     state.camera.zoom = 1;
     bgCanvas = buildBackground(state);
+    buildStaticGradients(state);
 
     bus.on('nest:ready', () => { nestReady = true; });
     bus.on('nest:placed', () => { nestReady = false; startZoomIn(state); });
@@ -310,6 +344,7 @@ export default {
     state.layout = computeLayout(state.w, state.h);
     if (camMode === 'idle') { state.camera.x = state.w / 2; state.camera.y = state.h / 2; }
     bgCanvas = buildBackground(state);
+    buildStaticGradients(state);
   },
 
   update(dt, state) {

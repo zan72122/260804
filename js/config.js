@@ -12,4 +12,8 @@ export default {
   THREAD_MIN_SPEED: 120,   // px/s, A5 spawn threshold
   PASSES_TO_FULL: 10,      // ~passes until nest.fullness reaches 1
   CARAMEL_PASSES: 2.5,     // ~passes per full tool load
+  // Shared spawn-rate assumption: strands emitted per "pass" (one swipe traversal). Both
+  // threads.js (spawn rate) and tool.js (caramel drain-per-pass math) must use this same
+  // number so a full caramel load lasts ≈ CARAMEL_PASSES passes exactly.
+  STRANDS_PER_PASS: 3.5,
 };

@@ -22,13 +22,22 @@ const RENDER_MODULES = [
   ['scene', scene], ['threads', threads], ['tool', tool], ['finish', finish],
 ];
 
-// One error log per (module, phase) — a broken module can't kill the loop or spam the console.
-const failed = new Set();
+// A broken module call is logged once and cooled down (not disabled forever) so a single
+// transient exception (e.g. from finish.js's game:reset handling) can't soft-lock the phase
+// machine. After RETRY_MS the call is retried; a persistent bug logs again at that cadence
+// instead of spamming every frame.
+const RETRY_MS = 2000;
+const failed = new Map(); // key -> resume timestamp (performance.now() ms)
 function safeCall(key, fn) {
-  if (failed.has(key)) return;
+  const resumeAt = failed.get(key);
+  const now = performance.now();
+  if (resumeAt !== undefined) {
+    if (now < resumeAt) return;
+    failed.delete(key);
+  }
   try { fn(); } catch (err) {
-    failed.add(key);
-    console.error(`[main] ${key} failed, disabling further calls:`, err);
+    failed.set(key, now + RETRY_MS);
+    console.error(`[main] ${key} failed, retrying in ${RETRY_MS}ms:`, err);
   }
 }
 
@@ -90,6 +99,13 @@ function boot() {
   document.addEventListener('gesturestart', (e) => e.preventDefault());
   document.addEventListener('gesturechange', (e) => e.preventDefault());
 
+  // Watchdog: if a bug leaves us stuck in 'celebrate' (game:reset never fires — finish.js is
+  // the sole emitter), force the reset ourselves after CELEBRATE_TIMEOUT so the game never
+  // permanently freezes on the finale screen.
+  const CELEBRATE_TIMEOUT = 8; // seconds
+  let celebrateSince = null;
+  let celebrateResetSent = false;
+
   // Main loop.
   let last = null;
   function loop(now) {
@@ -99,6 +115,17 @@ function boot() {
     last = now;
     if (dt > config.MAX_DT) dt = config.MAX_DT;
     state.time += dt;
+
+    if (state.phase === 'celebrate') {
+      if (celebrateSince === null) celebrateSince = state.time;
+      if (!celebrateResetSent && state.time - celebrateSince > CELEBRATE_TIMEOUT) {
+        celebrateResetSent = true; // guard against double emission
+        bus.emit('game:reset', {});
+      }
+    } else {
+      celebrateSince = null;
+      celebrateResetSent = false;
+    }
 
     for (const [name, mod] of UPDATE_MODULES) {
       if (mod && typeof mod.update === 'function') safeCall(`${name}.update`, () => mod.update(dt, state));

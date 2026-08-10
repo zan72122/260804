@@ -27,6 +27,8 @@ let dripCooldown = 0;
 let busRef = null;
 let idleBaseX = 0, idleBaseY = 0; // where the tool settled before pointer lifted, for idle bob
 let wasDown = false;
+let handleGrad = null;     // cached: handle geometry/colors never change, so build once
+let handleGradCtx = null;  // ctx the cache belongs to (guards against a hypothetical ctx swap)
 
 function reset(state) {
   sx = state.w / 2 || restX;
@@ -56,8 +58,8 @@ export default {
     idleBaseX = sx; idleBaseY = sy;
 
     bus.on('threads:added', ({ delta }) => {
-      // full load (caramel 1) should last ~CARAMEL_PASSES passes; a pass ~= totals ~4 delta.
-      const drainPerFullLoad = config.CARAMEL_PASSES * 4;
+      // full load (caramel 1) should last ~CARAMEL_PASSES passes; a pass ~= config.STRANDS_PER_PASS delta.
+      const drainPerFullLoad = config.CARAMEL_PASSES * config.STRANDS_PER_PASS;
       const drain = (delta || 0) / drainPerFullLoad;
       state.tool.caramel = Math.max(0, state.tool.caramel - drain);
     });
@@ -159,11 +161,15 @@ export default {
     ctx.rotate(t.angle);
 
     // --- handle: thin warm-wood/brass gradient, drawn from tip upward ---
-    const grad = ctx.createLinearGradient(0, 0, 0, -HANDLE_LEN);
-    grad.addColorStop(0, '#8a5a30');
-    grad.addColorStop(0.5, '#c98f4a');
-    grad.addColorStop(1, '#e8c078');
-    ctx.strokeStyle = grad;
+    // Static geometry/colors (0,0)->(0,-HANDLE_LEN) — cache once instead of allocating per frame.
+    if (!handleGrad || handleGradCtx !== ctx) {
+      handleGrad = ctx.createLinearGradient(0, 0, 0, -HANDLE_LEN);
+      handleGrad.addColorStop(0, '#8a5a30');
+      handleGrad.addColorStop(0.5, '#c98f4a');
+      handleGrad.addColorStop(1, '#e8c078');
+      handleGradCtx = ctx;
+    }
+    ctx.strokeStyle = handleGrad;
     ctx.lineWidth = HANDLE_W;
     ctx.lineCap = 'round';
     ctx.beginPath();
