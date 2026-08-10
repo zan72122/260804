@@ -20,8 +20,8 @@ const EMIT_INTERVAL = 0.22;   // throttle for threads:added
 const STRANDS_PER_PASS_FALLBACK = 3.5; // avg strands per full span traversal; config.STRANDS_PER_PASS wins when present
 const FIRST_STRAND_BUDGET = 0.9; // seed spawnBudget this high on gesture start so strand #1 appears almost instantly
 // dome sag shaping — sag is expressed as a fraction of "dome depth" (chord -> nestHome vertical drop)
-const SAG_BASE_FRAC = 0.35;   // minimum sag fraction (near-chord strands, the thin minority)
-const SAG_RANGE_FRAC = 0.95;  // extra sag range stacked on top of the base (deep strands can pass nestHome)
+const SAG_BASE_FRAC = 0.45;   // minimum sag fraction (near-chord strands, the thin minority)
+const SAG_RANGE_FRAC = 1.15;  // extra sag range stacked on top of the base (deep strands can pass nestHome)
 const SAG_JITTER_FRAC = 0.18; // +/- random jitter on top, as a fraction of dome depth
 const CORE_DRIFT_FRAC = 0.09; // lateral wobble of each strand's low point, fraction of screen width
 const SKEW_POW_START = 0.62, SKEW_POW_FULL = 0.32; // depth-distribution skew power (lower = deeper/rounder bias)
@@ -156,7 +156,7 @@ function spawnStrand(state, dirSign, speedFactor) {
   // depth distribution: skewed toward "deep" so most strands droop down near nestHome and only a
   // thin minority stay near-chord — the skew sharpens (rounder, denser dome) as fullness grows.
   const skewPow = lerp(SKEW_POW_START, SKEW_POW_FULL, fbT);
-  const depthT = Math.pow(rand(), skewPow) * (1 - speedEase * 0.55); // fast swipes stay shallower/straighter
+  const depthT = Math.pow(rand(), skewPow) * (1 - speedEase * 0.35); // fast swipes stay shallower/straighter
   const sag = domeDepth * (SAG_BASE_FRAC + depthT * SAG_RANGE_FRAC) +
               (rand() - 0.5) * domeDepth * SAG_JITTER_FRAC;
 
@@ -167,7 +167,7 @@ function spawnStrand(state, dirSign, speedFactor) {
   const c1y = midy + sag + (rand() - 0.5) * domeDepth * 0.08;
   const waveAmt = (rand() - 0.5) * w * 0.03 * (1 - speedEase * 0.5); // extra bend = waviness
   const c2x = lerp(midx, ex0, 0.68) + waveAmt;
-  const c2y = midy + sag * 0.82 + (rand() - 0.5) * domeDepth * 0.06;
+  const c2y = midy + sag * 1.0 + (rand() - 0.5) * domeDepth * 0.06;
   const width = clamp(lerp(1.5, 0.55, speedEase) + (rand() - 0.5) * 0.2, 0.55, 1.5);
   const alpha = clamp(0.24 + rand() * 0.26, 0.24, 0.5);
   const colorT = clamp01(rand() * 0.6 + clamp01(fullnessRaw) * 0.3);
@@ -439,18 +439,21 @@ function renderNestSprite(ctx, state) {
   const homeX = nestMeta.cx, homeY = nestMeta.cy;
   const tx = state.nest.x || homeX, ty = state.nest.y || homeY;
   let px = lerp(homeX, tx, ease), py = lerp(homeY, ty, ease);
-  // Condense toward a plump oval nest as it lifts — kept close to uniform scale (not a hard
-  // horizontal squash) so it reads as a dome/nest, never a flattened line.
+  // Condense toward a plump, rounder nest as it lifts. The raw bake bbox is naturally wide (it
+  // spans the two anchors), so on top of the overall scale-down we compress width a bit more than
+  // height — the opposite of a flattening "horizontal squash" — so the carried/placed nest reads
+  // as a dome, not a streak.
   const scale = lerp(1, 0.5, ease);
-  const squashY = lerp(1, 0.92, ease);
+  const squashX = lerp(1, 0.72, ease);
+  const squashY = lerp(1, 0.95, ease);
   const wobble = Math.sin(state.time * 2.5) * 0.05 * ease;
-  const halfW = nestMeta.halfW * scale, halfH = nestMeta.halfH * scale * squashY;
+  const halfW = nestMeta.halfW * scale * squashX, halfH = nestMeta.halfH * scale * squashY;
   px = clampOnscreen(px, halfW, state.w, 8);
   py = clampOnscreen(py, halfH, state.h, 8);
   ctx.save();
   ctx.translate(px, py);
   ctx.rotate(wobble);
-  ctx.scale(scale, scale * squashY);
+  ctx.scale(scale * squashX, scale * squashY);
   ctx.drawImage(nestCanvas, -nestMeta.halfW, -nestMeta.halfH, nestMeta.halfW * 2, nestMeta.halfH * 2);
   ctx.restore();
   if (state.phase === 'celebrate') drawLightSweep(ctx, px, py, (halfW + halfH) * 0.5);
