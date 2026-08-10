@@ -22,6 +22,16 @@ const GRAVITY = -9.2;
 const REST = 0.24;
 const FLOOR_FRICTION = 0.78;
 
+// How much two touching bodies are allowed to overlap (plush squish) before
+// the separation solver in _stepOnce() calls them not-overlapping and stops
+// applying any correction force at all. saddlePosition()/seatOn() below
+// solve for a genuinely tangent seat using this *same* factor — placing a
+// body at the full, un-squished sum of radii instead left it just outside
+// the solver's own contact threshold, meaning no contact force applied and
+// it free-fell straight through to the floor no matter how good the seat
+// math was.
+const REST_SEPARATION = 0.9;
+
 // step()'s own internal sub-step size — see the comment on step() itself for
 // why a large caller-supplied dt has to be broken up before it touches any
 // contact detection here.
@@ -49,7 +59,7 @@ const SLEEP_SETTLE_STEPS = 300;
 // once caused the opposite failure (a body ratcheting upward indefinitely,
 // never touching anything again — see LIFT_CAP_FRAC below, which bounds
 // that risk directly regardless of how many passes or contacts combine).
-const STACK_LEAN = 0.4;
+const STACK_LEAN = 0.18;
 
 // Hard ceiling on how far *up* any single body may be pushed by positional
 // correction in one step, regardless of how many overlapping pairs or
@@ -58,12 +68,12 @@ const STACK_LEAN = 0.4;
 // mode. A body genuinely needing more lift than this just takes another
 // step to get there instead of teleporting in one; downward correction and
 // horizontal correction are not capped, only the unsafe direction is.
-const LIFT_CAP_FRAC = 0.25;   // fraction of the body's own radius, per step
+const LIFT_CAP_FRAC = 0.2;   // fraction of the body's own radius, per step
 
 // One separation pass cannot hold a three-layer heap together (each pass only
 // resolves the *worst* overlap a body is in); a handful of cheap relaxation
 // passes converges close enough without turning this into a real solver.
-const SEP_ITERS = 3;
+const SEP_ITERS = 6;
 
 // Extra horizontal damping applied to a body found resting on another one, so
 // a toy in the saddle between two neighbours settles into that seat instead
@@ -176,7 +186,7 @@ function layerCounts(count) {
  * both) — the caller should then rest it directly on the nearer support.
  */
 function saddlePosition(radius, ax, ay, az, arad, bx, by, bz, brad) {
-  const dA = arad + radius, dB = brad + radius;
+  const dA = (arad + radius) * REST_SEPARATION, dB = (brad + radius) * REST_SEPARATION;
   const abx = bx - ax, aby = by - ay, abz = bz - az;
   const d = Math.hypot(abx, aby, abz);
   if (d < 1e-6 || d > dA + dB || d < Math.abs(dA - dB)) return null;
@@ -208,8 +218,8 @@ function seatOn(radius, ax, ay, az, arad, bx, by, bz, brad, hintX, hintZ) {
   const distA = Math.hypot(hintX - ax, hintZ - az);
   const distB = Math.hypot(hintX - bx, hintZ - bz);
   return distA <= distB
-    ? { x: ax, y: ay + arad + radius, z: az }
-    : { x: bx, y: by + brad + radius, z: bz };
+    ? { x: ax, y: ay + (arad + radius) * REST_SEPARATION, z: az }
+    : { x: bx, y: by + (brad + radius) * REST_SEPARATION, z: bz };
 }
 
 export class Pile {
@@ -394,8 +404,9 @@ export class Pile {
     // free-fall far more than an isolated drop would need — so this needs
     // real headroom, not just enough for the common case.
     const SETTLE_STEPS = 220;
-    for (let i = 0; i < SETTLE_STEPS; i++) this.step(1 / 60, true);   // layer 0 alone
+    this._gentleSettle(SETTLE_STEPS);   // layer 0 alone
 
+    const allSeated = [];   // every layer>0 spot across both tiers, for the final validation pass below
     for (let tier = 1; tier <= 2; tier++) {
       const seated = [];   // [{body, supA, supB}] for this tier, for the re-seat pass below
       for (const s of spots) {
@@ -423,33 +434,73 @@ export class Pile {
         b.held = false;
         b.syncMesh();
         seated.push({ body: b, supA, supB });
+        allSeated.push({ body: b, supA, supB });
       }
-      for (let i = 0; i < SETTLE_STEPS; i++) this.step(1 / 60, true);
+      this._gentleSettle(SETTLE_STEPS);
 
       // A body whose neighbours in this tier claimed part of its seat (two
       // adjacent saddle spots can overlap slightly, since each is solved
       // independently against its own support pair) can still end up
-      // shouldered down to the floor by the time the settle above finishes.
-      // Re-run the same tangent solve against the support pair's *current*
-      // position and, if this body has drifted meaningfully below that seat
-      // with nothing else genuinely holding it up there, put it back and
-      // give it one more settle window to hold on this time.
-      let driftedAny = false;
-      for (const { body: b, supA, supB } of seated) {
-        if (b.grounded) continue;   // legitimately settled on the floor -- leave it
+      // shouldered down to the floor by the time the settle above finishes
+      // — including all the way down (this spot's seat is always solved
+      // against a real support, never the floor, so ending up grounded
+      // here is itself the failure, not evidence the body "legitimately"
+      // belongs there — checking for that and skipping it was the bug that
+      // let a collapsed layout stay collapsed). Re-run the same tangent
+      // solve against the support pair's *current* position and, if this
+      // body has drifted meaningfully below that seat, put it back and
+      // give it another settle window to hold on. A few attempts, not
+      // just one — a single retry was not always enough.
+      for (let attempt = 0; attempt < 16; attempt++) {
+        let driftedAny = false;
+        for (const { body: b, supA, supB } of seated) {
+          const seat = seatOn(
+            b.radius, supA.pos.x, supA.pos.y, supA.pos.z, supA.radius,
+            supB.pos.x, supB.pos.y, supB.pos.z, supB.radius, b.pos.x, b.pos.z);
+          // Checked both ways: a body that slid off its seat down toward
+          // the floor is the common failure, but the small climbing lean
+          // in the separation solver (STACK_LEAN) can occasionally push
+          // one up clear of every contact instead — just as much a
+          // failure (a levitator that can never be grounded or resting
+          // again), so it gets the same re-seat treatment.
+          if (Math.abs(b.pos.y - seat.y) > b.radius * 0.5) {
+            b.pos.set(
+              clamp(seat.x, A.minX, A.maxX), Math.max(b.floorY, seat.y),
+              clamp(seat.z, A.minZ, A.maxZ));
+            b.vel.set(0, 0, 0);
+            b.syncMesh();
+            driftedAny = true;
+          }
+        }
+        if (!driftedAny) break;
+        this._gentleSettle(SETTLE_STEPS);
+      }
+    }
+
+    // ---- final validation, across every layer>0 spot at once (not just the
+    // tier being processed): a spot's seat is always solved against a real
+    // support, so a body that is still resting on the floor plane here is
+    // never "legitimately" there — it is the per-tier retries above having
+    // failed to hold it, most often when neighbouring seats collide during a
+    // retry and knock each other back down together in a way one tier's own
+    // retry loop cannot see. Re-seat any offenders against their current
+    // supports one more time, together, with an extra-long gentle settle.
+    for (let attempt = 0; attempt < 4; attempt++) {
+      let anyBad = false;
+      for (const { body: b, supA, supB } of allSeated) {
+        if (!b.grounded) continue;
         const seat = seatOn(
           b.radius, supA.pos.x, supA.pos.y, supA.pos.z, supA.radius,
           supB.pos.x, supB.pos.y, supB.pos.z, supB.radius, b.pos.x, b.pos.z);
-        if (b.pos.y < seat.y - b.radius * 0.5) {
-          b.pos.set(
-            clamp(seat.x, A.minX, A.maxX), Math.max(b.floorY, seat.y),
-            clamp(seat.z, A.minZ, A.maxZ));
-          b.vel.set(0, 0, 0);
-          b.syncMesh();
-          driftedAny = true;
-        }
+        b.pos.set(
+          clamp(seat.x, A.minX, A.maxX), Math.max(b.floorY, seat.y),
+          clamp(seat.z, A.minZ, A.maxZ));
+        b.vel.set(0, 0, 0);
+        b.syncMesh();
+        anyBad = true;
       }
-      if (driftedAny) for (let i = 0; i < SETTLE_STEPS; i++) this.step(1 / 60, true);
+      if (!anyBad) break;
+      this._gentleSettle(SETTLE_STEPS * 2);
     }
 
     // ---- let already-stable bodies actually fall asleep before the round
@@ -475,7 +526,108 @@ export class Pile {
     for (const b of this.bodies) {
       if (!b.sleeping) { b.vel.set(0, 0, 0); b.angVel.multiplyScalar(0.2); }
     }
+
+    this._freezeHeap(allSeated);
     return this.bodies;
+  }
+
+  /**
+   * Final, authored state of the heap.
+   *
+   * Everything above tries to *discover* a stable heap by simulating one, and
+   * for most seeds it does. But a soft-sphere relaxation has no guarantee of
+   * holding a saddle across hundreds of steps, so a minority of layouts still
+   * ended with a toy slid down to the mat (a flat pile, nothing buried) or
+   * ratcheted clear of every contact (a toy hanging in mid-air). Both are
+   * immediately obvious to a player and neither is recoverable once the round
+   * has started.
+   *
+   * A prize pile does not need to be discovered: it is arranged by hand and
+   * then it does not move until something touches it. So put every stacked toy
+   * back on the exact seat solved for it, push apart whatever residual overlap
+   * that leaves *without gravity* (so nothing can slide off again), and hand
+   * the round over asleep. The solver still owns everything that happens after
+   * the claw arrives — it just no longer decides what the shelf looks like.
+   */
+  _freezeHeap(allSeated) {
+    const A = CAB.aim;
+
+    // tier by tier, so layer 2 seats against layer 1's final position
+    for (const tier of [1, 2]) {
+      for (const { body: b, supA, supB } of allSeated) {
+        if (b.layer !== tier) continue;
+        const seat = seatOn(
+          b.radius, supA.pos.x, supA.pos.y, supA.pos.z, supA.radius,
+          supB.pos.x, supB.pos.y, supB.pos.z, supB.radius, b.pos.x, b.pos.z);
+        // A toy the claw cannot descend onto is not a prize, it is scenery.
+        // The claw parks at CAB.clawHomeY and drops from there, so the top of
+        // the heap has to stay clear of that line with room for the fingers.
+        const reachTop = CAB.clawHomeY - b.radius - 0.14;
+        b.pos.set(
+          clamp(seat.x, A.minX, A.maxX),
+          clamp(seat.y, b.floorY, reachTop),
+          clamp(seat.z, A.minZ, A.maxZ));
+        b._seatY = b.pos.y;
+      }
+    }
+    // a body on the mat may never be lifted by the relaxation below
+    for (const b of this.bodies) if (b._seatY === undefined) b._seatY = b.floorY;
+
+    // Gravity-free relaxation: overlap only. Seats are solved at the same rest
+    // separation the contact test uses, so this normally moves almost nothing —
+    // it exists to unpick the case where two independently-solved seats claim
+    // the same space.
+    for (let pass = 0; pass < 24; pass++) {
+      let worst = 0;
+      for (let i = 0; i < this.bodies.length; i++) {
+        const a = this.bodies[i];
+        for (let j = i + 1; j < this.bodies.length; j++) {
+          const b = this.bodies[j];
+          const dx = b.pos.x - a.pos.x, dy = b.pos.y - a.pos.y, dz = b.pos.z - a.pos.z;
+          const rr = (a.radius + b.radius) * REST_SEPARATION;
+          const d2 = dx * dx + dy * dy + dz * dz;
+          if (d2 >= rr * rr || d2 < 1e-9) continue;
+          const d = Math.sqrt(d2);
+          const pen = (rr - d) * 0.5;
+          if (pen > worst) worst = pen;
+          const nx = dx / d, ny = dy / d, nz = dz / d;
+          // Symmetric. Giving the upper body the larger share is precisely
+          // what ratchets a stack up into the ceiling over many passes; the
+          // seat clamp below is what keeps the heap from sinking instead.
+          a.pos.x -= nx * pen; a.pos.y -= ny * pen; a.pos.z -= nz * pen;
+          b.pos.x += nx * pen; b.pos.y += ny * pen; b.pos.z += nz * pen;
+        }
+      }
+      for (const b of this.bodies) {
+        const lx = CAB.inX - b.radius + WALL_SQUASH, lz = CAB.inZ - b.radius + WALL_SQUASH;
+        b.pos.x = clamp(b.pos.x, -lx, lx);
+        b.pos.z = clamp(b.pos.z, -lz, lz);
+        // Height is authored, never emergent: a body sits at the seat solved
+        // for it and may sink toward the mat, but nothing may climb.
+        b.pos.y = clamp(b.pos.y, b.floorY, b._seatY + 0.01);
+        // keep clear of the raised chute lip
+        const dx = b.pos.x - CAB.hole.x, dz = b.pos.z - CAB.hole.z;
+        const d = Math.hypot(dx, dz);
+        const minD = CAB.hole.rim + b.radius * 0.8;
+        if (d < minD && b.pos.y < b.floorY + b.radius * 1.1) {
+          const inv = 1 / (d || 1e-4);
+          b.pos.x += dx * inv * (minD - d);
+          b.pos.z += dz * inv * (minD - d);
+        }
+      }
+      if (worst < 1e-4) break;
+    }
+
+    // Arranged, not simulated: the shelf is at rest until the claw disturbs it.
+    for (const b of this.bodies) {
+      b.vel.set(0, 0, 0);
+      b.angVel.set(0, 0, 0);
+      b.sleeping = true;
+      b.sleepTimer = SLEEP_TIME;
+      b.grounded = b.pos.y <= b.floorY + 1e-3;
+      b.syncMesh();
+    }
+    this.refreshCoverage();
   }
 
   /**
@@ -503,7 +655,31 @@ export class Pile {
     for (let i = 0; i < substeps; i++) this._stepOnce(subDt, settling);
   }
 
-  _stepOnce(dt, settling = false) {
+  /**
+   * layout()-only: `steps` settle steps at 1/60s with gravity ramped from a
+   * gentle fraction up to full over the first quarter of the window. Right
+   * after a body is placed exactly tangent to its seat, full gravity
+   * re-penetrates it faster than a handful of relaxation passes can resolve
+   * every step — a much softer fall gives the correction solver
+   * proportionally more say while the contact is still establishing itself,
+   * without changing how gravity behaves anywhere the game is actually
+   * played (this never runs outside layout()).
+   */
+  _gentleSettle(steps) {
+    const rampSteps = Math.max(1, Math.floor(steps / 2));
+    for (let i = 0; i < steps; i++) {
+      const scale = i < rampSteps ? lerp(0.12, 1, i / rampSteps) : 1;
+      this._stepOnce(1 / 60, true, scale);
+    }
+  }
+
+  // gravityScale is internal-only (not part of the public step(dt, settling)
+  // contract) — layout() uses it right after reseating a tier, so the
+  // correction solver has proportionally more say over a much gentler fall
+  // while a body first finds genuine contact with its seat, instead of
+  // gravity re-penetrating it faster than a few relaxation passes can
+  // resolve.
+  _stepOnce(dt, settling = false, gravityScale = 1) {
     const bodies = this.bodies;
     const n = bodies.length;
     const h = CAB.hole;
@@ -515,7 +691,7 @@ export class Pile {
       b.restingOnBody = false;   // recomputed below if separation finds a support
       if (b.sleeping) continue;
 
-      b.vel.y += GRAVITY * dt;
+      b.vel.y += GRAVITY * gravityScale * dt;
       b.pos.addScaledVector(b.vel, dt);
 
       // ---- floor ----
@@ -624,7 +800,7 @@ export class Pile {
             else if (-dy > support) { a.restingOnBody = true; a.supportTimer = SUPPORT_GRACE; }
           }
 
-          const rr = sumR * 0.9;   // 10% overlap allowed = plush squish
+          const rr = sumR * REST_SEPARATION;   // 10% overlap allowed = plush squish
           if (d2 >= rr * rr) continue;   // touching, but nothing to resolve this pass
           const d = Math.sqrt(d2);
           const inv = 1 / d;
@@ -657,14 +833,16 @@ export class Pile {
             }
           }
 
-          // The lower body of a stacked pair still moves less than the
-          // upper one (some inertia, so the heap's base does not sink every
-          // time something settles onto it) — but gently, not by giving the
-          // upper body most of the correction, which is its own ratchet risk.
+          // The lower body of a stacked pair moves less than the upper one
+          // (some inertia, so the heap's base does not sink every time
+          // something settles onto it) — the upper body absorbing most,
+          // not all, of the correction is safe now that LIFT_CAP_FRAC
+          // bounds how far any single step can lift it regardless of this
+          // ratio.
           let shareA = 0.5, shareB = 0.5;
           if (stacked) {
-            if (dy >= 0) { shareA = 0.4; shareB = 0.6; }   // b sits above a
-            else { shareA = 0.6; shareB = 0.4; }           // a sits above b
+            if (dy >= 0) { shareA = 0.35; shareB = 0.65; }   // b sits above a
+            else { shareA = 0.65; shareB = 0.35; }           // a sits above b
           }
           // A sleeping body must not move at all until something actually
           // wakes it (below) — otherwise it silently drifts under an awake
