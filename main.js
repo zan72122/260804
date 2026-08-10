@@ -67,14 +67,20 @@ const PORT_C = { x: 210, y: 688 };  // 取り出し口内の商品静止位置
 const GRAV = 560;
 const PROD_R = 26;                  // 転がり半径（回転計算用）
 
-// 商品定義
+// 商品定義（形状・転がり半径・物性は商品ごとに固定＝選択と挙動の因果を保存）
 const PRODUCTS = [
-  { id: 'ichigo', type: 'can', c1: '#ff8fb5', c2: '#e0447c', lid: '#e8ecf2', fruit: 'berry' },
-  { id: 'orange', type: 'can', c1: '#ffb44d', c2: '#ef7d16', lid: '#e8ecf2', fruit: 'orange' },
-  { id: 'mizu',   type: 'pet', c1: '#cfeefe', c2: '#8fd2f4', lid: '#7fc7ee', fruit: 'none' },
-  { id: 'budou',  type: 'pet', c1: '#b48ae8', c2: '#7a44c0', lid: '#5f2fa0', fruit: 'grape' },
-  { id: 'miruku', type: 'pet', c1: '#fffdf6', c2: '#efe8d8', lid: '#7fa8e0', fruit: 'milk' },
-  { id: 'lemon',  type: 'can', c1: '#ffe066', c2: '#f2b41c', lid: '#e8ecf2', fruit: 'lemon' },
+  { id: 'ichigo', type: 'can', shape: 'can',       hw: 24, top: -30, ly0: -6, ly1: 18, fy: 6,  rollR: 26,
+    c1: '#ff8fb5', c2: '#e0447c', lid: '#e8ecf2', fruit: 'berry',  phys: { damp: 1,    rest: 1,    koto: 1 } },
+  { id: 'orange', type: 'can', shape: 'canShort',  hw: 26, top: -20, ly0: -2, ly1: 20, fy: 9,  rollR: 27,
+    c1: '#ffb44d', c2: '#ef7d16', lid: '#e8ecf2', fruit: 'orange', phys: { damp: 1.25, rest: 0.9,  koto: 1.15 } },
+  { id: 'mizu',   type: 'pet', shape: 'pet',       clear: true,  edgeX: 18.3, rollR: 22,
+    c1: '#cfeefe', c2: '#8fd2f4', lid: '#7fc7ee', fruit: 'none',   phys: { damp: 0.85, rest: 1,    koto: 0.85 } },
+  { id: 'budou',  type: 'pet', shape: 'petRound',  clear: true,  edgeX: 20.5, ly0: 2, ly1: 20, fy: 11, rollR: 24,
+    c1: '#b48ae8', c2: '#7a44c0', lid: '#5f2fa0', fruit: 'grape',  phys: { damp: 0.9,  rest: 1.3,  koto: 1 } },
+  { id: 'miruku', type: 'pet', shape: 'bottleMilk', clear: false, edgeX: 19.3, fy: 10, rollR: 23,
+    c1: '#fffdf6', c2: '#efe8d8', lid: '#7fa8e0', fruit: 'milk',   phys: { damp: 1.3,  rest: 0.8,  koto: 1.25 } },
+  { id: 'lemon',  type: 'can', shape: 'canSlim',   hw: 17, top: -34, ly0: -8, ly1: 14, fy: 2,  rollR: 18,
+    c1: '#ffe066', c2: '#f2b41c', lid: '#e8ecf2', fruit: 'lemon',  phys: { damp: 0.8,  rest: 1.05, koto: 0.85 } },
 ];
 const BTN_Y = [390, 390, 390, 458, 458, 458];
 const BTN_X = [110, 210, 310, 110, 210, 310];
@@ -137,82 +143,127 @@ function buildFruit(g, fruit, y) {
   }
 }
 
-// 結露：少数の固定水滴＋一筋の垂れ跡（パーティクル不使用の低コスト表現）
+// 結露：少数の水滴＋一筋の垂れ跡（パーティクル不使用の低コスト表現）
+// 生成のたびに付き方が少し変わる → 買うたびに「今日はちょっと違う」
 const DEW_SPOTS = [[-0.72, 0.18, 1.6], [-0.35, 0.55, 1.1], [-0.52, 0.82, 2.0], [0.18, 0.32, 1.3], [0.55, 0.62, 1.8], [0.76, 0.22, 1.1], [0.3, 0.86, 1.5], [-0.08, 0.68, 1.0]];
 function addDew(g, hw, y0, y1, op) {
   const dg = grp(g, { opacity: op == null ? 0.55 : op, 'pointer-events': 'none' });
   for (const [fx, fy, r] of DEW_SPOTS) {
-    el('circle', { cx: fx * hw, cy: y0 + (y1 - y0) * fy, r, fill: '#f2faff' }, dg);
+    if (Math.random() < 0.28) continue;
+    el('circle', { cx: fx * hw + rnd(-2.5, 2.5), cy: y0 + (y1 - y0) * fy + rnd(-2, 2), r: r * rnd(0.8, 1.25), fill: '#f2faff' }, dg);
   }
-  el('line', { x1: hw * 0.55, y1: y0 + (y1 - y0) * 0.62 - 13, x2: hw * 0.55, y2: y0 + (y1 - y0) * 0.62, stroke: '#f2faff', 'stroke-width': 1, opacity: 0.6 }, dg);
+  const sx = hw * rnd(-0.6, 0.6);
+  const sy = y0 + (y1 - y0) * rnd(0.45, 0.75);
+  el('line', { x1: sx, y1: sy - rnd(9, 16), x2: sx, y2: sy, stroke: '#f2faff', 'stroke-width': 1, opacity: 0.6 }, dg);
+  el('circle', { cx: sx, cy: sy, r: 1.4, fill: '#f2faff' }, dg);
 }
 
-function buildProduct(p, parent) {
-  const g = grp(parent);
-  if (p.type === 'can') {
-    el('ellipse', { cx: 0, cy: 32, rx: 24, ry: 7, fill: '#00000044' }, g);
-    el('path', { d: 'M-24 -30 L-24 30 A24 7 0 0 0 24 30 L24 -30 Z', fill: `url(#gp_${p.id})` }, g);
-    // ラベル帯
-    el('path', { d: 'M-24 -6 L-24 18 L24 18 L24 -6 Z', fill: '#ffffff', opacity: 0.88 }, g);
-    buildFruit(g, p.fruit, 6);
-    // 曲面の巻き込み陰影（ラベルごと巻く）＋右エッジの拾い光
-    el('rect', { x: -24, y: -30, width: 3.5, height: 60, fill: '#000000', opacity: 0.18 }, g);
-    el('rect', { x: 20.5, y: -30, width: 3.5, height: 60, fill: '#000000', opacity: 0.16 }, g);
-    el('rect', { x: 22, y: -28, width: 1.2, height: 56, fill: '#ffffff', opacity: 0.14 }, g);
-    // 鋭いスペキュラ＋広いシーン（曲面に沿った二段ハイライト）
-    el('rect', { x: -16, y: -28, width: 3.5, height: 58, rx: 1.75, fill: '#ffffff', opacity: 0.6 }, g);
-    el('rect', { x: -11, y: -27, width: 9, height: 56, rx: 4, fill: '#ffffff', opacity: 0.13 }, g);
-    // 首の絞り影・底の巻き込み
-    el('rect', { x: -24, y: -30, width: 48, height: 5, fill: '#000000', opacity: 0.1 }, g);
-    el('path', { d: 'M-23 27 A23 8 0 0 0 23 27', fill: 'none', stroke: '#000000', opacity: 0.22, 'stroke-width': 2.4 }, g);
-    addDew(g, 22, -4, 28);
-    // 蓋（縁の厚み＋巻き締めの段差）
-    el('ellipse', { cx: 0, cy: -29.2, rx: 24, ry: 7, fill: '#87909d' }, g);
-    el('ellipse', { cx: 0, cy: -30.6, rx: 24, ry: 7, fill: 'url(#gradLid)' }, g);
-    el('ellipse', { cx: 0, cy: -30.4, rx: 20.5, ry: 5.6, fill: 'none', stroke: '#a6aeba', 'stroke-width': 1.2 }, g);
-    el('ellipse', { cx: 0, cy: -30.2, rx: 14, ry: 3.8, fill: '#ccd3db' }, g);
-    el('ellipse', { cx: 0, cy: -29.8, rx: 6, ry: 2.2, fill: '#a8b0bc' }, g); // プルタブの示唆
-  } else {
-    // PET / ボトル
-    const clear = p.id === 'mizu' || p.id === 'budou';
-    el('ellipse', { cx: 0, cy: 34, rx: 20, ry: 6, fill: '#00000044' }, g);
-    el('path', {
-      d: 'M-20 34 L-20 -10 C-20 -20 -10 -24 -10 -30 L-10 -33 L10 -33 L10 -30 C10 -24 20 -20 20 -10 L20 34 Z',
-      fill: `url(#gp_${p.id})`, opacity: clear ? 0.82 : 1
-    }, g);
-    if (clear) {
-      // 液体：壁際の厚み・屈折の明るい芯・メニスカス
-      el('path', { d: 'M-17 -4 L-17 30 A17 5 0 0 0 17 30 L17 -4 Z', fill: p.c2, opacity: 0.55 }, g);
-      el('rect', { x: -17, y: -2, width: 3, height: 30, fill: p.c2, opacity: 0.5 }, g);
-      el('rect', { x: 14, y: -2, width: 3, height: 30, fill: p.c2, opacity: 0.38 }, g);
-      el('rect', { x: -4, y: 0, width: 8, height: 28, rx: 4, fill: '#ffffff', opacity: 0.18 }, g);
-      el('ellipse', { cx: 0, cy: -4, rx: 17, ry: 4, fill: '#ffffff', opacity: 0.5 }, g);
-      el('ellipse', { cx: 0, cy: -3, rx: 16.5, ry: 3.8, fill: 'none', stroke: p.c2, opacity: 0.45, 'stroke-width': 1 }, g);
-    }
-    if (p.fruit === 'none') {
-      // 水：小さな半透明ラベルと波模様（液体を隠さない）
-      el('path', { d: 'M-14 7 L-14 20 L14 20 L14 7 Z', fill: '#ffffff', opacity: 0.6 }, g);
-      el('path', { d: 'M-10 13.5 Q-5 9.5 0 13.5 T10 13.5', fill: 'none', stroke: '#4fb0e4', 'stroke-width': 2.2, opacity: 0.95 }, g);
-    } else {
-      el('path', { d: 'M-14 2 L-14 24 L14 24 L14 2 Z', fill: '#ffffff', opacity: p.id === 'miruku' ? 0.0 : 0.9 }, g);
-      buildFruit(g, p.fruit, 13);
-    }
-    // ボトル壁のエッジ（透明体の輪郭反射）
-    el('line', { x1: -18.3, y1: -6, x2: -18.3, y2: 32, stroke: '#ffffff', opacity: 0.5, 'stroke-width': 1.2 }, g);
-    el('line', { x1: 18.3, y1: -6, x2: 18.3, y2: 32, stroke: '#ffffff', opacity: 0.22, 'stroke-width': 1.2 }, g);
-    // スペキュラ二段＋肩のハイライト
-    el('rect', { x: -13, y: -24, width: 3, height: 54, rx: 1.5, fill: '#ffffff', opacity: 0.6 }, g);
-    el('rect', { x: -8, y: -20, width: 7, height: 50, rx: 3.5, fill: '#ffffff', opacity: 0.12 }, g);
-    el('path', { d: 'M-10 -26 Q-16 -20 -18 -11', fill: 'none', stroke: '#ffffff', opacity: 0.45, 'stroke-width': 1.8 }, g);
-    // 底の座
-    el('path', { d: 'M-16 31 A16 4 0 0 0 16 31', fill: 'none', stroke: '#000000', opacity: 0.18, 'stroke-width': 2 }, g);
-    addDew(g, 18, -2, 30, p.id === 'miruku' ? 0.45 : 0.55);
-    // キャップ（ローレット・天面の光・セーフティリング）
-    el('rect', { x: -11, y: -43, width: 22, height: 11, rx: 3, fill: p.lid }, g);
-    for (const kx of [-7, -3.5, 0, 3.5, 7]) el('line', { x1: kx, y1: -42.2, x2: kx, y2: -33.4, stroke: '#000000', opacity: 0.22, 'stroke-width': 1 }, g);
-    el('rect', { x: -9.5, y: -43.4, width: 19, height: 2.2, rx: 1.1, fill: '#ffffff', opacity: 0.4 }, g);
-    el('line', { x1: -10, y1: -32.6, x2: 10, y2: -32.6, stroke: '#000000', opacity: 0.3, 'stroke-width': 1.2 }, g);
+// まれなごほうび装飾（金の星／にこにこシール）
+function starPath(r) {
+  let d = '';
+  for (let i = 0; i < 10; i++) {
+    const rr = i % 2 ? r * 0.45 : r;
+    const a = -Math.PI / 2 + i * Math.PI / 5;
+    d += (i ? 'L' : 'M') + (Math.cos(a) * rr).toFixed(2) + ' ' + (Math.sin(a) * rr).toFixed(2);
   }
+  return d + 'Z';
+}
+function buildDeco(g, kind, x, y) {
+  const d = grp(g, { transform: `translate(${x} ${y}) rotate(-14)` });
+  if (kind === 'star') {
+    el('path', { d: starPath(6.5), fill: '#ffd23e', stroke: '#c8931a', 'stroke-width': 1 }, d);
+    el('circle', { cx: -1.6, cy: -2.2, r: 1, fill: '#fff8d8' }, d);
+  } else {
+    el('circle', { r: 5.5, fill: '#ffd94e', stroke: '#d89e14', 'stroke-width': 1 }, d);
+    el('circle', { cx: -1.8, cy: -1.3, r: 0.85, fill: '#7a5410' }, d);
+    el('circle', { cx: 1.8, cy: -1.3, r: 0.85, fill: '#7a5410' }, d);
+    el('path', { d: 'M-2.3 1.2 Q0 3.5 2.3 1.2', fill: 'none', stroke: '#7a5410', 'stroke-width': 1.1 }, d);
+  }
+}
+
+// PET系の外形（形状差：まっすぐ／丸胴／肩の張った小ボトル）
+const PET_BODY = {
+  pet:        'M-20 34 L-20 -10 C-20 -20 -10 -24 -10 -30 L-10 -33 L10 -33 L10 -30 C10 -24 20 -20 20 -10 L20 34 Z',
+  petRound:   'M-15 33 C-21 29 -23 16 -23 6 C-23 -8 -17 -17 -10 -24 L-10 -33 L10 -33 L10 -24 C17 -17 23 -8 23 6 C23 16 21 29 15 33 Z',
+  bottleMilk: 'M-20 34 L-20 -6 C-20 -15 -10 -19 -10 -26 L-10 -32 L10 -32 L10 -26 C10 -19 20 -15 20 -6 L20 34 Z',
+};
+const PET_LIQ = {
+  pet:      'M-17 -4 L-17 30 A17 5 0 0 0 17 30 L17 -4 Z',
+  petRound: 'M-13 30 C-18 27 -20 16 -20 6 C-20 -5 -15 -12 -10 -16 L10 -16 C15 -12 20 -5 20 6 C20 16 18 27 13 30 Z',
+};
+
+function buildCan(g, p, deco) {
+  const hw = p.hw, top = p.top, bot = 30, ry = hw * 0.29;
+  el('ellipse', { cx: 0, cy: bot + 2, rx: hw, ry, fill: '#00000044' }, g);
+  el('path', { d: `M${-hw} ${top} L${-hw} ${bot} A${hw} ${ry} 0 0 0 ${hw} ${bot} L${hw} ${top} Z`, fill: `url(#gp_${p.id})` }, g);
+  // ラベル帯
+  el('path', { d: `M${-hw} ${p.ly0} L${-hw} ${p.ly1} L${hw} ${p.ly1} L${hw} ${p.ly0} Z`, fill: '#ffffff', opacity: 0.88 }, g);
+  buildFruit(g, p.fruit, p.fy);
+  // 曲面の巻き込み陰影（ラベルごと巻く）＋右エッジの拾い光
+  const sw = Math.max(2.6, hw * 0.15);
+  el('rect', { x: -hw, y: top, width: sw, height: bot - top, fill: '#000000', opacity: 0.18 }, g);
+  el('rect', { x: hw - sw, y: top, width: sw, height: bot - top, fill: '#000000', opacity: 0.16 }, g);
+  el('rect', { x: hw - 2, y: top + 2, width: 1.2, height: bot - top - 4, fill: '#ffffff', opacity: 0.14 }, g);
+  // 鋭いスペキュラ＋広いシーン
+  el('rect', { x: -hw * 0.67, y: top + 2, width: 3.5, height: bot - top - 2, rx: 1.75, fill: '#ffffff', opacity: 0.6 }, g);
+  el('rect', { x: -hw * 0.46, y: top + 3, width: hw * 0.38, height: bot - top - 3, rx: 4, fill: '#ffffff', opacity: 0.13 }, g);
+  // 首の絞り影・底の巻き込み
+  el('rect', { x: -hw, y: top, width: hw * 2, height: 5, fill: '#000000', opacity: 0.1 }, g);
+  el('path', { d: `M${-hw + 1} ${bot - 3} A${hw - 1} ${ry + 1} 0 0 0 ${hw - 1} ${bot - 3}`, fill: 'none', stroke: '#000000', opacity: 0.22, 'stroke-width': 2.4 }, g);
+  addDew(g, hw - 2, top + 8, bot - 2);
+  if (deco) buildDeco(g, deco, hw * 0.5, p.ly1 - 5);
+  // 蓋（縁の厚み＋巻き締めの段差）
+  el('ellipse', { cx: 0, cy: top + 0.8, rx: hw, ry, fill: '#87909d' }, g);
+  el('ellipse', { cx: 0, cy: top - 0.6, rx: hw, ry, fill: 'url(#gradLid)' }, g);
+  el('ellipse', { cx: 0, cy: top - 0.4, rx: hw * 0.85, ry: ry * 0.8, fill: 'none', stroke: '#a6aeba', 'stroke-width': 1.2 }, g);
+  el('ellipse', { cx: 0, cy: top - 0.2, rx: hw * 0.58, ry: ry * 0.55, fill: '#ccd3db' }, g);
+  el('ellipse', { cx: 0, cy: top + 0.2, rx: 6, ry: 2.2, fill: '#a8b0bc' }, g); // プルタブの示唆
+}
+
+function buildPet(g, p, deco) {
+  const round = p.shape === 'petRound';
+  el('ellipse', { cx: 0, cy: 34, rx: round ? 21 : 20, ry: 6, fill: '#00000044' }, g);
+  el('path', { d: PET_BODY[p.shape], fill: `url(#gp_${p.id})`, opacity: p.clear ? 0.82 : 1 }, g);
+  if (p.clear) {
+    // 液体：壁際の厚み・屈折の明るい芯・メニスカス
+    const liqY = round ? -16 : -4, liqRx = round ? 13 : 17;
+    el('path', { d: PET_LIQ[p.shape], fill: p.c2, opacity: 0.55 }, g);
+    el('rect', { x: -4, y: liqY + 4, width: 8, height: 28 - (round ? 4 : 0), rx: 4, fill: '#ffffff', opacity: 0.18 }, g);
+    el('ellipse', { cx: 0, cy: liqY, rx: liqRx, ry: 3.6, fill: '#ffffff', opacity: 0.5 }, g);
+    el('ellipse', { cx: 0, cy: liqY + 1, rx: liqRx - 0.5, ry: 3.4, fill: 'none', stroke: p.c2, opacity: 0.45, 'stroke-width': 1 }, g);
+  }
+  if (p.fruit === 'none') {
+    // 水：小さな半透明ラベルと波模様（液体を隠さない）
+    el('path', { d: 'M-14 7 L-14 20 L14 20 L14 7 Z', fill: '#ffffff', opacity: 0.6 }, g);
+    el('path', { d: 'M-10 13.5 Q-5 9.5 0 13.5 T10 13.5', fill: 'none', stroke: '#4fb0e4', 'stroke-width': 2.2, opacity: 0.95 }, g);
+  } else if (p.fruit === 'milk') {
+    buildFruit(g, p.fruit, p.fy);
+  } else {
+    el('path', { d: `M-13 ${p.ly0} L-13 ${p.ly1} L13 ${p.ly1} L13 ${p.ly0} Z`, fill: '#ffffff', opacity: 0.9 }, g);
+    buildFruit(g, p.fruit, p.fy);
+  }
+  // ボトル壁のエッジ（透明体の輪郭反射）
+  el('line', { x1: -p.edgeX, y1: round ? 0 : -6, x2: -p.edgeX, y2: round ? 24 : 32, stroke: '#ffffff', opacity: 0.5, 'stroke-width': 1.2 }, g);
+  el('line', { x1: p.edgeX, y1: round ? 0 : -6, x2: p.edgeX, y2: round ? 24 : 32, stroke: '#ffffff', opacity: 0.22, 'stroke-width': 1.2 }, g);
+  // スペキュラ二段＋肩のハイライト
+  el('rect', { x: -13, y: -22, width: 3, height: 52, rx: 1.5, fill: '#ffffff', opacity: 0.6 }, g);
+  el('rect', { x: -8, y: -18, width: 7, height: 48, rx: 3.5, fill: '#ffffff', opacity: 0.12 }, g);
+  el('path', { d: round ? 'M-9 -22 Q-17 -14 -20 -2' : 'M-10 -25 Q-16 -19 -18 -10', fill: 'none', stroke: '#ffffff', opacity: 0.45, 'stroke-width': 1.8 }, g);
+  // 底の座
+  el('path', { d: 'M-15 31 A15 4 0 0 0 15 31', fill: 'none', stroke: '#000000', opacity: 0.18, 'stroke-width': 2 }, g);
+  addDew(g, round ? 19 : 18, 0, 30, p.id === 'miruku' ? 0.45 : 0.55);
+  if (deco) buildDeco(g, deco, 11, 24);
+  // キャップ（全PET系で共通の口径：ローレット・天面の光・セーフティリング）
+  el('rect', { x: -11, y: -43, width: 22, height: 11, rx: 3, fill: p.lid }, g);
+  for (const kx of [-7, -3.5, 0, 3.5, 7]) el('line', { x1: kx, y1: -42.2, x2: kx, y2: -33.4, stroke: '#000000', opacity: 0.22, 'stroke-width': 1 }, g);
+  el('rect', { x: -9.5, y: -43.4, width: 19, height: 2.2, rx: 1.1, fill: '#ffffff', opacity: 0.4 }, g);
+  el('line', { x1: -10, y1: -32.6, x2: 10, y2: -32.6, stroke: '#000000', opacity: 0.3, 'stroke-width': 1.2 }, g);
+}
+
+function buildProduct(p, parent, deco) {
+  const g = grp(parent);
+  if (p.type === 'can') buildCan(g, p, deco);
+  else buildPet(g, p, deco);
   return g;
 }
 
@@ -465,7 +516,7 @@ const SFX = {
   },
   flapThud() { tone(170, 0.08, 'sine', 0.2, 0, 90); },
   gakon() { tone(150, 0.12, 'sine', 0.36, 0, 65); noise(0.06, 0.2, 900); tone(320, 0.05, 'square', 0.1, 0.02); },
-  pshh() { noise(0.45, 0.34, 1900, 'highpass'); noise(0.9, 0.1, 3800, 'highpass', 0.12); },
+  pshh(k) { const s = k || 1; noise(0.3 + 0.18 * s, 0.22 + 0.13 * s, 1900, 'highpass'); noise(0.75 * s + 0.2, 0.1, 3800, 'highpass', 0.12); },
   pon() { tone(420, 0.09, 'sine', 0.32, 0, 940); noise(0.03, 0.12, 2400, 'highpass'); },
   kotori() { tone(300, 0.06, 'sine', 0.14, 0, 180); },
   hop() { tone(250, 0.12, 'triangle', 0.22, 0, 560); },
@@ -742,25 +793,37 @@ function pressButton(i) {
   el('circle', { cx: col - 32, cy: shelf, r: 3.5, fill: '#c8d0dc', stroke: '#5a616e', 'stroke-width': 1 }, prod.platG);
   // 接地影（レールとの接触位置を示す）
   prod.shadowEl = el('ellipse', { rx: 21, ry: 4.2, fill: '#000000', opacity: 0, 'pointer-events': 'none' }, rollLayer);
+  // 今回のマイクロバリエーション（商品固定の物性 × 毎回の小さな揺らぎ）
+  const ph = PRODUCTS[i].phys;
+  const u = Math.random(), t = Math.random();
+  variation = {
+    damp: rnd(0.25, 0.5) * ph.damp,
+    wallRest: clamp(rnd(0.45, 0.62) * ph.rest, 0.3, 0.8),
+    speedBoost: rnd(38, 72),
+    pauseOnA: Math.random() < 0.16,   // 一瞬引っかかってぐらつく
+    sparkleRoll: Math.random() < 0.14,
+    autoFlip: Math.random() < 0.12,   // レール中央でくるっと一回転
+    bouncy: Math.random() < 0.15,     // 今日はよく弾む
+    fizz: rnd(0.75, 1.35),            // プシュッの強さ
+    kotoK: ph.koto,
+    // 取り出し口での姿勢：たいてい真っ直ぐ、時々かしいで、まれに横倒し
+    portTilt: t < 0.55 ? rnd(-5, 5) : t < 0.85 ? (Math.random() < 0.5 ? -1 : 1) * rnd(9, 16) : (Math.random() < 0.5 ? -1 : 1) * rnd(72, 84),
+    // ごくまれなごほうび：金の星（5%）／にこにこシール（8%）
+    deco: u < 0.05 ? 'star' : u < 0.13 ? 'smile' : null,
+  };
   prod.el = grp(rollLayer);
-  buildProduct(PRODUCTS[i], prod.el);
+  buildProduct(PRODUCTS[i], prod.el, variation.deco);
   prod.x = col; prod.y = shelf; prod.vx = 0; prod.vy = 0; prod.rot = 0; prod.wob = 0; prod.squash = 0;
   prod.phase = 'tip'; prod.tipT = 0; prod.rollT = 0; prod.timeOnB = 0; prod.pauseT = 0;
   prod.col = col; prod.shelfY = shelf; prod.glowO = 0; prod.shadowO = 0; prod.trailT = 0;
   prod.autoT = 0; prod.vSign = 0; prod.spinBoost = 0; prod.wasHop = false; hopCd = 0;
+  prod.rollR = PRODUCTS[i].rollR; prod.bounced = false; prod.flipped = false;
   railYOff = 0; railPrevYOff = 0; railPrevTheta = RAIL_B.base;
   // 「これが動くよ」の商品色リング
   const ring = el('circle', { cx: col, cy: shelf - 38, r: 24, fill: 'none', stroke: PRODUCTS[i].c1, 'stroke-width': 4, opacity: 0.9, 'pointer-events': 'none' }, rollLayer);
   tween(420, k => { ring.setAttribute('r', 24 + 46 * k); ring.setAttribute('opacity', 0.9 * (1 - k)); }, () => ring.remove());
   railTouchedThisRound = false;
   railTheta = RAIL_B.base; railTargetBase = RAIL_B.base;
-  // 今回のマイクロバリエーション
-  variation = {
-    damp: rnd(0.25, 0.5),          // 転がり抵抗
-    wallRest: rnd(0.45, 0.62),     // 壁の反発
-    pauseOnA: Math.random() < 0.16, // まれに一瞬止まる（ぐらつき付き）
-    sparkleRoll: Math.random() < 0.14,
-  };
   renderProd();
   setState('ROLLING');
 }
@@ -788,7 +851,7 @@ function landOn(seg, vAlong, impact) {
   prod.s = clamp(t, 0, 1) * g.len;
   prod.v = vAlong;
   prod.squash = clamp(impact / 400, 0.15, 0.8);
-  SFX.koto(impact / 320);
+  SFX.koto(impact / 320 * (variation.kotoK || 1));
   setRailLit(seg.name);
   // ポンッからの着地はごほうびのきらめき
   if (prod.wasHop) {
@@ -800,8 +863,16 @@ function landOn(seg, vAlong, impact) {
   }
   if (seg.name === 'B') prod.timeOnB = 0;
   if (seg.name === 'A') {
-    prod.v += 55; // 着地の勢いで転がり出す（間延び防止）
+    prod.v += variation.speedBoost || 55; // 着地の勢い（今回の速さ）で転がり出す
     if (variation.pauseOnA) { prod.v = 0; prod.pauseT = 0.38; SFX.kotori(); }
+  }
+  // 「今日はよく弾む」：強い着地から一度だけ小さくバウンド
+  if (variation.bouncy && !prod.bounced && impact > 240 && seg.name !== 'FL' && seg.name !== 'FR') {
+    prod.bounced = true;
+    prod.phase = 'ballistic';
+    prod.vx = vAlong * g.cos;
+    prod.vy = clamp(-impact * 0.3, -180, -70);
+    prod.skipSeg = seg.name; prod.skipT = 0.1;
   }
 }
 
@@ -951,8 +1022,20 @@ function stepProd(dt) {
       prod.v *= Math.max(0, 1 - variation.damp * dt);
       prod.v = clamp(prod.v, -270, 270);
     }
+    // レール中央での「くるっ」（今回だけの小さな見せ場）
+    if (prod.seg === 'B' && variation.autoFlip && !prod.flipped && Math.abs(prod.s - g.len / 2) < 10 && Math.abs(prod.v) > 60) {
+      prod.flipped = true;
+      prod.phase = 'ballistic';
+      prod.vx = prod.v * g.cos; prod.vy = -125;
+      prod.spinBoost = (prod.v >= 0 ? 1 : -1) * 460;
+      prod.skipSeg = 'B'; prod.skipT = 0.12;
+      SFX.kotori();
+      setRailLit(null);
+      renderProd();
+      return;
+    }
     prod.s += prod.v * dt;
-    prod.rot += (prod.v / PROD_R) * dt * 57.3;
+    prod.rot += (prod.v / (prod.rollR || PROD_R)) * dt * 57.3;
     if (prod.s < 0 || prod.s > g.len) {
       // 端から落ちる
       const end = prod.s < 0 ? { x: seg.x1, y: seg.y1 } : { x: seg.x2, y: seg.y2 };
@@ -1001,8 +1084,9 @@ function arrive() {
   flapJit = 0;
   portLamp.setAttribute('opacity', 0.18);
   itemPos = { x: PORT_C.x, y: PORT_C.y };
+  itemTilt = variation.portTilt || 0;
   portItemEl = grp(portProdLayer);
-  buildProduct(PRODUCTS[selected], portItemEl);
+  buildProduct(PRODUCTS[selected], portItemEl, variation.deco);
   renderPortItem(0.55); // 暗がりの中
   // フラップがコツンと揺れ、取り出し口自体も一瞬沈む
   tween(200, k => { flapK = 1 - Math.sin(k * Math.PI) * 0.07; renderFlap(); });
@@ -1017,9 +1101,12 @@ function arrive() {
 }
 
 let portItemEl = null;
+let itemTilt = 0;
 function renderPortItem(bright) {
   if (!portItemEl) return;
-  portItemEl.setAttribute('transform', `translate(${itemPos.x} ${itemPos.y - 34}) scale(${itemHeld ? 1.04 : 0.95})`);
+  // 横倒しのときは持ち上げないよう少し下げる
+  const lift = Math.min(10, Math.abs(itemTilt) * 0.12);
+  portItemEl.setAttribute('transform', `translate(${itemPos.x} ${itemPos.y - 34 + lift}) rotate(${itemTilt}) scale(${itemHeld ? 1.04 : 0.95})`);
   portItemEl.setAttribute('opacity', bright == null ? 1 : bright);
 }
 function renderFlap() {
@@ -1055,7 +1142,7 @@ function startTakeout() {
   openItemG = grp(openSceneG);
   const p = PRODUCTS[selected];
   const inner = grp(openItemG);
-  buildProduct(p, inner);
+  buildProduct(p, inner, variation.deco);
   openParts = buildOpenables(p, inner);
   const target = { x: 210, y: 415, s: 3.1 };
   tween(420, k => {
@@ -1063,7 +1150,7 @@ function startTakeout() {
     const x = lerp(fromV.x, target.x, k), y = lerp(fromV.y, target.y, k), s = lerp(1, target.s, k);
     openItemG.setAttribute('transform', `translate(${x} ${y}) scale(${s})`);
   }, () => {
-    tabHintPos = p.type === 'can' ? { x: 210, y: 415 - 30 * 3.1 } : { x: 210, y: 415 - 38 * 3.1 };
+    tabHintPos = p.type === 'can' ? { x: 210, y: 415 + (p.top - 0.5) * 3.1 } : { x: 210, y: 415 - 38 * 3.1 };
     setState('OPENING');
   });
   SFX.tick();
@@ -1073,7 +1160,7 @@ function startTakeout() {
 // 缶のプルタブ / ボトルのキャップ（開封シーン用の上書きパーツ）
 function buildOpenables(p, inner) {
   if (p.type === 'can') {
-    const tg = grp(inner, { transform: 'translate(0 -30)' });
+    const tg = grp(inner, { transform: `translate(0 ${p.top - 0.5})` });
     // スコアライン（開く部分の刻印）
     el('ellipse', { cx: 0, cy: -3.4, rx: 5.2, ry: 2.5, fill: 'none', stroke: '#8a92a0', 'stroke-width': 0.8, opacity: 0.8 }, tg);
     const rot = grp(tg);
@@ -1105,16 +1192,18 @@ function doOpen() {
   setState('OPEN_ANIM');
   const v = tabHintPos;
   if (openParts.kind === 'can') {
-    SFX.pshh(); fizzStart();
+    const fz = variation.fizz || 1;
+    SFX.pshh(fz); fizzStart();
     tween(220, k => {
       openParts.rot.setAttribute('transform', `rotate(${-70 * k} 0 3)`);
       openParts.hole.setAttribute('opacity', k);
     });
-    // 泡としぶき
-    for (let i = 0; i < 16; i++) {
-      after(i * 90, () => spawnP(v.x + rnd(-16, 16), v.y, { vx: rnd(-25, 25), vy: rnd(-130, -60), g: 90, life: rnd(0.5, 1.0), r: rnd(1.8, 4), fill: '#eafaff', shrink: true }));
+    // 泡としぶき（今回の炭酸の強さで量と勢いが変わる）
+    const nBub = Math.round(16 * fz);
+    for (let i = 0; i < nBub; i++) {
+      after(i * 90, () => spawnP(v.x + rnd(-16, 16), v.y, { vx: rnd(-25, 25), vy: rnd(-130, -60) * fz, g: 90, life: rnd(0.5, 1.0), r: rnd(1.8, 4), fill: '#eafaff', shrink: true }));
     }
-    for (let i = 0; i < 8; i++) spawnP(v.x, v.y, { vx: rnd(-90, 90), vy: rnd(-190, -90), g: 480, life: 0.7, r: rnd(2, 3.5), fill: '#cdeefd' });
+    for (let i = 0; i < Math.round(8 * fz); i++) spawnP(v.x, v.y, { vx: rnd(-90, 90) * fz, vy: rnd(-190, -90) * fz, g: 480, life: 0.7, r: rnd(2, 3.5), fill: '#cdeefd' });
   } else {
     SFX.pon();
     // キャップが飛ぶ
@@ -1132,7 +1221,14 @@ function doOpen() {
   after(520, () => {
     setState('COMPLETE');
     SFX.jingle();
-    burstStars(210, 380, 18, 240);
+    if (variation.deco) {
+      // 星やシール付きの日はちょっと豪華に
+      burstStars(210, 380, 28, 280);
+      tone(1568, 0.28, 'triangle', 0.12, 0.48);
+      tone(2093, 0.3, 'sine', 0.08, 0.6);
+    } else {
+      burstStars(210, 380, 18, 240);
+    }
     // うれしい弾み
     tween(600, k => {
       const b = Math.sin(k * Math.PI * 2) * (1 - k) * 0.08;
@@ -1227,7 +1323,11 @@ svg.addEventListener('pointerdown', e => {
     if (dist(w.x, w.y, itemPos.x, itemPos.y - 20) < 80) {
       grab(e, 'item');
       itemGrabOff = { x: itemPos.x - w.x, y: itemPos.y - w.y };
-      itemHeld = true; renderPortItem(1);
+      itemHeld = true;
+      // つかむと自然に起き上がる
+      const t0 = itemTilt;
+      if (Math.abs(t0) > 1) tween(200, k => { itemTilt = t0 * (1 - k); renderPortItem(1); });
+      renderPortItem(1);
       handled = true;
     }
   } else if (S === 'OPENING') {
