@@ -24,6 +24,12 @@
   // オフスクリーンにキャッシュする和紙テクスチャパターン
   var paperPatternCanvas = null;
 
+  // 背景(和紙+ビネット)はキャンバスサイズのみに依存し毎フレーム不変なので、
+  // resize時に一度だけオフスクリーンへ焼き込み、以後は drawImage のみで済ませる
+  // (createRadialGradient×2+repeatパターンfillをフルキャンバス解像度で毎フレーム
+  // 実行するのはソフトウェアレンダリング環境で特に重く、60fps目標を阻害するため)。
+  var bgCache = null; // { canvas, wCss, hCss, dpr }
+
   // 小花びらスプライトキャッシュ: spriteCache[themeId][sizeClass] = {canvas, originX, originY}
   var spriteCache = {};
   var spriteBakedScale = 0; // resize時のズーム非依存の基準scale(px/world)
@@ -208,6 +214,28 @@
     // スプライトはズーム非依存の基準scaleで焼き直す(テーマ変更/resize時のみ)
     spriteBakedScale = shortSide * baseScale;
     buildSprites();
+    buildBackgroundCache();
+  }
+
+  // 現在の view.wCss/hCss/dpr で背景をオフスクリーンcanvasへ焼き込む。
+  // 実描画コードは drawBackground() をそのまま使い回す(ctxを一時的にすり替えるだけ)
+  // ので、見た目はライブ描画時と完全に同一。
+  function buildBackgroundCache() {
+    var w = view.wCss, h = view.hCss, dpr = view.dpr || 1;
+    if (!(w > 0) || !(h > 0)) { bgCache = null; return; }
+    var off = document.createElement('canvas');
+    off.width = Math.max(1, Math.round(w * dpr));
+    off.height = Math.max(1, Math.round(h * dpr));
+    var octx = off.getContext('2d');
+    var savedCtx = ctx;
+    try {
+      ctx = octx;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      drawBackground();
+    } finally {
+      ctx = savedCtx;
+    }
+    bgCache = { canvas: off, wCss: w, hCss: h, dpr: dpr };
   }
 
   // ============ 和紙背景テクスチャ ============
@@ -933,7 +961,14 @@
 
       var theme = getTheme(state);
 
-      drawBackground(state);
+      if (bgCache && bgCache.wCss === view.wCss && bgCache.hCss === view.hCss && bgCache.dpr === view.dpr) {
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.drawImage(bgCache.canvas, 0, 0);
+        ctx.restore();
+      } else {
+        drawBackground(state);
+      }
 
       var breathMul = 1;
       if (state.phase === 'finishing' || state.phase === 'reveal') {
