@@ -444,7 +444,19 @@
     { len: 0.330, wid: 0.225 }, // 3: XL(外周)
   ];
 
-  function renderPetalSprite(theme, sizeSpec, ppu) {
+  // RGB各chを係数倍してクランプ(明るさバケット焼き込み用)。ctx.filterは
+  // ソフトウェアレンダリング環境で1描画あたり数十〜数千ms級に爆発することがあり
+  // 60fps要件と両立しないため、明るさは"描画時のfilter"ではなく"事前焼き込みの
+  // 複数バリアント"で持つ。
+  function scaleColor(hex, factor) {
+    var c = hexToRgb(hex);
+    var r = clamp(Math.round(c.r * factor), 0, 255);
+    var g = clamp(Math.round(c.g * factor), 0, 255);
+    var b = clamp(Math.round(c.b * factor), 0, 255);
+    return 'rgb(' + r + ',' + g + ',' + b + ')';
+  }
+
+  function renderPetalSprite(theme, sizeSpec, ppu, brightness) {
     var halfW = sizeSpec.wid / 2;
     var len = sizeSpec.len;
     var padSide = 0.24, padBottom = 0.30;
@@ -483,11 +495,12 @@
     path.bezierCurveTo(l2[0], l2[1], l1[0], l1[1], p0[0], p0[1]);
     path.closePath();
 
-    // ベースグラデ: 根元(白〜クリーム) -> 先端(テーマdeep)
+    // ベースグラデ: 根元(白〜クリーム) -> 先端(テーマdeep)。brightnessで明るさバケットを焼き込む。
+    var bf = brightness || 1;
     var g = o.createLinearGradient(p0[0], p0[1], tip[0], tip[1]);
-    g.addColorStop(0, '#f7f2e8');
-    g.addColorStop(0.42, theme.base);
-    g.addColorStop(1, theme.deep);
+    g.addColorStop(0, scaleColor('#f7f2e8', bf));
+    g.addColorStop(0.42, scaleColor(theme.base, bf));
+    g.addColorStop(1, scaleColor(theme.deep, bf));
     o.fillStyle = g;
     o.fill(path);
 
@@ -529,17 +542,29 @@
     return { canvas: off, originX: originX, originY: originY };
   }
 
+  // 光源方向に対する明るさは連続演算(ctx.filter)ではなく、離散バケット数ぶんの
+  // スプライトを事前焼き込みして選択するだけにする(描画時は純粋なdrawImage)。
+  var LIGHT_BUCKETS = 7;
+  function lightBucketBrightness(bucketIdx) {
+    var cosVal = (bucketIdx / (LIGHT_BUCKETS - 1)) * 2 - 1; // -1..1
+    return 0.90 + 0.19 * cosVal;
+  }
+
   function buildSprites() {
     var themes = (window.NCFG && window.NCFG.THEMES) || [defaultTheme()];
     var ppu = Math.max(20, spriteBakedScale * SPRITE_HEADROOM);
     var cache = {};
     for (var i = 0; i < themes.length; i++) {
       var th = themes[i];
-      var arr = [];
+      var perSize = [];
       for (var s = 0; s < SIZE_CLASSES.length; s++) {
-        arr.push(renderPetalSprite(th, SIZE_CLASSES[s], ppu));
+        var perBucket = [];
+        for (var b = 0; b < LIGHT_BUCKETS; b++) {
+          perBucket.push(renderPetalSprite(th, SIZE_CLASSES[s], ppu, lightBucketBrightness(b)));
+        }
+        perSize.push(perBucket);
       }
-      cache[th.id] = arr;
+      cache[th.id] = perSize;
     }
     spriteCache = cache;
   }
@@ -630,33 +655,34 @@
   }
 
   // outwardAngle(そのインスタンスの外向き方向)が実際の光源方向とどれだけ揃っているかで
-  // 明るさ係数を返す。スプライト内部の固定ハッチングパターンを相殺し、単一光源の
-  // 自然な陰影に近づける(花全体で系統だった模様にならないようにする核心)。
-  function lightFactorFor(outwardAngle) {
-    var d = Math.cos(outwardAngle - LIGHT_SCREEN_ANGLE);
-    return 0.80 + 0.30 * clamp(d, -1, 1);
+  // 明るさバケット番号を返す。スプライト内部の固定ハッチングパターンを相殺し、
+  // 単一光源の自然な陰影に近づける(花全体で系統だった模様にならないようにする核心)。
+  // ctx.filterは使わず、事前焼き込み済みバリアントを選ぶだけ(重い描画時演算を回避)。
+  function lightBucketFor(outwardAngle) {
+    var d = clamp(Math.cos(outwardAngle - LIGHT_SCREEN_ANGLE), -1, 1);
+    var idx = Math.round(((d + 1) / 2) * (LIGHT_BUCKETS - 1));
+    return clamp(idx, 0, LIGHT_BUCKETS - 1);
   }
 
   function drawPetalInstance(theme, inst, breathMul) {
     var sprites = spriteCache[theme.id];
     if (!sprites) return;
-    var sprite = sprites[inst.sizeClass] || sprites[0];
-    if (!sprite) return;
+    var sizeArr = sprites[inst.sizeClass] || sprites[0];
+    if (!sizeArr) return;
     var eased = easeOutBack(inst.liftT);
     var scaleT = 0.22 + 0.78 * clamp(eased, -0.3, 1.2);
     if (scaleT <= 0.001) return;
     var p = project(inst.worldAngle, inst.radius, breathMul);
     var outward = outwardScreenAngle(inst.worldAngle, inst.radius, breathMul);
+    var sprite = sizeArr[lightBucketFor(outward)] || sizeArr[0];
+    if (!sprite) return;
     var ratio = (view.scale * breathMul / (spriteBakedScale || 1)) * inst.sizeMul * scaleT;
     if (!(ratio > 0)) return;
     ctx.save();
     ctx.translate(p.sx, p.sy);
     ctx.rotate(outward + Math.PI / 2 + inst.rot);
     var dw = sprite.canvas.width * ratio, dh = sprite.canvas.height * ratio;
-    var bf = lightFactorFor(outward);
-    if (bf !== 1) ctx.filter = 'brightness(' + bf.toFixed(3) + ')';
     ctx.drawImage(sprite.canvas, -sprite.originX * ratio, -sprite.originY * ratio, dw, dh);
-    if (bf !== 1) ctx.filter = 'none';
     ctx.restore();
   }
 
@@ -680,7 +706,8 @@
   function drawCenterRing(state, theme, breathMul) {
     var sprites = spriteCache[theme.id];
     if (!sprites) return;
-    var sprite = sprites[0];
+    var sizeArr = sprites[0];
+    if (!sizeArr) return;
     var need = (state.center && state.center.need) || 0;
     var count = (state.center && state.center.count) || 0;
     var p = need > 0 ? clamp(count / need, 0, 1) : 0;
@@ -701,16 +728,15 @@
       var worldAngle = e.angle + view.rotation;
       var pp = project(worldAngle, radius, breathMul);
       var outward = outwardScreenAngle(worldAngle, radius, breathMul);
+      var sprite = sizeArr[lightBucketFor(outward)] || sizeArr[0];
+      if (!sprite) continue;
       var ratio = (view.scale * breathMul / (spriteBakedScale || 1)) * scaleT * 0.85;
       if (!(ratio > 0)) continue;
       ctx.save();
       ctx.translate(pp.sx, pp.sy);
       ctx.rotate(outward + Math.PI / 2 + e.rot);
       var dw = sprite.canvas.width * ratio, dh = sprite.canvas.height * ratio;
-      var bf = lightFactorFor(outward);
-      if (bf !== 1) ctx.filter = 'brightness(' + bf.toFixed(3) + ')';
       ctx.drawImage(sprite.canvas, -sprite.originX * ratio, -sprite.originY * ratio, dw, dh);
-      if (bf !== 1) ctx.filter = 'none';
       ctx.restore();
     }
   }
