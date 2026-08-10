@@ -238,8 +238,11 @@ function init(args) {
 function resize() {
   // Baked layers are drawn top-left at their bake-time size; a resize (esp. orientation flip)
   // can make old anchor-relative geometry stale, so drop the cheap-to-rebuild baked density.
-  // Live strands + fullness persist (only a handful, negligible visual glitch at worst).
+  // Live strand geometry is also absolute-coordinate and goes stale the same way (this can be a
+  // large chunk of the nest right after several passes, not "only a handful") — drop it too.
+  // fullness/totalPassFrac persist so progress isn't lost; strands simply respawn on the next swipe.
   layers = [];
+  liveCount = 0;
 }
 
 function update(dt, state) {
