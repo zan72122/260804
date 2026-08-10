@@ -25,7 +25,29 @@
   <svg viewBox="0 0 24 24" width="54" height="54"><path fill="#fff" d="M12 5V1L7 6l5 5V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7z"/></svg>
 </button>
 
+<button id="btn-album" class="icon-btn" aria-label="アルバム">
+  <svg viewBox="0 0 24 24" width="26" height="26">
+    <rect x="3" y="3" width="14" height="14" rx="2" fill="#fff" opacity="0.35"/>
+    <rect x="5.5" y="5.5" width="14" height="14" rx="2" fill="#fff" opacity="0.6"/>
+    <rect x="8" y="8" width="14" height="14" rx="2" fill="#fff"/>
+    <circle cx="12.3" cy="12.3" r="1.5" fill="#5b3fae"/>
+    <path d="M9.5 21l3.6-4.2 2.5 2.8 2.1-2.4L22 21H9.5z" fill="#5b3fae"/>
+  </svg>
+  <span id="album-badge" class="badge hidden"></span>
+</button>
+
+<div id="palette" class="palette"></div>
+
+<div id="album-overlay" class="hidden">
+  <div id="album-grid"></div>
+  <button id="album-close" aria-label="とじる">&#10005;</button>
+</div>
+
+<script src="js/color.js"></script>
+<script src="js/liquid-art.js"></script>
 <script src="js/audio.js"></script>
+<script src="js/palette.js"></script>
+<script src="js/album.js"></script>
 <script src="js/game.js"></script>
 <script src="js/main.js"></script>
 </body>

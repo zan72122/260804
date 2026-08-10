@@ -3,6 +3,17 @@
 :root {
   /* readable from JS so canvas drawing can avoid the notch */
   --safe-top: env(safe-area-inset-top, 0px);
+
+  /* Palette bar: swatch size + a fixed pixel total for js/game.js to read.
+     --palette-h is intentionally a plain px literal (not calc()/env()) because
+     getComputedStyle() does not arithmetically resolve calc() on untyped custom
+     properties (env() alone resolves, calc(px + env()) does not) — a plain
+     number is the only value parseFloat() can rely on. It is sized as a
+     worst-case (largest real-world safe-area-inset-bottom for this
+     breakpoint), so it is always >= the bar's true rendered height; the bar's
+     own padding below still uses real env() so it looks pixel-correct. */
+  --sw-size: 56px;         /* portrait swatch diameter */
+  --palette-h: 122px;      /* 16 + 56 + 16 (padding+swatch+padding) + 34 (max iOS portrait inset) */
 }
 
 html, body {
@@ -57,6 +68,29 @@ html, body {
   top: calc(env(safe-area-inset-top, 0px) + 12px);
   right: calc(env(safe-area-inset-right, 0px) + 12px);
 }
+#btn-album {
+  top: calc(env(safe-area-inset-top, 0px) + 12px + 54px + 10px);
+  left: calc(env(safe-area-inset-left, 0px) + 12px);
+}
+
+/* small count badge on the album button */
+.badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: #ff5f6d;
+  border: 2px solid #241a52;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+.badge.hidden { display: none; }
 
 /* sound icon states */
 #btn-sound .ic-off { display: none; }
@@ -88,4 +122,145 @@ html, body {
 @keyframes replay-pulse {
   0%, 100% { transform: translate(-50%, -50%) scale(1); }
   50%      { transform: translate(-50%, -50%) scale(1.1); }
+}
+
+/* generic hide helper */
+.hidden { display: none; }
+
+/* ---------- palette bar ---------- */
+/* #palette sits above #game, below #btn-replay */
+#palette {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 14px calc(16px + env(safe-area-inset-bottom, 0px));
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  background: linear-gradient(to top, rgba(15, 8, 40, 0.55), rgba(15, 8, 40, 0));
+  justify-content: flex-start;
+  justify-content: safe center; /* centred when it fits; always scrollable/reachable when it doesn't */
+}
+#palette::-webkit-scrollbar { display: none; }
+#palette.armed {
+  background: linear-gradient(to top, rgba(15, 8, 40, 0.7), rgba(15, 8, 40, 0));
+}
+
+.swatch {
+  flex: 0 0 auto;
+  width: var(--sw-size);
+  height: var(--sw-size);
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.75);
+  background: var(--sw, #fff);
+  box-shadow: 0 3px 10px rgba(20, 8, 50, 0.35), inset 0 0 0 2px rgba(255, 255, 255, 0.18);
+  padding: 0;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.swatch:active { transform: scale(0.9); }
+.swatch.is-on {
+  border: 5px solid #fff;
+  transform: scale(1.18);
+  box-shadow:
+    0 0 0 4px rgba(255, 255, 255, 0.4),
+    0 4px 18px rgba(20, 8, 50, 0.45),
+    0 0 22px 6px rgba(255, 255, 255, 0.6);
+}
+.swatch.is-on:active { transform: scale(1.08); }
+
+/* ---------- album overlay ---------- */
+#album-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: rgba(18, 10, 42, 0.78);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  padding:
+    calc(env(safe-area-inset-top, 0px) + 84px)
+    calc(env(safe-area-inset-right, 0px) + 20px)
+    calc(env(safe-area-inset-bottom, 0px) + 24px)
+    calc(env(safe-area-inset-left, 0px) + 20px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+#album-overlay.hidden { display: none; }
+
+#album-grid {
+  width: 100%;
+  max-width: 900px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 14px;
+}
+#album-grid img,
+#album-grid .placeholder {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  object-fit: cover;
+  display: block;
+}
+#album-grid .placeholder {
+  border: 2px dashed rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: none;
+}
+
+#album-close {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 14px);
+  right: calc(env(safe-area-inset-right, 0px) + 14px);
+  z-index: 31;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.22);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  touch-action: manipulation;
+  box-shadow: 0 2px 12px rgba(20, 8, 50, 0.3);
+}
+#album-close:active { transform: scale(0.9); }
+
+/* Short landscape phones (~390px tall or less): shrink the palette bar so it
+   doesn't eat too much of the limited vertical space. */
+@media (orientation: landscape) and (max-height: 480px) {
+  :root {
+    --sw-size: 44px;
+    --palette-h: 86px; /* 10 + 44 + 10 (padding+swatch+padding) + 21 (max iOS landscape inset), + a hair of margin */
+  }
+  #palette {
+    gap: 8px;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+  }
+  #album-overlay {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 66px);
+  }
 }

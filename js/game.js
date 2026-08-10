@@ -35,30 +35,27 @@ window.Game = (function () {
   const STEM_HW = 0.048, FOOT_T = 0.88, FOOT_HW = 0.23;
   const REROUTE_STR = 0.35;        // field strength needed to actually re-aim a stream
 
-  // ---------- drink themes (cycled on each replay) ----------
+  // ---------- sky/sparkle themes (cycled on each replay) ----------
+  // the drink itself is no longer themed — its colour comes from Tint / LiquidArt
   const THEMES = [
-    { rainbow: true, sparkle: '#fff3c9',
-      sky: ['#241a52', '#5c2e91', '#c95e9e', '#ffb98a'] },
-    { stops: ['#ffa9c5', '#ff6f9d', '#ff4a80', '#e63067', '#c22257'], sparkle: '#ffe1ec',
-      sky: ['#2b1247', '#7a2a6b', '#d9578c', '#ffc2a8'] },
-    { stops: ['#a9f4ff', '#65dff7', '#3fc4f0', '#2f9fe8', '#2a7fd8'], sparkle: '#e3fbff',
-      sky: ['#0e2a52', '#1e5d8e', '#57a8c9', '#b7ecd9'] },
-    { stops: ['#e0b6ff', '#c08bff', '#a260f5', '#8442e2', '#6e2cc9'], sparkle: '#f2e4ff',
-      sky: ['#1d1240', '#4d2483', '#8a4bb0', '#e08bb5'] },
-    { stops: ['#ffefad', '#ffd968', '#ffc247', '#ffa834', '#f28a1f'], sparkle: '#fff8dc',
-      sky: ['#3a1c4f', '#8a3f66', '#d97a58', '#ffd28a'] },
+    { sparkle: '#fff3c9', sky: ['#241a52', '#5c2e91', '#c95e9e', '#ffb98a'] },
+    { sparkle: '#ffe1ec', sky: ['#2b1247', '#7a2a6b', '#d9578c', '#ffc2a8'] },
+    { sparkle: '#e3fbff', sky: ['#0e2a52', '#1e5d8e', '#57a8c9', '#b7ecd9'] },
+    { sparkle: '#f2e4ff', sky: ['#1d1240', '#4d2483', '#8a4bb0', '#e08bb5'] },
+    { sparkle: '#fff8dc', sky: ['#3a1c4f', '#8a3f66', '#d97a58', '#ffd28a'] },
   ];
   const RAINBOW = ['#ff5f6d', '#ffa14f', '#ffe95f', '#7be07b', '#5fc9ff', '#b78bff'];
 
   // ---------- state ----------
-  let canvas, ctx, W = 0, H = 0, dpr = 1, safeTop = 0;
+  let canvas, ctx, W = 0, H = 0, dpr = 1, safeTop = 0, paletteH = 0;
   let glasses = [], rows = 10, theme = THEMES[0], roundNum = 0, forceRows = 0;
   let glassW = 60, glassH = 60, spanX = 73, rowStep = 78, cloudS = 70;
   let towerCx = 0, towerTopY = 0, tableY = 0;
   let cloud = { x: 0, y: 0, drawY: 0, targetX: 0 };
   let autoPour = false, simPour = false, pouring = false;
   let pourVis = 0, holdT = 0, totalPoured = 0;
-  let pool = 0, fullCount = 0, glowPulse = 0, topOverflowed = false, overflowAt = 0;
+  let pool = 0, poolTint = Tint.WHITE, fullCount = 0, glowPulse = 0, topOverflowed = false, overflowAt = 0;
+  let cloudTint = Tint.WHITE, brush = null;      // colour painting state (Tint {h,c})
   let state = 'play';                    // 'play' | 'celebrate'
   let celebT = 0, celebNotified = false;
   let hintT = 0, idleT = 0, time = 0, lastTs = 0;
@@ -87,9 +84,7 @@ window.Game = (function () {
 
   // cached art
   let sprBack = null, sprFront = null, sprPad = 6;
-  let radialSpr = null, streamSpr = null;
-  let liquidSpr = null, liquidSprScl = 1;
-  const LQ_PAD = 2;
+  let radialSpr = null;
   let skyGrad = null, tableGrad = null;
   const glowQueue = [];
   const tiltedQueue = [];
