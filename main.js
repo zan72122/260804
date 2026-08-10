@@ -229,10 +229,12 @@ scene.fog = new THREE.Fog(0x8d8078, 2.6, 6.5);
 
 const camera = new THREE.PerspectiveCamera(41, window.innerWidth / window.innerHeight, 0.05, 20);
 const CAKE_C = new THREE.Vector3(0, 1.055, 0);   // where the cake sits (lookAt target)
+const camClose = new THREE.Vector3();     // reveal close-up position
 function frameCamera() {
   const portrait = window.innerHeight > window.innerWidth;
   camera.fov = portrait ? 44 : 33;
   camera.position.set(0.06, 1.33, portrait ? 1.06 : 1.16);
+  camClose.set(0.03, 1.19, portrait ? 0.5 : 0.55);
   camera.lookAt(CAKE_C.x, CAKE_C.y + 0.01, CAKE_C.z);
   camera.updateProjectionMatrix();
 }
@@ -265,7 +267,7 @@ const hemi = new THREE.HemisphereLight(0xfff4e4, 0x6b5a4c, 0.34);
 scene.add(hemi);
 
 // low side spotlight for the finale texture reveal
-const revealSpot = new THREE.SpotLight(0xffe6c0, 0, 3, Math.PI / 9, 0.45, 1.2);
+const revealSpot = new THREE.SpotLight(0xffeed8, 0, 3, Math.PI / 9, 0.45, 1.2);
 revealSpot.position.set(0.7, 1.12, 0.35);
 revealSpot.target.position.copy(CAKE_C);
 scene.add(revealSpot, revealSpot.target);
@@ -705,6 +707,12 @@ class Cake {
             vec2 u = f * f * (3.0 - 2.0 * f);
             return mix(mix(velvetHash(i), velvetHash(i + vec2(1.,0.)), u.x),
                        mix(velvetHash(i + vec2(0.,1.)), velvetHash(i + vec2(1.,1.)), u.x), u.y);
+          }
+          // powder height field: smoothed spray accumulation modulated by mid-scale clumps
+          float velvetHeightAt(vec2 uv){
+            float a = texture2D(uPaint, uv, 1.5).a;    // mip-biased read = pre-blurred height
+            float clump = velvetNoise(uv * 130.0) * 0.65 + velvetNoise(uv * 320.0) * 0.35;
+            return a * (0.55 + 0.9 * clump);
           }`)
         .replace('#include <color_fragment>', `#include <color_fragment>
           vec4 velvetSample = texture2D(uPaint, vUv);
@@ -715,22 +723,31 @@ class Cake {
           float velvetGrain = velvetNoise(vUv * 620.0) * 0.55 + velvetNoise(vUv * 173.0) * 0.45;
           vec3 velvetCol = velvetSample.rgb * (0.9 + velvetGrain * 0.2);
           diffuseColor.rgb = mix(diffuseColor.rgb, velvetCol, velvetCov);`)
-        .replace('float roughnessFactor = roughness;', `float roughnessFactor = mix(roughness, 0.94 + velvetGrain * 0.05, velvetDust);`)
-        .replace('material.clearcoat = clearcoat;', `material.clearcoat = clearcoat * (1.0 - velvetDust);`)
-        .replace(
-          'material.specularColor = mix( min( pow2( ( material.ior - 1.0 ) / ( material.ior + 1.0 ) ) * specularColorFactor, vec3( 1.0 ) ) * specularIntensityFactor, diffuseColor.rgb, metalnessFactor );',
-          `material.specularColor = mix( min( pow2( ( material.ior - 1.0 ) / ( material.ior + 1.0 ) ) * specularColorFactor, vec3( 1.0 ) ) * specularIntensityFactor, diffuseColor.rgb, metalnessFactor );
+        .replace('#include <lights_physical_fragment>', `#include <lights_physical_fragment>
+          // ---- velvet override: sprayed cocoa-butter dust replaces the glossy glaze response ----
+          material.roughness = mix(material.roughness, 0.94 + velvetGrain * 0.05, velvetDust);
+          material.clearcoat *= (1.0 - velvetDust);
           // deep velvet fibres swallow the broad grazing reflection of the base surface
           material.specularColor *= (1.0 - 0.88 * velvetDust);
-          material.specularF90 *= (1.0 - 0.88 * velvetDust);`
-        )
-        .replace('material.sheenColor = sheenColor;', `material.sheenColor = mix(vec3(0.0), velvetSample.rgb * 0.85 + 0.025, velvetCov);`)
+          material.specularF90 *= (1.0 - 0.88 * velvetDust);
+          // icy glaze keeps only a whisper of sheen; velvet gets a tinted nap sheen
+          material.sheenColor = mix(material.sheenColor * 0.12, velvetSample.rgb * 0.85 + 0.025, velvetCov);
+          material.sheenRoughness = mix(material.sheenRoughness, 0.75, velvetCov);`)
         .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
-          // micro-fuzz: static uv-anchored normal jitter where velvet covers
+          // real relief: bump-map the accumulated spray height so grazing light rakes across it
           {
-            float nx = velvetNoise(vUv * 540.0) - 0.5;
-            float ny = velvetNoise(vUv * 540.0 + 71.3) - 0.5;
-            normal = normalize(normal + velvetCov * 0.26 * vec3(nx, ny, 0.0));
+            vec2 dSTdx = clamp(dFdx(vUv), vec2(-0.01), vec2(0.01));   // tame the u-wrap seam
+            vec2 dSTdy = clamp(dFdy(vUv), vec2(-0.01), vec2(0.01));
+            float Hll = velvetHeightAt(vUv);
+            float dBx = velvetHeightAt(vUv + dSTdx) - Hll;
+            float dBy = velvetHeightAt(vUv + dSTdy) - Hll;
+            vec3 vSigmaX = dFdx(-vViewPosition);
+            vec3 vSigmaY = dFdy(-vViewPosition);
+            vec3 R1 = cross(vSigmaY, normal);
+            vec3 R2 = cross(normal, vSigmaX);
+            float fDet = dot(vSigmaX, R1) * (float(gl_FrontFacing) * 2.0 - 1.0);
+            vec3 vGrad = sign(fDet) * (dBx * R1 + dBy * R2);
+            normal = normalize(abs(fDet) * normal - 0.0008 * vGrad);
           }`);
     };
     this.mesh = new THREE.Mesh(geo, mat);
@@ -754,7 +771,7 @@ class Cake {
     const cx = u * S, cy = (1 - v) * S;
     // soft base wash so coverage saturates smoothly under the speckles
     ctx.fillStyle = color;
-    ctx.globalAlpha = strength * 0.16;
+    ctx.globalAlpha = strength * 0.3;
     for (const wrap of [-S, 0, S]) {
       const x = cx + wrap;
       if (x < -du || x > S + du) continue;
@@ -768,8 +785,8 @@ class Cake {
       const a = Math.random() * Math.PI * 2;
       const rr = (Math.random() + Math.random()) * 0.5;
       const px = Math.cos(a) * rr * du, py = Math.sin(a) * rr * dv;
-      const dotR = rand(1.8, 4.6) * (S / 1024);
-      ctx.globalAlpha = strength * rand(0.35, 0.8) * (1 - rr * 0.45);
+      const dotR = rand(2.2, 5.6) * (S / 1024);
+      ctx.globalAlpha = strength * rand(0.4, 0.85) * (1 - rr * 0.45);
       for (const wrap of [-S, 0, S]) {   // u seam duplication
         const x = cx + px + wrap;
         if (x < -8 || x > S + 8) continue;
@@ -791,7 +808,8 @@ class Cake {
     for (let y = 0; y < N; y++) {
       const v = 1 - y / (N - 1);
       const rIdx = Math.round(v * (this.radiusByV.length - 1));
-      const w = Math.max(this.radiusByV[rIdx], 0.004);   // area weight ∝ local radius
+      let w = Math.max(this.radiusByV[rIdx], 0.004);     // area weight ∝ local radius
+      if (v < 0.07) w *= 0.3;                             // hard-to-see bottom skirt counts less
       for (let x = 0; x < N; x++) {
         const a = data[(y * N + x) * 4 + 3] / 255;
         sum += w * Math.min(a * 1.25, 1);
@@ -1061,7 +1079,10 @@ let plateAngle = 0, plateVel = 0, plateHold = 0;
 let sprayingPtr = null, rotatePtr = null, rotateLastX = 0;
 let aimPoint = new THREE.Vector3(), aimNormal = new THREE.Vector3(0, 0, 1), aimValid = false, aimOnCake = false;
 let aimUV = new THREE.Vector2();
+let lastPtrX = 0, lastPtrY = 0;   // last finger position — re-raycast per frame while the plate turns
 let revealT = 0;
+let revealAz = -0.9, revealEl = 0.06;               // finale light direction
+let lightDragActive = false, lightDragAz = 0, lightDragEl = 0.06, lightPtr = null;
 let starsLit = 0;
 let lastCovCheck = 0;
 let firstSprayDone = false;
@@ -1123,11 +1144,11 @@ spray.setColor(VELVET_COLORS[0].hex);
 mistCone.material.color.set(VELVET_COLORS[0].hex).multiplyScalar(1.15);
 
 function updateMeter(cov) {
-  const pct = clamp(cov / 0.86, 0, 1) * 100;
+  const pct = clamp(cov / 0.78, 0, 1) * 100;
   meterFill.style.width = pct + '%';
   const c = VELVET_COLORS[colorIdx];
   meterFill.style.background = `linear-gradient(180deg, ${lighten(c.css, 30)}, ${c.css})`;
-  const th = [0.3, 0.6, 0.855];
+  const th = [0.28, 0.55, 0.775];
   for (let i = 0; i < 3; i++) {
     if (cov >= th[i] && starsLit <= i) {
       starsLit = i + 1;
@@ -1154,8 +1175,10 @@ document.getElementById('startBtn').addEventListener('pointerup', () => {
 document.getElementById('nextBtn').addEventListener('pointerup', () => {
   sfx.ensure(); sfx.blip(700, .1, .2);
   const ov = document.getElementById('finishOv');
-  ov.classList.remove('show'); ov.style.pointerEvents = 'none';
+  ov.classList.remove('show');
   sparkles.active = false;
+  lightDragActive = false; lightPtr = null; revealAz = -0.9; revealEl = 0.06;
+  document.getElementById('hud').classList.remove('finale');
   revealSpot.intensity = 0;
   keyLight.intensity = 3.4;
   hemi.intensity = 0.34;
@@ -1202,6 +1225,10 @@ aimProxy.position.copy(CAKE_C);
 scene.add(aimProxy);
 
 cv.addEventListener('pointerdown', (e) => {
+  if (state === 'done') {                 // free-play: drag to steer the finale light
+    if (lightPtr === null) { lightPtr = e.pointerId; lightDragActive = true; setLightFromPointer(e); }
+    return;
+  }
   if (state !== 'play') return;
   sfx.ensure();
   setNDC(e);
@@ -1221,7 +1248,13 @@ cv.addEventListener('pointerdown', (e) => {
     if (!firstSprayDone) { firstSprayDone = true; hintEl.style.opacity = 0; setTimeout(() => hintEl.remove(), 600); }
   }
 });
+function setLightFromPointer(e) {
+  // horizontal → azimuth around the cake, vertical → light height (kept grazing-low)
+  lightDragAz = lerp(-2.4, 2.4, e.clientX / window.innerWidth);
+  lightDragEl = lerp(0.28, -0.02, e.clientY / window.innerHeight);
+}
 cv.addEventListener('pointermove', (e) => {
+  if (e.pointerId === lightPtr) { setLightFromPointer(e); return; }
   if (e.pointerId === sprayingPtr) updateAim(e);
   else if (e.pointerId === rotatePtr) {
     const dx = e.clientX - rotateLastX;
@@ -1232,12 +1265,18 @@ cv.addEventListener('pointermove', (e) => {
 function endPtr(e) {
   if (e.pointerId === sprayingPtr) { sprayingPtr = null; sfx.hiss(false); }
   if (e.pointerId === rotatePtr) rotatePtr = null;
+  if (e.pointerId === lightPtr) lightPtr = null;   // keep last light direction, stop tracking
 }
 cv.addEventListener('pointerup', endPtr);
 cv.addEventListener('pointercancel', endPtr);
 
 function updateAim(e) {
-  setNDC(e);
+  lastPtrX = e.clientX; lastPtrY = e.clientY;
+  refreshAim();
+}
+function refreshAim() {
+  ndc.x = (lastPtrX / window.innerWidth) * 2 - 1;
+  ndc.y = -(lastPtrY / window.innerHeight) * 2 + 1;
   raycaster.setFromCamera(ndc, camera);
   const hit = cake && raycaster.intersectObject(cake.mesh)[0];
   if (hit) {
@@ -1263,8 +1302,10 @@ function startReveal() {
   state = 'reveal';
   revealT = 0;
   sprayingPtr = null; sfx.hiss(false);
+  if (!firstSprayDone) { firstSprayDone = true; hintEl.style.opacity = 0; setTimeout(() => hintEl.remove(), 600); }
   sfx.fanfare();
   sparkles.active = true;
+  document.getElementById('hud').classList.add('finale');
   toast('よこから ひかりを あててみよう ✨');
 }
 
@@ -1285,18 +1326,22 @@ const _m = new THREE.Matrix4();
 const _up = new THREE.Vector3(0, 1, 0);
 
 function animate() {
-  const dt = Math.min(clock.getDelta(), 0.05);
+  const rawDt = clock.getDelta();
+  const dt = Math.min(rawDt, 0.05);
   const t = clock.elapsedTime;
 
-  // ---- turntable spin ----
+  // ---- spraying state (re-raycast every frame so paint lands where the finger points
+  //      even while the turntable spins underneath) ----
+  if (state === 'play' && sprayingPtr !== null) refreshAim();
+  const spraying = state === 'play' && sprayingPtr !== null && aimValid;
+
+  // ---- turntable spin: chef-style auto-turn while spraying, manual overrides win ----
   if (plateHold !== 0) plateVel = lerp(plateVel, plateHold * 2.4, 0.12);
+  else if (spraying && rotatePtr === null) plateVel = lerp(plateVel, 1.4, 0.06);   // ≈0.7 rad/s steady
   plateVel *= 0.945;
   if (state === 'reveal' || state === 'done') plateVel = lerp(plateVel, 0.55, 0.03);
-  plateAngle += plateVel * dt * (state === 'play' ? 60 * 0.016 : 1) * (state === 'play' ? 1 : 1);
+  plateAngle += plateVel * dt;
   plateGroup.rotation.y = plateAngle;
-
-  // ---- spraying ----
-  const spraying = state === 'play' && sprayingPtr !== null && aimValid;
   if (spraying) {
     // gun placement: hover off the surface, nozzle aimed at the hit point
     _dir.copy(aimNormal); _dir.y = Math.max(_dir.y * 0.35, -0.1);
@@ -1340,8 +1385,8 @@ function animate() {
     // paint
     if (aimOnCake && cake) {
       const c = VELVET_COLORS[colorIdx];
-      cake.splat(aimUV.x, aimUV.y, c.css, 0.85, 0.021);
-      cake.splat(aimUV.x, aimUV.y, c.css, 0.4, 0.034);
+      cake.splat(aimUV.x, aimUV.y, c.css, 0.9, 0.042);
+      cake.splat(aimUV.x, aimUV.y, c.css, 0.45, 0.068);
     }
   } else {
     mistCone.material.opacity = lerp(mistCone.material.opacity, 0, 0.2);
@@ -1358,7 +1403,7 @@ function animate() {
     lastCovCheck = t;
     const cov = cake.computeCoverage();
     updateMeter(cov);
-    if (cov >= 0.86) startReveal();
+    if (cov >= 0.78) startReveal();
   }
 
   spray.update(dt);
@@ -1376,33 +1421,52 @@ function animate() {
     s.material.opacity = Math.sin(ph * Math.PI) * 0.15 * fade;
   }
 
-  // ---- reveal cinematics ----
+  // ---- reveal cinematics: dolly in close, sweep a low grazing light, then hand it to the child ----
   if (state === 'reveal' || state === 'done') {
-    revealT += dt;
-    const k = clamp(revealT / 2.2, 0, 1);
-    keyLight.intensity = lerp(3.4, 0.4, k);
-    hemi.intensity = lerp(0.34, 0.12, k);
-    fillLight.intensity = lerp(0.38, 0.08, k);
-    scene.environmentIntensity = lerp(0.48, 0.18, k);
-    revealSpot.intensity = lerp(0, 42, k);
-    // low side-light sweeping around the cake — velvet nap catches the grazing light
-    const az = -0.9 + Math.sin(revealT * 0.45) * 1.15;
-    revealSpot.position.set(Math.sin(az) * 0.62, CAKE_C.y + 0.1, Math.cos(az) * 0.62);
+    revealT += Math.min(rawDt, 0.25);   // wall-clock timeline so slow devices still finish
+    const k = clamp(revealT / 1.8, 0, 1);
+    keyLight.intensity = lerp(3.4, 0.32, k);
+    hemi.intensity = lerp(0.34, 0.1, k);
+    fillLight.intensity = lerp(0.38, 0.06, k);
+    scene.environmentIntensity = lerp(0.48, 0.16, k);
+    revealSpot.intensity = lerp(0, 7.5, k);
+    // low grazing side-light around the cake — the powder relief catches it
+    if (lightDragActive) {
+      revealAz = lerp(revealAz, lightDragAz, 0.15);
+      revealEl = lerp(revealEl, lightDragEl, 0.15);
+    } else if (state === 'reveal') {
+      revealAz = -2.4 + revealT * 1.15;               // one slow pass across the face
+      revealEl = 0.06;
+    } else {
+      revealAz += rawDt * 0.25;                       // gentle idle drift until touched
+    }
+    revealSpot.position.set(
+      Math.sin(revealAz) * 0.55,
+      CAKE_C.y + 0.02 + revealEl,
+      Math.cos(revealAz) * 0.55
+    );
     sparkles.update(t);
-    if (state === 'reveal' && revealT > 2.8) {
+    if (state === 'reveal' && revealT > 4.2) {
       state = 'done';
       gun.visible = false;
       const ov = document.getElementById('finishOv');
-      ov.classList.add('show'); ov.style.pointerEvents = 'auto';
+      ov.classList.add('show');           // button stays clickable; canvas still gets light-drag touches
+      toast('ゆびで ひかりを うごかしてみて！✨');
     }
-    // slow celebratory dolly
-    camera.position.x = camBase.x + Math.sin(revealT * 0.3) * 0.05;
-    camera.lookAt(CAKE_C.x, CAKE_C.y + 0.01, CAKE_C.z);
+    // dolly in close so the velvet grain fills the screen
+    const dk = clamp(revealT / 1.6, 0, 1);
+    const ease = dk * dk * (3 - 2 * dk);
+    camera.position.lerpVectors(camBase, camClose, ease);
+    camera.position.x += Math.sin(revealT * 0.22) * 0.012 * ease;
+    camera.lookAt(CAKE_C.x, CAKE_C.y + 0.005, CAKE_C.z);
   } else {
     // subtle handheld sway
     camSway = t;
-    camera.position.x = camBase.x + Math.sin(camSway * 0.5) * 0.004 + Math.sin(camSway * 1.7) * 0.0015;
-    camera.position.y = camBase.y + Math.sin(camSway * 0.8) * 0.003;
+    camera.position.set(
+      camBase.x + Math.sin(camSway * 0.5) * 0.004 + Math.sin(camSway * 1.7) * 0.0015,
+      camBase.y + Math.sin(camSway * 0.8) * 0.003,
+      camBase.z
+    );
     camera.lookAt(CAKE_C.x, CAKE_C.y + 0.01, CAKE_C.z);
   }
 
