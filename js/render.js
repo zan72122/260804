@@ -284,18 +284,23 @@
     ctx.arc(cx, cy, plateR * 0.985, 0, Math.PI * 2);
     ctx.stroke();
 
-    // 控えめな艶ハイライト（細い弧状の光筋）
+    // リムハイライト（左上の縁だけをふちどる細く淡い光。汚れ/欠けに見えないよう
+    // 縁に沿った弧のみに限定し、面を横切る光筋は作らない）
     ctx.save();
     ctx.beginPath();
     ctx.arc(cx, cy, plateR, 0, Math.PI * 2);
     ctx.clip();
+    ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.ellipse(cx - plateR * 0.38, cy - plateR * 0.46, plateR * 0.34, plateR * 0.11, -0.55, 0, Math.PI * 2);
-    var hi = ctx.createRadialGradient(cx - plateR * 0.38, cy - plateR * 0.46, 0, cx - plateR * 0.38, cy - plateR * 0.46, plateR * 0.34);
-    hi.addColorStop(0, 'rgba(255,255,255,0.10)');
-    hi.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = hi;
-    ctx.fill();
+    ctx.arc(cx, cy, plateR * 0.975, -2.35, -0.95);
+    ctx.lineWidth = Math.max(1, plateR * 0.020);
+    ctx.strokeStyle = 'rgba(255,255,255,0.09)';
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx, cy, plateR * 0.975, -2.05, -1.25);
+    ctx.lineWidth = Math.max(1, plateR * 0.010);
+    ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+    ctx.stroke();
     ctx.restore();
 
     ctx.restore();
@@ -362,12 +367,13 @@
   function buildPetalPath(len, width) {
     var p = new Path2D();
     var baseW = width * 0.5;
-    // 根元から先端へ、菊弁らしいティアドロップ。先端やや尖り。
-    p.moveTo(0, baseW * 0.55);
-    p.bezierCurveTo(len * 0.28, baseW * 0.98, len * 0.62, baseW * 0.62, len * 0.92, baseW * 0.14);
-    p.quadraticCurveTo(len * 1.04, 0, len * 0.92, -baseW * 0.14);
-    p.bezierCurveTo(len * 0.62, -baseW * 0.62, len * 0.28, -baseW * 0.98, 0, -baseW * 0.55);
-    p.quadraticCurveTo(-len * 0.06, 0, 0, baseW * 0.55);
+    // 根元から先端へ、はさみ菊らしい細長いへら型。密度を出すため先端近くまで
+    // あまり細くならないよう（テーパーを緩めて）隣同士がしっかり重なる幅を保つ。
+    p.moveTo(0, baseW * 0.62);
+    p.bezierCurveTo(len * 0.20, baseW * 1.05, len * 0.50, baseW * 0.95, len * 0.82, baseW * 0.50);
+    p.quadraticCurveTo(len * 1.00, 0, len * 0.82, -baseW * 0.50);
+    p.bezierCurveTo(len * 0.50, -baseW * 0.95, len * 0.20, -baseW * 1.05, 0, -baseW * 0.62);
+    p.quadraticCurveTo(-len * 0.05, 0, 0, baseW * 0.62);
     p.closePath();
     return p;
   }
@@ -383,14 +389,14 @@
     return p;
   }
 
-  // 花びら1枚を描画。angle=ローカル角(rotation加算済み,画面基準), baseRadius=根元半径(world),
-  // outerLen/width=world単位, lift=0..1
-  function drawPetal(theme, angle, baseRadius, outerLen, width, lift, isOuterRing) {
+  // 花びら1枚を描画。angle=ローカル角(rotation加算済み,画面基準),
+  // rootBase/growth=根元半径の起点/せり出し量(world), outerLen/width=world単位, lift=0..1
+  function drawPetal(theme, angle, rootBase, growth, outerLen, width, lift) {
     var t = easeOutBack(lift);
     var liftC = clamp(lift, 0, 1);
     var scaleT = 0.35 + 0.65 * clamp(t, 0, 1.15);
-    // 切り込みから起き上がるにつれ、根元がほんの少し外側へせり出す(0.06〜0.1world)
-    var rootRadius = baseRadius + (isOuterRing ? 0.10 : 0.06) * clamp(t, 0, 1.15);
+    // 切り込みから起き上がるにつれ、根元が外側へせり出す(リングごとの growth 量)
+    var rootRadius = rootBase + growth * clamp(t, 0, 1.15);
 
     var rootX = view.cx + Math.cos(angle) * rootRadius * view.scale;
     var rootY = view.cy + Math.sin(angle) * rootRadius * view.scale;
@@ -459,24 +465,32 @@
   }
 
   // ============ リング & 花びら描画 ============
-  function petalSizeForRing(ringIndex, ringsLen) {
-    // 外周は大きめ、内側は小さめ・密
-    if (ringIndex === 0) return { len: 0.40, width: 0.30 };
-    return { len: 0.27, width: 0.20 };
+  // 花びらのジオメトリ: ring.r はコア(ゲームロジック)所有の値なので描画では使わず、
+  // 見た目の迫力(密度・豪華さ)専用の値をここで独立管理する。
+  //   rootBase : 切った直後(lift=0)の根元半径(world)
+  //   growth   : lift到達時に根元がさらにせり出す量(world)。完了時の根元半径 ≈ rootBase+growth
+  //   len      : 花びらの長さパラメータ(world)。完了時の先端半径 ≈ (rootBase+growth) + len*1.00
+  //   width    : 花びらの幅パラメータ(world)
+  var PETAL_GEOM = [
+    { rootBase: 0.28, growth: 0.12, len: 0.64, width: 0.62 }, // 外周10枚: 根元≈0.40→先端≈1.04(練り切りの縁にわずかに掛かる)
+    { rootBase: 0.11, growth: 0.07, len: 0.42, width: 0.42 }, // 中段7枚: 根元≈0.18→先端≈0.60(外周花びらの根元に重なる)
+  ];
+  var PETAL_GEOM_FALLBACK = { rootBase: 0.05, growth: 0.03, len: 0.20, width: 0.18 };
+  function petalGeomForRing(ringIndex) {
+    return PETAL_GEOM[ringIndex] || PETAL_GEOM_FALLBACK;
   }
 
   function drawPetalsForRing(state, theme, ringIndex) {
     var ring = state.rings[ringIndex];
     if (!ring) return;
-    var size = petalSizeForRing(ringIndex, state.rings.length);
-    var isOuter = ringIndex === 0;
+    var geo = petalGeomForRing(ringIndex);
     var n = ring.n;
     for (var slot = 0; slot < n; slot++) {
       if (!ring.cut[slot]) continue;
       var lift = ring.lift[slot] || 0;
       var localAngle = ring.offset + slot * (Math.PI * 2 / n);
       var screenAngle = localAngle + view.rotation;
-      drawPetal(theme, screenAngle, ring.r * 0.62, size.len, size.width, lift, isOuter);
+      drawPetal(theme, screenAngle, geo.rootBase, geo.growth, geo.len, geo.width, lift);
     }
   }
 
@@ -528,9 +542,9 @@
 
     // 完成したら黄色いしべ粒(菊の芯)
     if (isDone) {
-      var grains = 8;
-      var gR = r * 0.62;
-      var grainSize = r * 0.16;
+      var grains = 10;
+      var gR = r * 0.64;
+      var grainSize = r * 0.18;
       for (var i = 0; i < grains; i++) {
         var a = (i / grains) * Math.PI * 2 + 0.3;
         var gx = Math.cos(a) * gR;
