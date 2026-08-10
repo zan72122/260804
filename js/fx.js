@@ -272,24 +272,32 @@
   // 金箔風の小さな四角片(祝福演出)。ゆっくり舞い落ち、きらりと明滅する。
   function drawGold(ctx, p) {
     var frac = p.life / p.maxLife;
-    var glim = 0.72 + 0.28 * Math.sin(p.t * 9 + p.seed * 3);
+    var glim = 0.55 + 0.45 * Math.sin(p.t * 9 + p.seed * 3); // きらりと明滅
     ctx.save();
-    ctx.globalAlpha = Math.max(0, Math.min(1, frac * 2.2)) * glim;
+    ctx.globalAlpha = Math.max(0, Math.min(1, frac * 2.2));
     ctx.translate(p.x, p.y);
     ctx.rotate(p.rot);
     var s = p.size;
+    // 淡い金の後光(グロー)で「金箔らしい」きらめきを演出
+    try {
+      ctx.shadowColor = 'rgba(255,214,120,0.9)';
+      ctx.shadowBlur = s * (0.9 + glim * 0.9);
+    } catch (eShadow) { /* noop */ }
     var g;
     try {
       g = ctx.createLinearGradient(-s / 2, -s / 2, s / 2, s / 2);
-      g.addColorStop(0, '#fff3c4');
-      g.addColorStop(0.5, '#e8b84b');
-      g.addColorStop(1, '#c9962c');
-    } catch (e) { g = '#e8b84b'; }
+      g.addColorStop(0, '#fffbe8');
+      g.addColorStop(0.42, '#ffd75e');
+      g.addColorStop(0.75, '#f0a92e');
+      g.addColorStop(1, '#c97f14');
+    } catch (e) { g = '#f0a92e'; }
     ctx.fillStyle = g;
+    ctx.globalAlpha = Math.max(0, Math.min(1, frac * 2.2)) * (0.75 + 0.25 * glim);
     ctx.fillRect(-s / 2, -s / 2, s, s);
-    ctx.strokeStyle = 'rgba(255,255,255,0.65)';
-    ctx.lineWidth = Math.max(0.5, s * 0.1);
-    ctx.strokeRect(-s / 2 + s * 0.16, -s / 2 + s * 0.16, s * 0.32, s * 0.32);
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = 'rgba(255,255,255,' + (0.55 + 0.4 * glim) + ')';
+    ctx.lineWidth = Math.max(0.6, s * 0.12);
+    ctx.strokeRect(-s / 2 + s * 0.15, -s / 2 + s * 0.15, s * 0.34, s * 0.34);
     ctx.restore();
   }
 
@@ -364,41 +372,54 @@
   // チョキン鋏アニメ — 様式化した菓子鋏(和鋏)。canvasパスのみ、絵文字禁止。
   // U字バネの握り(背面)＋2枚の細い刃(前方)。halfOpenで開閉角を制御。
   // =====================================================================
+  // 鋏の各部寸法をsizeから一元算出(描画とtip位置合わせの両方で使う)
+  function scissorMetrics(size) {
+    var pivotX = size * 0.08;
+    var bladeLen = size * 0.68;
+    var legLen = size * 0.34;
+    var legGap = size * 0.115;
+    return {
+      pivotX: pivotX,
+      bladeLen: bladeLen,
+      legLen: legLen,
+      legGap: legGap,
+      backX: -(pivotX + legLen),
+      tipShift: pivotX + bladeLen, // 刃先(切っ先)までの距離。刃先を切り位置に一致させるための平行移動量
+    };
+  }
+
   function drawScissorBlade(ctx, pivotX, bladeLen, size) {
-    var w = size * 0.10;
+    var w = size * 0.072; // 細身の刃元幅(上品な菓子鋏らしい繊細さ)
     ctx.beginPath();
-    ctx.moveTo(pivotX * 0.35, -w * 0.5);
-    ctx.lineTo(pivotX + bladeLen * 0.16, -w * 0.6);
-    ctx.quadraticCurveTo(pivotX + bladeLen * 0.62, -w * 0.20, pivotX + bladeLen, -size * 0.012);
-    ctx.lineTo(pivotX + bladeLen + size * 0.02, 0);
-    ctx.quadraticCurveTo(pivotX + bladeLen * 0.62, w * 0.20, pivotX + bladeLen * 0.16, w * 0.38);
-    ctx.lineTo(pivotX * 0.35, w * 0.42);
+    ctx.moveTo(pivotX * 0.3, -w * 0.40);
+    ctx.lineTo(pivotX + bladeLen * 0.13, -w * 0.52);
+    ctx.quadraticCurveTo(pivotX + bladeLen * 0.52, -w * 0.16, pivotX + bladeLen * 0.86, -size * 0.010);
+    ctx.quadraticCurveTo(pivotX + bladeLen * 0.97, -size * 0.004, pivotX + bladeLen + size * 0.014, 0);
+    ctx.quadraticCurveTo(pivotX + bladeLen * 0.55, w * 0.14, pivotX + bladeLen * 0.13, w * 0.28);
+    ctx.lineTo(pivotX * 0.3, w * 0.32);
     ctx.closePath();
     var g;
     try {
-      g = ctx.createLinearGradient(0, -w * 0.6, 0, w * 0.42);
-      g.addColorStop(0, '#fbfdff');
-      g.addColorStop(0.35, '#dfe6ee');
-      g.addColorStop(0.7, '#b7c1cd');
-      g.addColorStop(1, '#98a3b0');
+      g = ctx.createLinearGradient(0, -w * 0.55, 0, w * 0.32);
+      g.addColorStop(0, '#fdfeff');
+      g.addColorStop(0.32, '#e3e9f0');
+      g.addColorStop(0.68, '#bcc6d1');
+      g.addColorStop(1, '#9aa5b2');
     } catch (e) { g = '#c7d0da'; }
     ctx.fillStyle = g;
     ctx.fill();
     // 柔らかい白ハイライト(刃先の峰)
-    ctx.strokeStyle = 'rgba(255,255,255,0.75)';
-    ctx.lineWidth = Math.max(0.6, size * 0.012);
+    ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+    ctx.lineWidth = Math.max(0.5, size * 0.010);
     ctx.beginPath();
-    ctx.moveTo(pivotX + bladeLen * 0.2, -w * 0.42);
-    ctx.quadraticCurveTo(pivotX + bladeLen * 0.62, -w * 0.16, pivotX + bladeLen * 0.94, -size * 0.01);
+    ctx.moveTo(pivotX + bladeLen * 0.18, -w * 0.36);
+    ctx.quadraticCurveTo(pivotX + bladeLen * 0.55, -w * 0.13, pivotX + bladeLen * 0.92, -size * 0.006);
     ctx.stroke();
   }
 
   function drawScissorShape(ctx, size, halfOpen) {
-    var pivotX = size * 0.09;
-    var bladeLen = size * 0.60;
-    var legLen = size * 0.36;
-    var legGap = size * 0.135;
-    var backX = -(pivotX + legLen);
+    var m = scissorMetrics(size);
+    var pivotX = m.pivotX, bladeLen = m.bladeLen, legGap = m.legGap, backX = m.backX;
 
     // U字バネ(背面の握り) — 一続きの太い線で表現
     ctx.beginPath();
@@ -414,7 +435,7 @@
       sg.addColorStop(1, '#b0bac6');
     } catch (e) { sg = '#c7d0da'; }
     ctx.strokeStyle = sg;
-    ctx.lineWidth = Math.max(1, size * 0.075);
+    ctx.lineWidth = Math.max(1, size * 0.062);
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.stroke();
@@ -432,11 +453,11 @@
 
     // 要(かなめ)の小さな金の飾り
     ctx.beginPath();
-    ctx.arc(0, 0, size * 0.045, 0, Math.PI * 2);
+    ctx.arc(0, 0, size * 0.040, 0, Math.PI * 2);
     ctx.fillStyle = '#e6bd5a';
     ctx.fill();
     ctx.beginPath();
-    ctx.arc(-size * 0.012, -size * 0.012, size * 0.018, 0, Math.PI * 2);
+    ctx.arc(-size * 0.011, -size * 0.011, size * 0.016, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(255,255,255,0.85)';
     ctx.fill();
   }
@@ -471,17 +492,26 @@
         halfOpen = SCISSOR_CLOSED_HALF;
       }
 
+      var m = scissorMetrics(fx.size);
       ctx.save();
       ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
       ctx.translate(fx.x, fx.y);
       ctx.rotate(fx.rot);
       ctx.scale(scale, scale);
+      // 刃先(切っ先)がちょうど切り位置(fx.x,fx.y)に来るよう背面側へ平行移動
+      ctx.translate(-m.tipShift, 0);
       drawScissorShape(ctx, fx.size, halfOpen);
       ctx.restore();
     } catch (e) { /* noop */ }
   }
 
   function spawnScissors(x, y, rot, palette) {
+    // 前の鋏がまだ閉じきっていない状態で置き換わる場合、その演出フィードバックを
+    // 取りこぼさないよう直前の位置で即座に発火させておく(通常はcutCooldownで発生しないが念のため)
+    if (scissorsFx && !scissorsFx.flashDone) {
+      scissorsFx.flashDone = true;
+      try { triggerCutImpact(scissorsFx.x, scissorsFx.y, scissorsFx.palette); } catch (ePrev) { /* noop */ }
+    }
     var minSide = Math.min(lastW, lastH);
     scissorsFx = {
       x: x, y: y, rot: (typeof rot === 'number' && isFinite(rot)) ? rot : 0,
@@ -771,7 +801,8 @@
       // triggerCutImpact() がフラッシュ+生地の欠片+紙吹雪きらめきを発火する。
       var cx = (lastView && typeof lastView.cx === 'number') ? lastView.cx : lastW / 2;
       var cy = (lastView && typeof lastView.cy === 'number') ? lastView.cy : lastH / 2;
-      var rot = Math.atan2(pos.y - cy, pos.x - cx);
+      // 刃先が切り位置を指し、握り(バネ)が外側に来るよう中心から見て内向きに構える
+      var rot = Math.atan2(cy - pos.y, cx - pos.x);
       spawnScissors(pos.x, pos.y, rot, palette);
     } catch (e) { /* noop */ }
     playCut();
@@ -921,7 +952,7 @@
                 ax: 22,
                 rot: Math.random() * Math.PI * 2,
                 vrot: (Math.random() * 2 - 1) * 1.6,
-                size: 4 + Math.random() * 3.5,
+                size: 5 + Math.random() * 4,
                 flutterFreq: 0.8 + Math.random() * 1.2,
                 flutterAmp: 18 + Math.random() * 22,
                 seed: Math.random() * Math.PI * 2,
