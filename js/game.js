@@ -1414,14 +1414,22 @@ window.Game = (function () {
     requestAnimationFrame(frame);
   }
 
+  // read the layout custom properties CSS sets on :root — same convention
+  // for --safe-top (already existed) and --palette-h (the new bottom bar)
+  function readCssVars() {
+    const cs = getComputedStyle(document.documentElement);
+    safeTop = parseFloat(cs.getPropertyValue('--safe-top')) || 0;
+    paletteH = parseFloat(cs.getPropertyValue('--palette-h')) || 0;
+  }
+
   function resizeInternal() {
     dpr = Math.min(window.devicePixelRatio || 1, TIER[tier].dpr);
     W = window.innerWidth;
     H = window.innerHeight;
-    safeTop = parseFloat(getComputedStyle(document.documentElement)
-                .getPropertyValue('--safe-top')) || 0;
+    readCssVars();
     canvas.width = Math.round(W * dpr);
     canvas.height = Math.round(H * dpr);
+    LiquidArt.clearCache();
     layout();
   }
 
@@ -1434,6 +1442,7 @@ window.Game = (function () {
     roundNum = (opts && opts.round) || 0;
     theme = THEMES[roundNum % THEMES.length];
     W = window.innerWidth; H = window.innerHeight;
+    readCssVars();               // rows must be computed with the palette reserve known
     rows = computeRows();
     buildTower();
     resizeInternal();
@@ -1526,12 +1535,41 @@ window.Game = (function () {
                rowGap: +(rowStep - glassH).toFixed(1),
                deflectR: +deflectRadius().toFixed(1) };
     },
+    tintAt(r, i) {
+      const t = glassAt(r, i).tint;
+      return { h: +t.h.toFixed(2), c: +t.c.toFixed(2) };
+    },
+    cloudTint() { return { h: +cloudTint.h.toFixed(2), c: +cloudTint.c.toFixed(2) }; },
+    poolTint() { return { h: +poolTint.h.toFixed(2), c: +poolTint.c.toFixed(2) }; },
+    paintStream(r, i, side, tint) {
+      const s = glassAt(r, i);
+      const tr = s.r + 1, ti = side === 'L' ? s.i : s.i + 1;
+      const t = glassAt(tr, ti);
+      if (!t) return;
+      forcedGrabs.set(gIdx(r, i) + ':' + side, {
+        d: { x: (s.x + t.x) / 2, y: (s.y + t.y) / 2, vx: 0, speed: 0, sprayT: 0,
+             paint: Tint.make(tint.h, tint.c) },
+        targetIdx: gIdx(tr, ti), str: 1 });
+      everDeflected = true;
+    },
   };
+
+  function setBrush(t) { brush = t ? Tint.make(t.h, t.c) : null; }
+  function getBrush() { return brush; }
+  function getTintGrid() {
+    const cells = [];
+    for (let k = 0; k < glasses.length; k++) {
+      const g = glasses[k];
+      cells.push({ r: g.r, i: g.i, h: +g.tint.h.toFixed(1), c: +g.tint.c.toFixed(3) });
+    }
+    return { rows, cells };
+  }
 
   return {
     init, reset, simulate, bench, test, setPouring,
     pointerDown, pointerMove, pointerUp, releaseAll,
     resize: resizeInternal,
+    setBrush, getBrush, getTintGrid,
     getState: () => state,
     debug: () => ({ rows, glasses: glasses.length, fullCount, state,
                     pool: +pool.toFixed(2), totalPoured: +totalPoured.toFixed(2),
