@@ -80,9 +80,22 @@ export class RevealScene {
   show(record, quality = 1) {
     this.clear();
     const p = new Plush(record.species, record.variant, { quality: 1, fuzz: quality > 0.4, seed: 4242 });
-    p.root.scale.setScalar(2.9);
-    p.root.position.y = -0.15;
     this.holder.add(p.root);
+
+    // fit by measured height, not a magic number — a rabbit's ears and a
+    // chick's body must both land at the same size on screen
+    p.root.scale.setScalar(1);
+    p.root.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(p.root);
+    const h = Math.max(0.2, box.max.y - box.min.y);
+    const scale = 2.25 / h;
+    this.baseScale = scale;
+    this.baseY = -((box.min.y + box.max.y) / 2) * scale - 0.05;
+    p.root.scale.setScalar(scale);
+    p.root.position.y = this.baseY;
+    this.shadow.position.y = box.min.y * scale + this.baseY - 0.1;
+    this.shadow.scale.setScalar(Math.max(0.6, (box.max.x - box.min.x) * scale * 0.8));
+
     this.plush = p;
     this.t = 0;
     this.name = SPECIES_INFO[record.species]?.name ?? '';
@@ -111,10 +124,10 @@ export class RevealScene {
     const t = this.t;
     if (this.plush) {
       const pop = easeOutBack(clamp(t / 0.55, 0, 1));
-      const s = 2.9 * lerp(0.55, 1, pop);
+      const s = this.baseScale * lerp(0.55, 1, pop);
       this.plush.root.scale.setScalar(s);
       this.plush.root.rotation.y = -0.5 + Math.sin(t * 0.55) * 0.55;
-      this.plush.root.position.y = -0.15 + Math.sin(t * 1.5) * 0.045;
+      this.plush.root.position.y = this.baseY + Math.sin(t * 1.5) * 0.045;
       // let the limbs swing from the presentation turn
       _v.set(Math.cos(t * 0.55) * 0.3, Math.cos(t * 1.5) * 0.07, 0);
       this.plush.update(dt, _v, 1);

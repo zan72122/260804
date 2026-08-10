@@ -22,12 +22,17 @@ import { Spring, clamp, makeRng } from './util.js';
 // between a smooth phone frame rate and a slideshow. Small trim uses the S
 // variants — nobody can see the facets on a 4 mm eye highlight.
 const G = {};
-const geoSphere = (q = 1) => (G['s' + q] ||= new THREE.SphereGeometry(1, q > 0.6 ? 18 : 12, q > 0.6 ? 12 : 8));
+const geoSphere = (q = 1) => (G['s' + q] ||= new THREE.SphereGeometry(1, q > 0.6 ? 20 : 14, q > 0.6 ? 14 : 9));
+// torso and head carry the fuzz shell, whose silhouette would show every facet
+const geoSphereHi = () => (G.sHi ||= new THREE.SphereGeometry(1, 26, 18));
 const geoSphereS = () => (G.sS ||= new THREE.SphereGeometry(1, 10, 7));
 const geoCone = () => (G.cone ||= new THREE.ConeGeometry(1, 1, 12, 1));
 const geoCyl = () => (G.cyl ||= new THREE.CylinderGeometry(1, 1, 1, 8, 1));
 const geoTorus = () => (G.torus ||= new THREE.TorusGeometry(1, 0.08, 6, 20));
 const geoTorusS = () => (G.torusS ||= new THREE.TorusGeometry(1, 0.08, 4, 12));
+// a thread, not a tube: the tube radius is relative to the ring radius, so a
+// seam ring needs a far thinner profile than a collar
+const geoSeamRing = () => (G.seamRing ||= new THREE.TorusGeometry(1, 0.014, 4, 26));
 const geoTorusHalf = () => (G.torusH ||= new THREE.TorusGeometry(1, 0.1, 5, 10, Math.PI));
 // partial ring used for the crown seam: sweeps from the nape over the top and
 // stops before it would cross the face
@@ -153,7 +158,7 @@ export class Plush {
     const accent = threadMaterial(this.pal.acc, { roughness: 0.28 });
     const eyeM = eyeMaterial(0x241d24);
     const gloss = new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.05, clearcoat: 1, metalness: 0 });
-    const seamMat = threadMaterial(new THREE.Color(this.pal.fur).multiplyScalar(0.86).getHex(), { roughness: 0.62 });
+    const seamMat = threadMaterial(new THREE.Color(this.pal.fur).multiplyScalar(0.9).getHex(), { roughness: 0.75, sheen: 0.4 });
     this.materials.push(fur, inner, thread, accent, eyeM, gloss, seamMat);
     this.mats = { fur, inner, thread, accent, eyeM, gloss, seam: seamMat };
 
@@ -348,9 +353,9 @@ export class Plush {
       unicorn: { s: [0.72, 0.72, 0.70], y: -0.28 },
     }[species];
 
-    const torso = mesh(B, geoSphere(q), fur, [0, shape.y, 0], shape.s, null, true);
+    const torso = mesh(B, geoSphereHi(), fur, [0, shape.y, 0], shape.s, null, true);
     torso.receiveShadow = true;
-    this._fuzz(torso, pal.fur, 0.055, true);
+    this._fuzz(torso, pal.fur, 0.04, true);
 
     // belly panel: a lighter shade of the same fabric, sewn on the front
     if (species !== 'unicorn') {
@@ -383,9 +388,9 @@ export class Plush {
     head.position.y = headCfg.y - (shape.y + shape.s[1] * 0.45);
     neck.add(head);
     this.head = head;
-    const headMesh = mesh(head, geoSphere(q), fur, [0, 0, 0],
+    const headMesh = mesh(head, geoSphereHi(), fur, [0, 0, 0],
       [headCfg.r, headCfg.r * (species === 'chick' ? 0.95 : 0.92), headCfg.r * 0.94], null, true);
-    this._fuzz(headMesh, pal.fur, 0.055, true);
+    this._fuzz(headMesh, pal.fur, 0.04, true);
     // head is built in a unit sphere space then scaled: work in local head units
     head.scale.setScalar(1);
     const HR = headCfg.r;
@@ -572,7 +577,7 @@ export class Plush {
       for (let i = 0; i < 6; i++) {
         const t = i / 5;
         const m = mesh(head, geoSphereS(), maneMats[i % maneMats.length],
-          [0, HR * 0.72 - t * 0.62, -HR * (0.55 + t * 0.42)], [0.17 - t * 0.03, 0.15, 0.14]);
+          [0, HR * 0.88 - t * 0.66, -HR * (0.28 + t * 0.52)], [0.2 - t * 0.03, 0.17, 0.16]);
         this._fuzz(m, maneCols[i % maneCols.length], 0.045);
       }
       this._face(head, { ...faceOpt, eyeX: 0.30, eyeY: 0.06, eyeZ: 0.80, noseY: -0.20, noseR: 0.07, noseColor: pal.inner, blush: true });
@@ -593,9 +598,12 @@ export class Plush {
       this.materials.push(star.material);
     }
 
-    // side seam around the widest part of the body
-    const bs = mesh(B, geoTorus(), seamMat, [0, shape.y, 0], [1, 1, 1], [Math.PI / 2, 0, 0]);
-    bs.scale.set(shape.s[0] * 0.985, shape.s[2] * 0.985, 0.09);
+    // side seam: sits a little below the equator like a real two-panel body,
+    // and hugs the surface so it reads as thread rather than a joint line
+    const seamY = shape.y - shape.s[1] * 0.26;
+    const k = Math.sqrt(Math.max(0.05, 1 - Math.pow((seamY - shape.y) / shape.s[1], 2))) * 0.99;
+    const bs = mesh(B, geoSeamRing(), seamMat, [0, seamY, 0], [1, 1, 1], [Math.PI / 2, 0, 0]);
+    bs.scale.set(shape.s[0] * k, shape.s[2] * k, 0.35);
 
     // gentle random personality: slight head tilt
     neck.rotation.z += (rng() - 0.5) * 0.12;
