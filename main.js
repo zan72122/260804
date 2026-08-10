@@ -213,7 +213,7 @@ drawRail(railBG, -RAIL_B.half, 0, RAIL_B.half, 0);
 el('circle', { cx: 0, cy: 0, r: 6, fill: '#d8dee8', stroke: '#7a8494', 'stroke-width': 2 }, railBG); // 中心ピボット
 const railHandleG = grp(railBG, { id: 'railHandle' });
 for (const hx of [-30, 0, 30]) el('circle', { cx: hx, cy: 9, r: 5, fill: '#ffd23e', stroke: '#b8871a', 'stroke-width': 1.6 }, railHandleG);
-el('rect', { x: -46, y: 2, width: 92, height: 15, rx: 7.5, fill: '#ffd23e', opacity: 0.18 }, railHandleG);
+const railGlowRect = el('rect', { x: -46, y: 2, width: 92, height: 15, rx: 7.5, fill: '#ffd23e', opacity: 0.18 }, railHandleG);
 // 漏斗レール
 drawRail(interiorG, FUN_L.x1, FUN_L.y1, FUN_L.x2, FUN_L.y2);
 drawRail(interiorG, FUN_R.x1, FUN_R.y1, FUN_R.x2, FUN_R.y2);
@@ -290,6 +290,7 @@ el('path', { d: 'M74 44 L78 52 L70 52 Z M70 56 L74 48 L78 56 Z', fill: '#ffb44d'
 el('ellipse', { cx: TRAY.x, cy: TRAY.y + 14, rx: 82, ry: 24, fill: '#5c6c85' }, worldG);
 el('ellipse', { cx: TRAY.x, cy: TRAY.y + 10, rx: 74, ry: 19, fill: '#3c4a60' }, worldG);
 const coinG = grp(worldG, { id: 'coin' });
+const coinShadow = el('circle', { cx: 3, cy: 9, r: 33, fill: '#000000', opacity: 0.22 }, coinG);
 const coinInner = grp(coinG);
 el('circle', { cx: 0, cy: 0, r: COIN_R, fill: 'url(#gradCoin)', stroke: '#8a90a0', 'stroke-width': 2 }, coinInner);
 el('circle', { cx: 0, cy: 0, r: COIN_R - 2.5, fill: 'none', stroke: '#ffffff', 'stroke-width': 1.4, opacity: 0.6, 'stroke-dasharray': '2 3' }, coinInner);
@@ -457,9 +458,12 @@ function worldToView(x, y) { return { x: 210 + cam.s * (x - cam.x), y: 420 + cam
 let S = 'READY';
 function setState(s) { S = s; lastInteract = performance.now(); }
 let lastInteract = performance.now();
+let forceHintUntil = 0;
 let selected = -1;
 let coinPos = { x: TRAY.x, y: TRAY.y };
 let coinVisible = true;
+let coinHeld = false, coinScale = 1, coinVisOffY = 0, coinGen = 0;
+let itemHeld = false;
 let railTheta = RAIL_B.base;   // 度
 let railTargetBase = RAIL_B.base;
 let railHeld = false;
@@ -520,21 +524,22 @@ function cutaway(on) {
 // 硬貨
 // ---------------------------------------------------------------
 function renderCoin() {
-  coinG.setAttribute('transform', `translate(${coinPos.x} ${coinPos.y})`);
+  coinG.setAttribute('transform', `translate(${coinPos.x} ${coinPos.y + coinVisOffY}) scale(${coinScale})`);
   coinG.style.display = coinVisible ? '' : 'none';
 }
 function insertCoin() {
   setState('COIN_INSERTING');
+  coinGen++;
   SFX.tick();
   slotGlow.setAttribute('opacity', 0);
   const from = { ...coinPos };
-  // 投入口の上へ滑り、縦になって吸い込まれる
-  tween(260, k => {
+  // 投入口の上へ滑り、縦になって吸い込まれる（ワープさせない・短く）
+  tween(150, k => {
     coinPos.x = lerp(from.x, SLOT.x, k);
     coinPos.y = lerp(from.y, SLOT.y - 26, k);
     renderCoin();
   }, () => {
-    tween(300, k => {
+    tween(210, k => {
       coinInner.setAttribute('transform', `scale(${lerp(1, 0.1, k)} 1)`);
       coinPos.y = lerp(SLOT.y - 26, SLOT.y + 8, easeInQuad(k));
       renderCoin();
@@ -542,7 +547,7 @@ function insertCoin() {
       coinVisible = false; renderCoin();
       coinInner.setAttribute('transform', '');
       SFX.charin();
-      after(320, () => {
+      after(110, () => {
         SFX.credit();
         creditLamp.setAttribute('fill', 'url(#gradLampOn)');
         buttonEls.forEach(b => b.lamp.classList.add('lampArmed'));
@@ -553,20 +558,32 @@ function insertCoin() {
 }
 function coinSpringBack() {
   const from = { ...coinPos };
+  coinGen++;
+  const gen = coinGen;
   SFX.back();
-  tween(420, k => {
+  tween(380, k => {
+    if (gen !== coinGen) return; // つかみ直されたら中断
     coinPos.x = lerp(from.x, TRAY.x, k);
     coinPos.y = lerp(from.y, TRAY.y, k);
     renderCoin();
   }, null, easeOutBack);
 }
 function coinRespawn() {
-  coinPos = { x: TRAY.x, y: TRAY.y - 60 };
+  // 論理位置は即トレーへ（すぐつかみ直せる）。見た目だけ上から落ちて弾む
+  coinGen++;
+  const gen = coinGen;
+  coinPos = { x: TRAY.x, y: TRAY.y };
+  coinVisOffY = -64;
   coinVisible = true; renderCoin();
-  tween(380, k => {
-    coinPos.y = lerp(TRAY.y - 60, TRAY.y, k);
+  tween(340, k => {
+    if (gen !== coinGen) return;
+    coinVisOffY = -64 * (1 - k);
     renderCoin();
-  }, () => { SFX.tick(); burstStars(TRAY.x, TRAY.y - 20, 5, 90); }, easeOutBack);
+  }, () => {
+    if (gen !== coinGen) return;
+    coinVisOffY = 0;
+    SFX.tick(); burstStars(TRAY.x, TRAY.y - 20, 5, 90);
+  }, easeOutBack);
 }
 
 // ---------------------------------------------------------------
@@ -575,43 +592,42 @@ function coinRespawn() {
 function pressButton(i) {
   if (S !== 'CREDIT_READY') return;
   selected = i;
-  setState('VENDING');
   const b = buttonEls[i];
-  // 即時フィードバック：沈む・光る・鳴る
+  // 同フレームで：沈む・光る・鳴る・モーター始動・透明化・商品が動き出す
   b.press.setAttribute('transform', 'translate(0 4)');
   b.lamp.setAttribute('fill', 'url(#gradLampOn)');
   SFX.click();
+  after(200, () => tween(140, k => b.press.setAttribute('transform', `translate(0 ${4 * (1 - k)})`)));
   buttonEls.forEach(bb => bb.lamp.classList.remove('lampArmed'));
   creditLamp.setAttribute('fill', '#5a5250');
-  after(140, () => {
-    motorStart();
-    cutaway(true);
-    // 選ばれた見本そのものが動き出す
-    const col = COLS[i % 3], shelf = SHELF_Y[i < 3 ? 0 : 1];
-    sampleEls[i].style.opacity = 0;
-    prod.el = grp(rollLayer);
-    buildProduct(PRODUCTS[i], prod.el);
-    prod.x = col; prod.y = shelf; prod.vx = 0; prod.vy = 0; prod.rot = 0; prod.squash = 0;
-    prod.phase = 'tip'; prod.tipT = 0; prod.rollT = 0; prod.timeOnB = 0;
-    railTouchedThisRound = false;
-    railTheta = RAIL_B.base; railTargetBase = RAIL_B.base;
-    // 今回のマイクロバリエーション
-    variation = {
-      damp: rnd(0.25, 0.5),          // 転がり抵抗
-      wallRest: rnd(0.45, 0.62),     // 壁の反発
-      pauseOnA: Math.random() < 0.16, // まれに一瞬止まる
-      sparkleRoll: Math.random() < 0.14,
-    };
-    renderProd();
-  });
-  after(320, () => { if (S === 'VENDING') setState('ROLLING'); rollStart(); });
+  motorStart();
+  rollStart();
+  cutaway(true);
+  // 選ばれた見本そのものが動き出す
+  const col = COLS[i % 3], shelf = SHELF_Y[i < 3 ? 0 : 1];
+  sampleEls[i].style.opacity = 0;
+  prod.el = grp(rollLayer);
+  buildProduct(PRODUCTS[i], prod.el);
+  prod.x = col; prod.y = shelf; prod.vx = 0; prod.vy = 0; prod.rot = 0; prod.wob = 0; prod.squash = 0;
+  prod.phase = 'tip'; prod.tipT = 0; prod.rollT = 0; prod.timeOnB = 0; prod.pauseT = 0;
+  railTouchedThisRound = false;
+  railTheta = RAIL_B.base; railTargetBase = RAIL_B.base;
+  // 今回のマイクロバリエーション
+  variation = {
+    damp: rnd(0.25, 0.5),          // 転がり抵抗
+    wallRest: rnd(0.45, 0.62),     // 壁の反発
+    pauseOnA: Math.random() < 0.16, // まれに一瞬止まる（ぐらつき付き）
+    sparkleRoll: Math.random() < 0.14,
+  };
+  renderProd();
+  setState('ROLLING');
 }
 
 function renderProd() {
   if (!prod.el) return;
   const sq = 1 - prod.squash * 0.22;
   prod.el.setAttribute('transform',
-    `translate(${prod.x} ${prod.y - PROD_R}) rotate(${prod.rot}) scale(${1 + prod.squash * 0.12} ${sq})`);
+    `translate(${prod.x} ${prod.y - PROD_R}) rotate(${prod.rot + (prod.wob || 0)}) scale(${1 + prod.squash * 0.12} ${sq})`);
 }
 
 function landOn(seg, vAlong, impact) {
@@ -624,8 +640,9 @@ function landOn(seg, vAlong, impact) {
   prod.squash = clamp(impact / 400, 0.15, 0.8);
   SFX.koto(impact / 320);
   if (seg.name === 'B') prod.timeOnB = 0;
-  if (seg.name === 'A' && variation.pauseOnA) {
-    prod.v = 0; prod.pauseT = 0.38; SFX.kotori();
+  if (seg.name === 'A') {
+    prod.v += 55; // 着地の勢いで転がり出す（間延び防止）
+    if (variation.pauseOnA) { prod.v = 0; prod.pauseT = 0.38; SFX.kotori(); }
   }
 }
 
@@ -641,13 +658,17 @@ function stepProd(dt) {
 
   if (prod.phase === 'tip') {
     prod.tipT += dt;
-    prod.rot = easeOutCubic(clamp(prod.tipT / 0.3, 0, 1)) * 10;
+    const k = clamp(prod.tipT / 0.3, 0, 1);
+    // モーターに押されて震えながら傾く
+    prod.rot = easeOutCubic(k) * 10;
+    prod.wob = Math.sin(prod.tipT * 46) * 2.6 * (1 - k);
     if (prod.tipT > 0.32) {
-      prod.phase = 'ballistic';
+      prod.phase = 'ballistic'; prod.wob = 0;
       prod.vx = rnd(-14, 14); prod.vy = 0;
       SFX.kotori();
     }
   } else if (prod.phase === 'ballistic' || prod.phase === 'chutefall') {
+    prod.wob = (prod.wob || 0) * Math.max(0, 1 - 10 * dt);
     prod.skipT = Math.max(0, (prod.skipT || 0) - dt);
     const prevY = prod.y;
     prod.vy = Math.min(prod.vy + GRAV * dt, 620);
@@ -695,8 +716,11 @@ function stepProd(dt) {
     const g = segGeom(seg);
     if (prod.pauseT > 0) {
       prod.pauseT -= dt;
-      if (prod.pauseT <= 0) SFX.kotori();
+      // 引っかかって「ぐらぐら」している（意味のある静止として見せる）
+      prod.wob = Math.sin(prod.rollT * 32) * 3.5;
+      if (prod.pauseT <= 0) { prod.wob = 0; SFX.kotori(); }
     } else {
+      prod.wob = (prod.wob || 0) * Math.max(0, 1 - 10 * dt);
       let a = GRAV * g.sin;
       // レールBの「届けたい」補正
       if (prod.seg === 'B') {
@@ -756,8 +780,14 @@ function arrive() {
   portItemEl = grp(portProdLayer);
   buildProduct(PRODUCTS[selected], portItemEl);
   renderPortItem(0.55); // 暗がりの中
-  // フラップがコツンと揺れる
+  // フラップがコツンと揺れ、取り出し口自体も一瞬沈む
   tween(200, k => { flapK = 1 - Math.sin(k * Math.PI) * 0.07; renderFlap(); });
+  tween(170, k => { portG.setAttribute('transform', `translate(0 ${3.5 * Math.sin(k * Math.PI)})`); },
+    () => portG.setAttribute('transform', ''));
+  // 衝撃の小さなほこり
+  for (let i = 0; i < 6; i++) {
+    spawnPWorld(PORT_C.x + rnd(-60, 60), 702, { vx: rnd(-30, 30), vy: rnd(-70, -30), g: 200, life: rnd(0.3, 0.55), r: rnd(2, 3.5), fill: '#cfc8ba', shrink: true });
+  }
   cutaway(false);
   setState('ARRIVED');
 }
@@ -765,7 +795,7 @@ function arrive() {
 let portItemEl = null;
 function renderPortItem(bright) {
   if (!portItemEl) return;
-  portItemEl.setAttribute('transform', `translate(${itemPos.x} ${itemPos.y - 34}) scale(0.95)`);
+  portItemEl.setAttribute('transform', `translate(${itemPos.x} ${itemPos.y - 34}) scale(${itemHeld ? 1.04 : 0.95})`);
   portItemEl.setAttribute('opacity', bright == null ? 1 : bright);
 }
 function renderFlap() {
@@ -787,6 +817,7 @@ function latchFlap() {
 let openItemG = null, openParts = null, tabHintPos = { x: 210, y: 300 };
 function startTakeout() {
   setState('ITEM_OUT');
+  itemHeld = false;
   const from = { ...itemPos };
   const fromV = worldToView(from.x, from.y - 34);
   if (portItemEl) { portItemEl.remove(); portItemEl = null; }
@@ -803,7 +834,7 @@ function startTakeout() {
   buildProduct(p, inner);
   openParts = buildOpenables(p, inner);
   const target = { x: 210, y: 415, s: 3.1 };
-  tween(500, k => {
+  tween(420, k => {
     dim.setAttribute('opacity', k * 0.5);
     const x = lerp(fromV.x, target.x, k), y = lerp(fromV.y, target.y, k), s = lerp(1, target.s, k);
     openItemG.setAttribute('transform', `translate(${x} ${y}) scale(${s})`);
@@ -864,16 +895,16 @@ function doOpen() {
     timers.push(fly);
     for (let i = 0; i < 10; i++) spawnP(v.x, v.y, { vx: rnd(-70, 70), vy: rnd(-170, -70), g: 420, life: 0.7, r: rnd(2, 4), fill: '#dff2ff' });
   }
-  after(650, () => {
+  after(520, () => {
     setState('COMPLETE');
     SFX.jingle();
     burstStars(210, 380, 18, 240);
     // うれしい弾み
-    tween(650, k => {
+    tween(600, k => {
       const b = Math.sin(k * Math.PI * 2) * (1 - k) * 0.08;
       openItemG.setAttribute('transform', `translate(210 ${415 - Math.sin(k * Math.PI * 2) * (1 - k) * 26}) scale(${3.1 * (1 + b)} ${3.1 * (1 - b)})`);
     });
-    after(1750, startReset);
+    after(1050, startReset); // タップで即スキップも可能
   });
 }
 
@@ -881,7 +912,7 @@ function startReset() {
   if (S !== 'COMPLETE') return;
   setState('RESETTING');
   fizzStop();
-  tween(420, k => {
+  tween(280, k => {
     openSceneG.setAttribute('opacity', 1 - k);
     if (openItemG) openItemG.setAttribute('transform', `translate(210 ${415 - k * 130}) scale(${3.1 * (1 - k * 0.5)})`);
   }, () => {
@@ -908,55 +939,73 @@ function startReset() {
 let activePointer = null, dragging = null;
 let grabOff = { x: 0, y: 0 }, railGrabX = 0, railGrabTheta = 0, flapStartY = 0, flapStartK = 1, tabStartY = 0, itemGrabOff = { x: 0, y: 0 };
 
+// どこに触れても波紋が出る（「無反応」を作らない）
+function ripple(vx, vy) {
+  const c = el('circle', { cx: vx, cy: vy, r: 10, fill: 'none', stroke: '#ffffff', 'stroke-width': 3, opacity: 0.5, 'pointer-events': 'none' }, fxG);
+  tween(340, k => { c.setAttribute('r', 10 + 38 * k); c.setAttribute('opacity', 0.5 * (1 - k)); }, () => c.remove());
+}
+
+function grab(e, kind) {
+  activePointer = e.pointerId; dragging = kind;
+  SFX.tick();
+  try { svg.setPointerCapture(e.pointerId); } catch (err) {}
+}
+
 svg.addEventListener('pointerdown', e => {
   ensureAudio();
   lastInteract = performance.now();
   if (activePointer !== null) return;
   e.preventDefault();
   const w = toWorld(e);
+  const v = toView(e);
+  ripple(v.x, v.y);
+  let handled = false;
   if (S === 'READY') {
-    if (dist(w.x, w.y, coinPos.x, coinPos.y) < 62) {
-      activePointer = e.pointerId; dragging = 'coin';
+    if (coinVisible && dist(w.x, w.y, coinPos.x, coinPos.y) < 62) {
+      grab(e, 'coin');
       grabOff = { x: coinPos.x - w.x, y: coinPos.y - w.y };
-      SFX.tick();
-      try { svg.setPointerCapture(e.pointerId); } catch (err) {}
+      coinHeld = true; coinGen++; coinVisOffY = 0;
+      handled = true;
     }
   } else if (S === 'CREDIT_READY') {
     for (let i = 0; i < buttonEls.length; i++) {
       const b = buttonEls[i];
-      if (Math.abs(w.x - b.x) < 50 && Math.abs(w.y - b.y) < 32) { pressButton(i); return; }
+      if (Math.abs(w.x - b.x) < 50 && Math.abs(w.y - b.y) < 32) { pressButton(i); handled = true; break; }
     }
-  } else if (S === 'ROLLING' || S === 'VENDING') {
+  } else if (S === 'ROLLING') {
     if (w.x > 56 && w.x < 364 && w.y > 405 && w.y < 545) {
-      activePointer = e.pointerId; dragging = 'rail';
+      grab(e, 'rail');
       railGrabX = w.x; railGrabTheta = railTheta; railHeld = true; railTouchedThisRound = true;
-      SFX.tick();
-      svg.setPointerCapture(e.pointerId);
+      railGlowRect.setAttribute('opacity', 0.5);
+      handled = true;
     }
   } else if (S === 'ARRIVED') {
     if (w.x > 100 && w.x < 320 && w.y > 575 && w.y < 720) {
-      activePointer = e.pointerId; dragging = 'flap';
+      grab(e, 'flap');
       flapStartY = w.y; flapStartK = flapK;
-      SFX.tick();
-      svg.setPointerCapture(e.pointerId);
+      handled = true;
     }
   } else if (S === 'FLAP_OPEN') {
     if (dist(w.x, w.y, itemPos.x, itemPos.y - 20) < 80) {
-      activePointer = e.pointerId; dragging = 'item';
+      grab(e, 'item');
       itemGrabOff = { x: itemPos.x - w.x, y: itemPos.y - w.y };
-      SFX.tick();
-      svg.setPointerCapture(e.pointerId);
+      itemHeld = true; renderPortItem(1);
+      handled = true;
     }
   } else if (S === 'OPENING') {
-    const v = toView(e);
     if (dist(v.x, v.y, tabHintPos.x, tabHintPos.y) < 95) {
-      activePointer = e.pointerId; dragging = 'tab';
+      grab(e, 'tab');
       tabStartY = v.y;
-      SFX.tick();
-      svg.setPointerCapture(e.pointerId);
+      handled = true;
     }
   } else if (S === 'COMPLETE') {
     startReset();
+    handled = true;
+  }
+  if (!handled) {
+    // 対象外の場所：やわらかい音＋次に触る場所を即座に光らせる
+    tone(620, 0.05, 'sine', 0.05);
+    forceHintUntil = performance.now() + 1300;
   }
 }, { passive: false });
 
@@ -1001,17 +1050,20 @@ function endPointer(e) {
   const d = dragging;
   dragging = null; activePointer = null;
   if (d === 'coin') {
+    coinHeld = false;
     slotGlow.setAttribute('opacity', 0);
     if (dist(coinPos.x, coinPos.y, SLOT.x, SLOT.y) < 100) insertCoin();
     else coinSpringBack();
   } else if (d === 'rail') {
     railHeld = false;
+    railGlowRect.setAttribute('opacity', 0.18);
   } else if (d === 'flap') {
     if (!flapLatched) {
       SFX.flapThud();
       tween(220, k => { flapK = lerp(flapK, 1, k); renderFlap(); });
     }
   } else if (d === 'item') {
+    itemHeld = false;
     if (S === 'FLAP_OPEN') {
       tween(260, k => {
         itemPos.x = lerp(itemPos.x, PORT_C.x, k);
@@ -1051,7 +1103,8 @@ function hintTarget() {
 function stepHint(now) {
   const t = hintTarget();
   const wait = (t && t.delay) || 2000;
-  if (!t || dragging || now - lastInteract < wait) {
+  const forced = now < forceHintUntil;
+  if (!t || dragging || (!forced && now - lastInteract < wait)) {
     hintGlow.style.display = 'none';
     return;
   }
@@ -1077,13 +1130,35 @@ function frame(now) {
   }
   railBG.setAttribute('transform', `translate(${RAIL_B.cx} ${RAIL_B.cy}) rotate(${railTheta})`);
 
+  // 硬貨：持ち上がり（スケール＋影）と投入口への磁力
+  {
+    const target = coinHeld ? 1.1 : 1;
+    if (Math.abs(coinScale - target) > 0.001 || coinHeld) {
+      coinScale = lerp(coinScale, target, 1 - Math.pow(0.0005, dt));
+      const hk = clamp((coinScale - 1) / 0.1, 0, 1);
+      coinShadow.setAttribute('cx', 3 + hk * 5);
+      coinShadow.setAttribute('cy', 9 + hk * 9);
+      coinShadow.setAttribute('opacity', 0.22 - hk * 0.09);
+      renderCoin();
+    }
+    if (dragging === 'coin') {
+      const d = dist(coinPos.x, coinPos.y, SLOT.x, SLOT.y);
+      if (d < 95 && d > 2) {
+        const pull = (1 - d / 95) * 5.5 * dt;
+        coinPos.x += (SLOT.x - coinPos.x) * pull;
+        coinPos.y += (SLOT.y - coinPos.y) * pull;
+        renderCoin();
+      }
+    }
+  }
+
   // 物理（2サブステップ）
-  if (S === 'VENDING' || S === 'ROLLING') {
+  if (S === 'ROLLING') {
     stepProd(dt / 2); stepProd(dt / 2);
   }
 
   // カメラ目標
-  if (S === 'VENDING' || S === 'ROLLING') {
+  if (S === 'ROLLING') {
     camTo(clamp(prod.x, 150, 270), clamp(prod.y - 20, 320, 560), 1.38);
   } else if (S === 'ARRIVED' || S === 'FLAP_OPEN') {
     camTo(210, 555, 1.38);

@@ -75,4 +75,4 @@ text { pointer-events:none; }
 }
 
 /* smooth opacity transitions for cutaway */
-.fadeable { transition:opacity .55s ease; }
+.fadeable { transition:opacity .3s ease; }
