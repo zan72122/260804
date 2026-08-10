@@ -105,6 +105,7 @@ radGrad('gradCoin', [[0, '#f4f6f9'], [0.62, '#d9dde4'], [0.88, '#b8bec9'], [1, '
 radGrad('gradLampOn', [[0, '#c8ffc0'], [0.5, '#5ee85a'], [1, '#1da344']]);
 radGrad('gradGlow', [[0, '#ffffff', 0.9], [1, '#ffffff', 0]]);
 radGrad('gradPortLamp', [[0, '#ffe9b0', 0.85], [1, '#ffe9b0', 0]]);
+radGrad('gradWarmGlow', [[0, '#ffeaa8', 0.68], [0.55, '#ffdf8a', 0.28], [1, '#ffdf8a', 0]]);
 linGrad('gradShine', [[0, '#ffffff', 0], [0.5, '#ffffff', 0.55], [1, '#ffffff', 0]], 0, 0, 1, 0);
 PRODUCTS.forEach(p => {
   linGrad('gp_' + p.id, [[0, p.c1], [0.42, p.c1], [1, p.c2]], 0, 0, 1, 0);
@@ -188,8 +189,8 @@ const interiorG = grp(machineG, { id: 'interior', class: 'fadeable', opacity: 0 
 el('rect', { x: 44, y: 72, width: 332, height: 650, rx: 8, fill: 'url(#gradInterior)' }, interiorG);
 // 奥の在庫シルエット（雰囲気用・静的）
 for (let i = 0; i < 6; i++) {
-  el('rect', { x: 70 + i * 47, y: 96, width: 30, height: 52, rx: 8, fill: '#4a4050', opacity: 0.5 }, interiorG);
-  el('rect', { x: 82 + i * 45, y: 214, width: 30, height: 52, rx: 8, fill: '#443a4a', opacity: 0.4 }, interiorG);
+  el('rect', { x: 70 + i * 47, y: 96, width: 30, height: 52, rx: 8, fill: '#4a4050', opacity: 0.32 }, interiorG);
+  el('rect', { x: 82 + i * 45, y: 214, width: 30, height: 52, rx: 8, fill: '#443a4a', opacity: 0.26 }, interiorG);
 }
 // 内壁
 el('rect', { x: 56, y: 356, width: 10, height: 226, rx: 3, fill: '#4a515e', stroke: '#242830', 'stroke-width': 1.5 }, interiorG);
@@ -204,19 +205,29 @@ for (let i = 0; i < 3; i++) el('rect', { x: 339, y: 613, width: 4, height: 15, r
 function drawRail(parent, x1, y1, x2, y2) {
   el('line', { x1, y1: y1 + 3.5, x2, y2: y2 + 3.5, stroke: '#0d0c11', 'stroke-width': 8, 'stroke-linecap': 'round', opacity: 0.6 }, parent);
   el('line', { x1, y1, x2, y2, stroke: '#6b7484', 'stroke-width': 7, 'stroke-linecap': 'round' }, parent);
-  el('line', { x1, y1: y1 - 2.2, x2, y2: y2 - 2.2, stroke: '#cfd8e4', 'stroke-width': 2, 'stroke-linecap': 'round', opacity: 0.95 }, parent);
+  // ハイライト線を返す（商品が乗っている間だけ明るく点灯させる）
+  return el('line', { x1, y1: y1 - 2.2, x2, y2: y2 - 2.2, stroke: '#cfd8e4', 'stroke-width': 2, 'stroke-linecap': 'round', opacity: 0.95 }, parent);
 }
-drawRail(interiorG, RAIL_A.x1, RAIL_A.y1, RAIL_A.x2, RAIL_A.y2);
+const railHi = {};
+railHi.A = drawRail(interiorG, RAIL_A.x1, RAIL_A.y1, RAIL_A.x2, RAIL_A.y2);
 // レールB（プレイヤーが傾けられる）
 const railBG = grp(interiorG, { id: 'railB' });
-drawRail(railBG, -RAIL_B.half, 0, RAIL_B.half, 0);
+railHi.B = drawRail(railBG, -RAIL_B.half, 0, RAIL_B.half, 0);
 el('circle', { cx: 0, cy: 0, r: 6, fill: '#d8dee8', stroke: '#7a8494', 'stroke-width': 2 }, railBG); // 中心ピボット
 const railHandleG = grp(railBG, { id: 'railHandle' });
 for (const hx of [-30, 0, 30]) el('circle', { cx: hx, cy: 9, r: 5, fill: '#ffd23e', stroke: '#b8871a', 'stroke-width': 1.6 }, railHandleG);
 const railGlowRect = el('rect', { x: -46, y: 2, width: 92, height: 15, rx: 7.5, fill: '#ffd23e', opacity: 0.18 }, railHandleG);
 // 漏斗レール
-drawRail(interiorG, FUN_L.x1, FUN_L.y1, FUN_L.x2, FUN_L.y2);
-drawRail(interiorG, FUN_R.x1, FUN_R.y1, FUN_R.x2, FUN_R.y2);
+railHi.FL = drawRail(interiorG, FUN_L.x1, FUN_L.y1, FUN_L.x2, FUN_L.y2);
+railHi.FR = drawRail(interiorG, FUN_R.x1, FUN_R.y1, FUN_R.x2, FUN_R.y2);
+function setRailLit(name) {
+  for (const k in railHi) {
+    const on = k === name;
+    railHi[k].setAttribute('stroke', on ? '#ffffff' : '#cfd8e4');
+    railHi[k].setAttribute('stroke-width', on ? 3.2 : 2);
+    railHi[k].setAttribute('opacity', on ? 1 : 0.95);
+  }
+}
 // 転がる商品のレイヤー
 const rollLayer = grp(interiorG, { id: 'rollLayer' });
 
@@ -297,6 +308,8 @@ el('circle', { cx: 0, cy: 0, r: COIN_R - 2.5, fill: 'none', stroke: '#ffffff', '
 el('circle', { cx: 0, cy: 0, r: COIN_R - 8, fill: 'none', stroke: '#9aa0ac', 'stroke-width': 1.6 }, coinInner);
 el('text', { x: 0, y: 8, 'font-size': 22, 'font-weight': 800, fill: '#7d838f', 'text-anchor': 'middle', 'font-family': 'system-ui, sans-serif' }, coinInner).textContent = '100';
 el('rect', { x: -6, y: -COIN_R, width: 12, height: COIN_R * 2, fill: 'url(#gradShine)', class: 'glint', transform: 'rotate(24)' }, coinInner);
+// ワールド座標パーティクル層（カメラと一緒に動く）
+const worldFxG = grp(worldG, { id: 'worldFx' });
 
 // ---------------------------------------------------------------
 // 音（WebAudio・全部生成音）
@@ -414,9 +427,9 @@ function fizzStop() { if (fizzNodes) { fizzNodes.g.gain.linearRampToValueAtTime(
 // パーティクル
 // ---------------------------------------------------------------
 const particles = [];
-function spawnP(x, y, opt) {
+function spawnP(x, y, opt, parent) {
   const o = Object.assign({ vx: 0, vy: 0, g: 0, life: 0.7, r: 3, fill: '#fff', fade: true, shrink: false }, opt);
-  const c = el('circle', { cx: x, cy: y, r: o.r, fill: o.fill, 'pointer-events': 'none' }, fxG);
+  const c = el('circle', { cx: x, cy: y, r: o.r, fill: o.fill, 'pointer-events': 'none' }, parent || fxG);
   particles.push({ x, y, el: c, t: 0, ...o });
 }
 function stepParticles(dt) {
@@ -469,6 +482,7 @@ let railTargetBase = RAIL_B.base;
 let railHeld = false;
 let railTouchedThisRound = false;
 let flapK = 1;                  // 1=閉 0.1=開
+let flapJit = 0;                // 商品接近時の微振動
 let flapLatched = false;
 let itemPos = { x: PORT_C.x, y: PORT_C.y };
 let variation = {};
@@ -515,9 +529,16 @@ function toView(e) {
 // ---------------------------------------------------------------
 function cutaway(on) {
   interiorG.style.opacity = on ? 1 : 0;
-  frontGlassG.style.opacity = on ? 0.16 : 1;
-  frontPanelG.style.opacity = on ? 0.26 : 1;
-  if (on) fanG.classList.add('spin'); else fanG.classList.remove('spin');
+  // 前面は「色つきガラス」程度まで薄く（内部が白っぽく濁らないように）
+  frontGlassG.style.opacity = on ? 0.1 : 1;
+  frontPanelG.style.opacity = on ? 0.15 : 1;
+  if (on) { fanG.classList.add('spin'); lightSweep(); }
+  else fanG.classList.remove('spin');
+}
+// 透明化の瞬間に走る光のスイープ（「透けた！」の合図）
+function lightSweep() {
+  const g = el('rect', { x: 0, y: 20, width: 70, height: 740, fill: 'url(#gradShine)', opacity: 0.75, 'pointer-events': 'none' }, machineG);
+  tween(420, k => g.setAttribute('transform', `translate(${-90 + k * 460} 0) skewX(-12)`), () => g.remove());
 }
 
 // ---------------------------------------------------------------
@@ -606,10 +627,23 @@ function pressButton(i) {
   // 選ばれた見本そのものが動き出す
   const col = COLS[i % 3], shelf = SHELF_Y[i < 3 ? 0 : 1];
   sampleEls[i].style.opacity = 0;
+  rollLayer.innerHTML = '';
+  // 商品に追従する暖色スポットライト
+  prod.glowEl = el('circle', { r: 58, fill: 'url(#gradWarmGlow)', opacity: 0, 'pointer-events': 'none' }, rollLayer);
+  // 傾いて商品を送り出す棚板
+  prod.platG = grp(rollLayer);
+  el('rect', { x: col - 40, y: shelf - 2, width: 80, height: 5, rx: 2.5, fill: '#7e8798', stroke: '#3a3f4a', 'stroke-width': 1 }, prod.platG);
+  el('circle', { cx: col - 32, cy: shelf, r: 3.5, fill: '#c8d0dc', stroke: '#5a616e', 'stroke-width': 1 }, prod.platG);
+  // 接地影（レールとの接触位置を示す）
+  prod.shadowEl = el('ellipse', { rx: 21, ry: 4.2, fill: '#000000', opacity: 0, 'pointer-events': 'none' }, rollLayer);
   prod.el = grp(rollLayer);
   buildProduct(PRODUCTS[i], prod.el);
   prod.x = col; prod.y = shelf; prod.vx = 0; prod.vy = 0; prod.rot = 0; prod.wob = 0; prod.squash = 0;
   prod.phase = 'tip'; prod.tipT = 0; prod.rollT = 0; prod.timeOnB = 0; prod.pauseT = 0;
+  prod.col = col; prod.shelfY = shelf; prod.glowO = 0; prod.shadowO = 0; prod.trailT = 0;
+  // 「これが動くよ」の商品色リング
+  const ring = el('circle', { cx: col, cy: shelf - 38, r: 24, fill: 'none', stroke: PRODUCTS[i].c1, 'stroke-width': 4, opacity: 0.9, 'pointer-events': 'none' }, rollLayer);
+  tween(420, k => { ring.setAttribute('r', 24 + 46 * k); ring.setAttribute('opacity', 0.9 * (1 - k)); }, () => ring.remove());
   railTouchedThisRound = false;
   railTheta = RAIL_B.base; railTargetBase = RAIL_B.base;
   // 今回のマイクロバリエーション
@@ -628,6 +662,14 @@ function renderProd() {
   const sq = 1 - prod.squash * 0.22;
   prod.el.setAttribute('transform',
     `translate(${prod.x} ${prod.y - PROD_R}) rotate(${prod.rot + (prod.wob || 0)}) scale(${1 + prod.squash * 0.12} ${sq})`);
+  if (prod.glowEl) {
+    prod.glowEl.setAttribute('cx', prod.x); prod.glowEl.setAttribute('cy', prod.y - PROD_R);
+    prod.glowEl.setAttribute('opacity', prod.glowO || 0);
+  }
+  if (prod.shadowEl) {
+    prod.shadowEl.setAttribute('cx', prod.x); prod.shadowEl.setAttribute('cy', prod.y + 2);
+    prod.shadowEl.setAttribute('opacity', prod.shadowO || 0);
+  }
 }
 
 function landOn(seg, vAlong, impact) {
@@ -639,6 +681,7 @@ function landOn(seg, vAlong, impact) {
   prod.v = vAlong;
   prod.squash = clamp(impact / 400, 0.15, 0.8);
   SFX.koto(impact / 320);
+  setRailLit(seg.name);
   if (seg.name === 'B') prod.timeOnB = 0;
   if (seg.name === 'A') {
     prod.v += 55; // 着地の勢いで転がり出す（間延び防止）
@@ -651,21 +694,43 @@ function stepProd(dt) {
   prod.rollT += dt;
   prod.squash = Math.max(0, prod.squash - dt * 4);
 
+  // スポットライトのフェードインと接地影（接触＝濃い／空中＝薄い）
+  prod.glowO = Math.min(0.55, (prod.glowO || 0) + dt * 2.5);
+  const shTarget = (prod.phase === 'rail' || prod.phase === 'tip') ? 0.32 : 0.07;
+  prod.shadowO = (prod.shadowO || 0) + (shTarget - (prod.shadowO || 0)) * Math.min(1, 12 * dt);
+
+  // 速いときだけ残像トレイル（運動の連続性）
+  const spd = prod.phase === 'rail' ? Math.abs(prod.v) : Math.hypot(prod.vx || 0, prod.vy || 0);
+  prod.trailT = (prod.trailT || 0) + dt;
+  if (spd > 130 && prod.trailT > 0.055) {
+    prod.trailT = 0;
+    spawnPWorld(prod.x, prod.y - PROD_R, { life: 0.28, r: 5, fill: PRODUCTS[selected].c1, shrink: true });
+  }
+
   // 保険：転がりが長引いたら確実に届ける
   if (prod.rollT > 12 && prod.phase !== 'chutefall') {
     prod.phase = 'chutefall'; prod.x = 210; prod.y = 575; prod.vx = 0; prod.vy = 60;
   }
 
   if (prod.phase === 'tip') {
+    // 棚板が傾き、商品がその上を滑って離脱する（連続した一つの運動）
     prod.tipT += dt;
-    const k = clamp(prod.tipT / 0.3, 0, 1);
-    // モーターに押されて震えながら傾く
-    prod.rot = easeOutCubic(k) * 10;
-    prod.wob = Math.sin(prod.tipT * 46) * 2.6 * (1 - k);
-    if (prod.tipT > 0.32) {
+    const k = clamp(prod.tipT / 0.36, 0, 1);
+    const ang = 20 * easeInQuad(k);
+    const rad = ang * Math.PI / 180;
+    const px = prod.col - 32, py = prod.shelfY;
+    const d = 32 + 26 * k * k;
+    prod.x = px + Math.cos(rad) * d;
+    prod.y = py + Math.sin(rad) * d;
+    prod.rot = ang * 0.9;
+    prod.wob = Math.sin(prod.tipT * 46) * 2.2 * (1 - k);
+    if (prod.platG) prod.platG.setAttribute('transform', `rotate(${ang} ${px} ${py})`);
+    if (k >= 1) {
       prod.phase = 'ballistic'; prod.wob = 0;
-      prod.vx = rnd(-14, 14); prod.vy = 0;
+      prod.vx = Math.cos(rad) * 165; prod.vy = Math.sin(rad) * 165;
       SFX.kotori();
+      const plat = prod.platG;
+      if (plat) tween(360, kk => plat.setAttribute('transform', `rotate(${20 * (1 - kk)} ${px} ${py})`), null, easeOutBack);
     }
   } else if (prod.phase === 'ballistic' || prod.phase === 'chutefall') {
     prod.wob = (prod.wob || 0) * Math.max(0, 1 - 10 * dt);
@@ -683,6 +748,10 @@ function stepProd(dt) {
       // 取り出し口へ吸い込まれる補正
       prod.vx *= Math.max(0, 1 - 3 * dt);
       prod.x += (210 - prod.x) * 2.6 * dt;
+      // 期待の高まり：取り出し口が温かく灯り、フラップがかすかに震える
+      portLamp.setAttribute('opacity', Math.min(0.4, (+portLamp.getAttribute('opacity') || 0) + dt * 1.4));
+      flapJit = Math.sin(prod.rollT * 46) * 1.5;
+      renderFlap();
       if (prod.y >= BIN_Y) arrive();
       renderProd();
       return;
@@ -741,6 +810,7 @@ function stepProd(dt) {
       prod.vx = prod.v * g.cos; prod.vy = Math.max(prod.v * g.sin, 20);
       prod.phase = 'ballistic';
       prod.skipSeg = prod.seg; prod.skipT = 0.3;
+      setRailLit(null);
       // 漏斗のすき間へ落ちた場合
       if ((prod.seg === 'FL' && prod.s > g.len) || (prod.seg === 'FR' && prod.s < 0)) {
         prod.phase = 'chutefall';
@@ -763,8 +833,8 @@ function stepProd(dt) {
 }
 
 function spawnPWorld(wx, wy, opt) {
-  const v = worldToView(wx, wy);
-  spawnP(v.x, v.y, opt);
+  // ワールド座標のまま生成（カメラが動いても位置がずれない）
+  spawnP(wx, wy, opt, worldFxG);
 }
 
 function arrive() {
@@ -773,9 +843,12 @@ function arrive() {
   SFX.gatan();
   machineG.classList.remove('shake'); void machineG.getBoundingClientRect(); machineG.classList.add('shake');
   after(320, () => machineG.classList.remove('shake'));
-  // 商品を取り出し口レイヤーへ
-  prod.el.remove();
-  prod.el = null;
+  // 内部演出をすべて片付け、運動をガタンに収束させる
+  rollLayer.innerHTML = '';
+  prod.el = null; prod.glowEl = null; prod.shadowEl = null; prod.platG = null;
+  setRailLit(null);
+  flapJit = 0;
+  portLamp.setAttribute('opacity', 0.18);
   itemPos = { x: PORT_C.x, y: PORT_C.y };
   portItemEl = grp(portProdLayer);
   buildProduct(PRODUCTS[selected], portItemEl);
@@ -799,7 +872,7 @@ function renderPortItem(bright) {
   portItemEl.setAttribute('opacity', bright == null ? 1 : bright);
 }
 function renderFlap() {
-  flapG.setAttribute('transform', `translate(0 ${592 * (1 - flapK)}) scale(1 ${flapK})`);
+  flapG.setAttribute('transform', `translate(0 ${592 * (1 - flapK) + flapJit}) scale(1 ${flapK})`);
 }
 function latchFlap() {
   if (flapLatched) return;
@@ -923,8 +996,10 @@ function startReset() {
     // 機械を元に戻す
     if (selected >= 0) sampleEls[selected].style.opacity = 1;
     buttonEls.forEach(b => { b.press.setAttribute('transform', ''); b.lamp.setAttribute('fill', '#e8e2d2'); });
-    flapK = 1; flapLatched = false; renderFlap();
+    flapK = 1; flapLatched = false; flapJit = 0; renderFlap();
     portLamp.setAttribute('opacity', 0);
+    rollLayer.innerHTML = '';
+    setRailLit(null);
     railTheta = RAIL_B.base;
     selected = -1;
     coinRespawn();
@@ -1157,9 +1232,10 @@ function frame(now) {
     stepProd(dt / 2); stepProd(dt / 2);
   }
 
-  // カメラ目標
+  // カメラ目標：商品を追い、取り出し口へ近づくほど寄る（急がない）
   if (S === 'ROLLING') {
-    camTo(clamp(prod.x, 150, 270), clamp(prod.y - 20, 320, 560), 1.38);
+    const deep = clamp((prod.y - 430) / 150, 0, 1);
+    camTo(clamp(prod.x, 150, 270), clamp(prod.y + 10, 330, 572), 1.32 + 0.2 * deep);
   } else if (S === 'ARRIVED' || S === 'FLAP_OPEN') {
     camTo(210, 555, 1.38);
   } else if (S === 'READY' || S === 'CREDIT_READY' || S === 'COIN_INSERTING') {
