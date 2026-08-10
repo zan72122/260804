@@ -1,13 +1,17 @@
 /* Rainbow Glass Tower — core simulation + Canvas 2D rendering.
-   The "fluid" is a lightweight overflow graph: each glass holds 0..1,
-   excess flows to its two children. The split is 50:50 with a weak bias
-   toward emptier subtrees (so the tower always completes), and the player
-   can override it by tilting glasses or pushing the falling streams.
 
-   Rendering is optimized for large towers (60-140 glasses):
+   The "fluid" is a lightweight overflow graph: each glass holds 0..1, excess
+   flows to its two children. The split is 50:50 with a weak bias toward
+   emptier subtrees (so the tower always completes), and the player can
+   override it by tilting glasses or deflecting the falling streams.
+
+   Glasses are stemmed coupes: the bowl is the only wide part, so the whole
+   region where liquid falls is open space a small finger can reach.
+
+   Rendering is optimized for large towers (55-170 glasses):
    - static glass art is cached into sprites (one drawImage per glass)
-   - liquid is a direct polygon fill (no per-glass clip)
-   - one shared liquid gradient per frame (glasses draw in local space)
+   - the liquid body is drawn once per frame and blitted per glass
+   - streams are a rotated blit of a single per-frame ribbon sprite
    - a frame-time monitor lowers quality tiers before dropping rows */
 'use strict';
 
@@ -16,7 +20,20 @@ window.Game = (function () {
   const CAP = 1;
   const MAXTILT = 0.42;            // ~24° visual tilt at full drag
   const MIN_GLASS_W = 30;          // touch-friendly minimum glass width
-  const MAX_ROWS = 16, MIN_ROWS = 6;
+  const MAX_ROWS = 18, MIN_ROWS = 6;
+
+  // layout factors (glass height == glass width for a coupe)
+  const SPAN_F = 1.22;             // horizontal pitch / glass width
+  const RATIO = 1.00;              // glass height / glass width
+  const STEP_F = 1.30;             // row pitch / glass height (0.30 = airy gap)
+
+  // coupe profile, as fractions of glass height/width
+  const BOWL_H = 0.52;             // bowl depth
+  const BOWL_TIP = 0.26;           // bowl half-width at its base, / rim half-width
+  const TH = Math.acos(BOWL_TIP);  // ellipse angle where the bowl meets the stem
+  const BOWL_RY = BOWL_H / Math.sin(TH);
+  const STEM_HW = 0.048, FOOT_T = 0.88, FOOT_HW = 0.23;
+  const REROUTE_STR = 0.35;        // field strength needed to actually re-aim a stream
 
   // ---------- drink themes (cycled on each replay) ----------
   const THEMES = [
@@ -36,44 +53,46 @@ window.Game = (function () {
   // ---------- state ----------
   let canvas, ctx, W = 0, H = 0, dpr = 1, safeTop = 0;
   let glasses = [], rows = 10, theme = THEMES[0], roundNum = 0, forceRows = 0;
-  let glassW = 60, glassH = 76, spanX = 68, rowStep = 78, cloudS = 70;
+  let glassW = 60, glassH = 60, spanX = 73, rowStep = 78, cloudS = 70;
   let towerCx = 0, towerTopY = 0, tableY = 0;
   let cloud = { x: 0, y: 0, drawY: 0, targetX: 0 };
-  let pouring = false, simPour = false, pourVis = 0, holdT = 0, totalPoured = 0;
+  let autoPour = false, simPour = false, pouring = false;
+  let pourVis = 0, holdT = 0, totalPoured = 0;
   let pool = 0, fullCount = 0, glowPulse = 0, topOverflowed = false, overflowAt = 0;
   let state = 'play';                    // 'play' | 'celebrate'
   let celebT = 0, celebNotified = false;
   let hintT = 0, idleT = 0, time = 0, lastTs = 0;
-  let streamHintShown = false, streamHintT = -1, everGrabbed = false;
-  let pointerX = null;
+  let streamHintT = -1, streamHintShown = false, everDeflected = false;
   let stickers = 0;
   let onComplete = null;
   let turbo = false;
   const parts = [];                      // global particle pool
 
-  // input roles
-  const pointers = new Map();            // pointerId -> {role, gi?, key?, startX?}
-  const grabs = new Map();               // streamKey ('cloud' | gi+':L'/':R') -> grab
-  let streamSegs = [];                   // last frame's stream geometry, for hit tests
+  // input
+  const pointers = new Map();            // pointerId -> {role, gi?, startX?}
+  const deflectors = new Map();          // pointerId -> magic-finger field
+  const grabs = new Map();               // streamKey -> {d, targetIdx}
+  const forcedGrabs = new Map();         // test-only pinned grabs
+  let streamSegs = [];                   // last frame's stream geometry
 
   // performance tiers
   let tier = 0, rowPenalty = 0;
   let frameMsAcc = 0, frameMsN = 0, perfTimer = 0, avgFrameMs = 0;
   const TIER = [
-    { dpr: 2.0, maxParts: 400, core: true,  glints: true  },
-    { dpr: 1.6, maxParts: 280, core: false, glints: true  },
-    { dpr: 1.35, maxParts: 180, core: false, glints: false },
-    { dpr: 1.2, maxParts: 140, core: false, glints: false },
+    { dpr: 2.0, maxParts: 400, core: true,  glints: true,  extras: true  },
+    { dpr: 1.6, maxParts: 280, core: true,  glints: true,  extras: true  },
+    { dpr: 1.35, maxParts: 180, core: false, glints: false, extras: false },
+    { dpr: 1.2, maxParts: 140, core: false, glints: false, extras: false },
   ];
 
   // cached art
   let sprBack = null, sprFront = null, sprPad = 6;
-  let radialSpr = null;                  // generic soft white glow sprite
-  let streamSpr = null;                  // per-frame ribbon sprite (fast stream draw)
-  let liquidSpr = null, liquidSprScl = 1;  // full-glass liquid sprite (blit per glass)
+  let radialSpr = null, streamSpr = null;
+  let liquidSpr = null, liquidSprScl = 1;
+  const LQ_PAD = 2;
   let skyGrad = null, tableGrad = null;
-  let streamGradCache = {};
-  const glowQueue = [];                  // rim glows batched into one composite pass
+  const glowQueue = [];
+  const tiltedQueue = [];
 
   try { stickers = Math.min(99, parseInt(localStorage.getItem('rgt_stars') || '0', 10) || 0); } catch (e) {}
 
@@ -87,34 +106,39 @@ window.Game = (function () {
 
   function tiltAngle(g) { return g.bias * MAXTILT; }
 
-  // glass-local (lx, ly; origin = rim center, +y down) → world, honoring tilt
+  // glass-local (origin = rim center, +y down) → world, honoring tilt
   function localToWorld(g, lx, ly) {
     const a = tiltAngle(g);
     if (a === 0) return { x: g.x + lx, y: g.y + ly };
     const c = Math.cos(a), s = Math.sin(a);
-    const rx = lx, ry = ly - g.h;        // pivot = bottom center
+    const rx = lx, ry = ly - g.h;        // pivot = foot center
     return { x: g.x + rx * c - ry * s, y: g.y + g.h + rx * s + ry * c };
   }
   const rimPoint = (g, sx) => localToWorld(g, sx, 0);
 
+  // liquid only lives in the bowl
   function surfLocal(g) {
-    const b = g.h - g.w * 0.06;
-    const innerTop = g.rimRy * 1.3;
-    return b - (b - innerTop) * clamp(g.disp, 0, 1.06);
+    const bottom = g.h * BOWL_H - g.h * 0.015;
+    const innerTop = g.rimRy * 1.0;
+    return bottom - (bottom - innerTop) * clamp(g.disp, 0, 1.06);
   }
   const surfaceWorld = (g) => localToWorld(g, 0, surfLocal(g));
+
+  function halfWidthLocal(g, ly) {
+    const ry = g.h * BOWL_RY;
+    const t = clamp(ly / ry, 0, 1);
+    return (g.w / 2) * Math.sqrt(Math.max(0, 1 - t * t));
+  }
 
   // ---------- tower setup ----------
   function computeRows() {
     if (forceRows) return clamp(forceRows, 4, 20);
-    const topArea = H * 0.15;
-    const bottomArea = Math.max(H * 0.09, 42);
-    const availH = H - topArea - bottomArea;
+    const availH = H - H * 0.15 - Math.max(H * 0.09, 42);
     const availW = W * 0.96;
     let best = MIN_ROWS;
     for (let r = MIN_ROWS; r <= MAX_ROWS; r++) {
-      const gw = Math.min(availW / ((r - 1) * 1.13 + 1),
-                          availH / (r * 1.045 * 1.24));
+      const gw = Math.min(availW / ((r - 1) * SPAN_F + 1),
+                          availH / (r * STEP_F * RATIO));
       if (gw >= MIN_GLASS_W) best = r; else break;
     }
     return clamp(best - rowPenalty, MIN_ROWS, MAX_ROWS);
@@ -139,63 +163,83 @@ window.Game = (function () {
     state = 'play'; celebT = 0; celebNotified = false;
     hintT = 0; idleT = 0;
     streamHintShown = false; streamHintT = -1;
+    autoPour = false; simPour = false; pouring = false;
     parts.length = 0;
-    grabs.clear();
-    pointers.clear();
-    pouring = false;
+    grabs.clear(); forcedGrabs.clear(); deflectors.clear(); pointers.clear();
+    streamSegs = [];
   }
 
   function layout() {
-    const topArea = H * 0.15;
-    const bottomArea = Math.max(H * 0.09, 42);
-    const availH = H - topArea - bottomArea;
+    const availH = H - H * 0.15 - Math.max(H * 0.09, 42);
     const availW = W * 0.96;
-    glassW = Math.min(availW / ((rows - 1) * 1.13 + 1),
-                      availH / (rows * 1.045 * 1.24));
-    glassW = Math.max(16, glassW);
-    glassH = glassW * 1.24;
-    spanX = glassW * 1.13;
-    rowStep = glassH * 1.045;
-    const towerH = rows * rowStep;
+    glassW = Math.max(16, Math.min(availW / ((rows - 1) * SPAN_F + 1),
+                                   availH / (rows * STEP_F * RATIO)));
+    glassH = glassW * RATIO;
+    spanX = glassW * SPAN_F;
+    rowStep = glassH * STEP_F;
+    const towerH = (rows - 1) * rowStep + glassH;
     towerCx = W / 2;
-    towerTopY = topArea + Math.max(0, (availH - towerH) / 2);
-    tableY = towerTopY + towerH + glassH * 0.05;
+    // bias the leftover vertical slack upward: the tower sits low on the
+    // table and the freed sky becomes a long, easy-to-catch pour stream
+    towerTopY = H * 0.15 + Math.max(0, (availH - towerH) * 0.72);
+    tableY = towerTopY + towerH + glassH * 0.06;
     for (const g of glasses) {
       g.x = towerCx + (g.i - g.r / 2) * spanX;
       g.y = towerTopY + g.r * rowStep;
       g.w = glassW; g.h = glassH;
       g.rimRy = glassW * 0.09;
     }
-    cloudS = clamp(glassW * 1.6, 46, 92);
+    cloudS = clamp(glassW * 1.7, 52, 96);
     const top = glasses[0];
-    cloud.y = Math.max(cloudS * 0.72, top.y - Math.max(glassH * 0.95, cloudS * 1.05));
+    // keep a long, obvious pour stream between the cloud and the top glass
+    cloud.y = Math.max(safeTop + cloudS * 0.8,
+                       top.y - clamp(glassH * 3.2, cloudS * 1.15, H * 0.22));
     if (!cloud.x) cloud.x = top.x;
     cloud.targetX = top.x;
     buildStaticArt();
   }
 
-  // ---------- cached sprites & gradients ----------
-  function glassBodyPathLocal(c, w, h) {
-    const tw = w / 2, bw = w * 0.34, bry = w * 0.09;
+  // ---------- glass geometry paths (local space) ----------
+  function glassOutlinePath(c, w, h) {
+    const hw = w * 0.5, ry = h * BOWL_RY, bh = h * BOWL_H;
+    const sx = w * STEM_HW, fx = w * FOOT_HW;
+    const ft = h * FOOT_T, fb = h;
     c.beginPath();
-    c.moveTo(-tw, 0);
-    c.lineTo(-bw, h - bry);
-    c.quadraticCurveTo(-bw, h, -bw * 0.6, h);
-    c.lineTo(bw * 0.6, h);
-    c.quadraticCurveTo(bw, h, bw, h - bry);
-    c.lineTo(tw, 0);
+    c.ellipse(0, 0, hw, ry, 0, 0, TH);                        // right bowl wall
+    c.quadraticCurveTo(w * 0.085, bh + h * 0.05, sx, bh + h * 0.09);
+    c.lineTo(sx, ft);
+    c.quadraticCurveTo(sx, ft + h * 0.05, fx * 0.85, fb - h * 0.018);
+    c.quadraticCurveTo(fx, fb, fx * 0.7, fb);
+    c.lineTo(-fx * 0.7, fb);
+    c.quadraticCurveTo(-fx, fb, -fx * 0.85, fb - h * 0.018);
+    c.quadraticCurveTo(-sx, ft + h * 0.05, -sx, ft);
+    c.lineTo(-sx, bh + h * 0.09);
+    c.quadraticCurveTo(-w * 0.085, bh + h * 0.05, -hw * BOWL_TIP, bh);
+    c.ellipse(0, 0, hw, ry, 0, Math.PI - TH, Math.PI);        // left bowl wall
     c.closePath();
   }
 
+  function bowlPath(c, w, h, inset) {
+    const hw = w * 0.5 - inset, ry = h * BOWL_RY - inset;
+    const bh = h * BOWL_H;
+    const th = Math.asin(clamp(bh / ry, 0, 1));
+    c.beginPath();
+    c.moveTo(hw, 0);
+    c.ellipse(0, 0, hw, ry, 0, 0, th);
+    c.lineTo(-hw * Math.cos(th), bh);
+    c.ellipse(0, 0, hw, ry, 0, Math.PI - th, Math.PI);
+    c.closePath();
+  }
+
+  // ---------- cached sprites & gradients ----------
   function makeSprite(draw) {
-    const pad = sprPad;
-    const cw = Math.ceil((glassW + pad * 2) * dpr);
-    const ch = Math.ceil((glassH + pad * 2) * dpr);
+    const cw = Math.ceil((glassW + sprPad * 2) * dpr);
+    const ch = Math.ceil((glassH + sprPad * 2) * dpr);
     const cv = document.createElement('canvas');
     cv.width = Math.max(2, cw); cv.height = Math.max(2, ch);
     const c = cv.getContext('2d');
     c.scale(dpr, dpr);
-    c.translate(glassW / 2 + pad, pad);   // origin = rim center
+    c.translate(glassW / 2 + sprPad, sprPad);   // origin = rim center
     draw(c, glassW, glassH);
     return cv;
   }
@@ -203,41 +247,48 @@ window.Game = (function () {
   function buildStaticArt() {
     const rimRy = glassW * 0.09;
     sprBack = makeSprite((c, w, h) => {
-      // back half of the rim
       c.strokeStyle = 'rgba(255,255,255,0.35)';
       c.lineWidth = 1.4;
       c.beginPath(); c.ellipse(0, 0, w / 2, rimRy, 0, Math.PI, TAU); c.stroke();
-      // faint cool body tint
+      // faint cool tint inside the bowl
       c.save();
-      glassBodyPathLocal(c, w, h);
+      bowlPath(c, w, h, 0);
       c.clip();
-      const bodyG = c.createLinearGradient(-w / 2, 0, w / 2, 0);
-      bodyG.addColorStop(0, 'rgba(255,255,255,0.16)');
-      bodyG.addColorStop(0.25, 'rgba(255,255,255,0.05)');
-      bodyG.addColorStop(0.75, 'rgba(200,225,255,0.06)');
-      bodyG.addColorStop(1, 'rgba(255,255,255,0.18)');
-      c.fillStyle = bodyG;
-      c.fillRect(-w / 2, 0, w, h);
+      const bg = c.createLinearGradient(-w / 2, 0, w / 2, 0);
+      bg.addColorStop(0, 'rgba(255,255,255,0.18)');
+      bg.addColorStop(0.28, 'rgba(255,255,255,0.05)');
+      bg.addColorStop(0.72, 'rgba(200,225,255,0.06)');
+      bg.addColorStop(1, 'rgba(255,255,255,0.20)');
+      c.fillStyle = bg;
+      c.fillRect(-w / 2, 0, w, h * BOWL_H + 2);
       c.restore();
     });
+
     sprFront = makeSprite((c, w, h) => {
-      // vertical shine streak
+      // glassy body fill for stem + foot (thin, so keep it bright)
       c.save();
-      glassBodyPathLocal(c, w, h);
+      glassOutlinePath(c, w, h);
       c.clip();
-      const shine = c.createLinearGradient(-w * 0.36, 0, -w * 0.12, 0);
-      shine.addColorStop(0, 'rgba(255,255,255,0)');
-      shine.addColorStop(0.5, 'rgba(255,255,255,0.30)');
-      shine.addColorStop(1, 'rgba(255,255,255,0)');
-      c.fillStyle = shine;
-      c.fillRect(-w * 0.4, 3, w * 0.3, h - 6);
+      const sg = c.createLinearGradient(-w * 0.1, 0, w * 0.1, 0);
+      sg.addColorStop(0, 'rgba(255,255,255,0.10)');
+      sg.addColorStop(0.45, 'rgba(255,255,255,0.55)');
+      sg.addColorStop(1, 'rgba(255,255,255,0.12)');
+      c.fillStyle = sg;
+      c.fillRect(-w * 0.3, h * BOWL_H, w * 0.6, h * 0.5);
+      // curved highlight on the left of the bowl
+      const hl = c.createLinearGradient(-w * 0.34, 0, -w * 0.12, 0);
+      hl.addColorStop(0, 'rgba(255,255,255,0)');
+      hl.addColorStop(0.5, 'rgba(255,255,255,0.34)');
+      hl.addColorStop(1, 'rgba(255,255,255,0)');
+      c.fillStyle = hl;
+      c.fillRect(-w * 0.38, h * 0.05, w * 0.28, h * BOWL_H * 0.85);
       c.restore();
       // outline + front rim
-      c.strokeStyle = 'rgba(255,255,255,0.4)';
+      c.strokeStyle = 'rgba(255,255,255,0.45)';
       c.lineWidth = 1.4;
-      glassBodyPathLocal(c, w, h);
+      glassOutlinePath(c, w, h);
       c.stroke();
-      c.strokeStyle = 'rgba(255,255,255,0.55)';
+      c.strokeStyle = 'rgba(255,255,255,0.6)';
       c.lineWidth = 1.8;
       c.beginPath(); c.ellipse(0, 0, w / 2, rimRy, 0, 0, Math.PI); c.stroke();
     });
@@ -279,14 +330,13 @@ window.Game = (function () {
     return grad;
   }
 
-  // full liquid rendered once per frame; each glass blits the part below its
-  // own surface line (the shape is a vertical trapezoid, so a horizontal cut
-  // of the full sprite IS the correct liquid silhouette)
-  const LQ_PAD = 2;
+  // the bowl's liquid, drawn once per frame; each glass blits the part below
+  // its own surface line (a horizontal cut of a convex shape is still correct)
   function buildLiquidSprite() {
     liquidSprScl = dpr;
+    const bh = glassH * BOWL_H;
     const cw = Math.ceil((glassW + LQ_PAD * 2) * liquidSprScl);
-    const ch = Math.ceil((glassH + LQ_PAD * 2) * liquidSprScl);
+    const ch = Math.ceil((bh + LQ_PAD * 2) * liquidSprScl);
     if (!liquidSpr) liquidSpr = document.createElement('canvas');
     if (liquidSpr.width !== cw || liquidSpr.height !== ch) {
       liquidSpr.width = Math.max(2, cw); liquidSpr.height = Math.max(2, ch);
@@ -295,24 +345,14 @@ window.Game = (function () {
     c.clearRect(0, 0, liquidSpr.width, liquidSpr.height);
     c.save();
     c.scale(liquidSprScl, liquidSprScl);
-    c.translate(glassW / 2 + LQ_PAD, LQ_PAD);      // origin = rim center
-    const w = glassW, h = glassH;
-    const bw = w * 0.34 - 0.8, bry = w * 0.09, tw = w / 2 - 0.8;
-    c.fillStyle = liquidGradient(c, 0, h);
-    c.beginPath();
-    c.moveTo(-tw, 0);
-    c.lineTo(-bw, h - bry);
-    c.quadraticCurveTo(-bw, h - 1, -bw * 0.6, h - 1);
-    c.lineTo(bw * 0.6, h - 1);
-    c.quadraticCurveTo(bw, h - 1, bw, h - bry);
-    c.lineTo(tw, 0);
-    c.closePath();
+    c.translate(glassW / 2 + LQ_PAD, LQ_PAD);
+    c.fillStyle = liquidGradient(c, 0, bh);
+    bowlPath(c, glassW, glassH, 1.1);
     c.fill();
     c.restore();
   }
 
-  // one small ribbon sprite per frame: vertical drink gradient + baked white
-  // core; every straight stream becomes a single rotated drawImage
+  // one ribbon sprite per frame: drink gradient + baked white core
   function buildStreamSprite() {
     if (!streamSpr) {
       streamSpr = document.createElement('canvas');
@@ -328,78 +368,42 @@ window.Game = (function () {
       const st = theme.stops;
       grad.addColorStop(0, st[0]); grad.addColorStop(1, st[st.length - 1]);
     }
+    // soft outer bloom so the ribbon reads against the dark sky
+    c.globalAlpha = 0.35;
     c.fillStyle = grad;
-    // rounded ribbon with soft side falloff
+    c.fillRect(1, 2, 22, 60);
+    c.globalAlpha = 1;
     c.beginPath();
     c.moveTo(4, 6); c.quadraticCurveTo(4, 0, 12, 0); c.quadraticCurveTo(20, 0, 20, 6);
     c.lineTo(20, 58); c.quadraticCurveTo(20, 64, 12, 64); c.quadraticCurveTo(4, 64, 4, 58);
     c.closePath();
     c.fill();
-    c.fillStyle = 'rgba(255,255,255,0.45)';
-    c.fillRect(9.5, 3, 5, 58);
-  }
-
-  function drawStreamSprite(c, key, x0, y0, x1, y1, w, intensity) {
-    if (intensity < 0.03) return;
-    const dx = x1 - x0, dy = y1 - y0;
-    const len = Math.sqrt(dx * dx + dy * dy);
-    if (len < 2) return;
-    const wig = 0.85 + 0.15 * Math.sin(time * 22 + x0 * 0.3);
-    c.save();
-    c.translate(x0, y0);
-    c.rotate(Math.atan2(dy, dx) - Math.PI / 2);
-    c.globalAlpha = clamp(intensity, 0, 1) * 0.9;
-    c.drawImage(streamSpr, -w * wig * 0.75, -2, w * wig * 1.5, len + 4);
-    c.restore();
-    if (key) {
-      streamSegs.push({ key, x0, y0, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, x1, y1, intensity });
+    if (TIER[tier].core) {
+      c.fillStyle = 'rgba(255,255,255,0.38)';
+      c.fillRect(9, 3, 6, 58);
+      c.fillStyle = 'rgba(255,255,255,0.75)';
+      c.fillRect(10.8, 3, 2.4, 58);
     }
-    if (TIER[tier].glints && Math.random() < intensity * 0.25) {
-      const t = Math.random();
-      push({ type: 'drop', x: lerp(x0, x1, t) + rnd(-2, 2), y: lerp(y0, y1, t),
-             vx: rnd(-10, 10), vy: rnd(20, 60), t: 0, life: 0.3, size: rnd(1, 2.2) });
-    }
-  }
-
-  function streamGrad(key, y0, y1) {
-    let e = streamGradCache[key];
-    if (!e) {
-      e = ctx.createLinearGradient(0, y0, 0, y1);
-      if (theme.rainbow) {
-        const base = time * 30;
-        for (let k = 0; k <= 4; k++) e.addColorStop(k / 4, 'hsl(' + ((base + k * 50) % 360) + ' 90% 66%)');
-      } else {
-        const st = theme.stops;
-        e.addColorStop(0, st[0]); e.addColorStop(1, st[st.length - 1]);
-      }
-      streamGradCache[key] = e;
-    }
-    return e;
   }
 
   // ---------- pacing ----------
   function paceK() {
-    // target pour duration grows with tower size: ~40s for small landscape
-    // towers up to ~90s for the 136-glass iPad tower
     const N = glasses.length;
-    const T = clamp(N * 0.8, 40, 90);
-    return (N * 1.1) / T;
+    return (N * 1.1) / clamp(N * 0.8, 40, 90);
   }
   function pourRate() {
-    const k = paceK();
-    const r = k * Math.min(1.7, 0.4 + holdT * 0.022);
+    const r = paceK() * Math.min(1.7, 0.4 + holdT * 0.022);
     return turbo ? r * 6 : r;
   }
 
-  // ---------- stream grabs (push-the-flow) ----------
+  // ---------- stream routing ----------
   function grabCandidates(key) {
     if (key === 'cloud') {
       const out = [0];
       if (rows > 1) out.push(1, 2);
       return out;
     }
-    const [giStr] = key.split(':');
-    const g = glasses[+giStr];
+    const g = glasses[+key.split(':')[0]];
     if (!g || g.r >= rows - 1) return [];
     const out = [];
     const cr = g.r + 1;
@@ -407,44 +411,39 @@ window.Game = (function () {
     return out;
   }
 
-  function resolveGrabTarget(grab, key) {
-    if (grab.targetIdxForce != null) return grab.targetIdxForce;
+  function nearestCandidate(key, x) {
     const cands = grabCandidates(key);
     if (!cands.length) return null;
     let best = cands[0], bd = 1e12;
     for (const idx of cands) {
-      const d = Math.abs(grab.x - glasses[idx].x);
+      const d = Math.abs(x - glasses[idx].x);
       if (d < bd) { bd = d; best = idx; }
     }
     return best;
   }
 
-  // route a portion of flow: grabbed → target (or spray), else default child / pool
+  // route a portion of flow: deflected → target (or spray), else default child
   function deliver(portion, defIdx, key) {
     if (portion <= 0) return;
     const grab = key ? grabs.get(key) : null;
-    if (grab) {
-      const ti = grab.targetIdx;
-      if (ti != null) {
-        const t = glasses[ti];
-        if (grab.sprayT > 0) {
-          // fast swipe → spray across the target and its row neighbors
-          const sibs = [];
-          if (t.i > 0) sibs.push(glassAt(t.r, t.i - 1));
-          if (t.i < t.r) sibs.push(glassAt(t.r, t.i + 1));
-          t.amount += portion * 0.4;
-          t.receive = Math.min(1, t.receive + portion * 2.5);
-          for (const s of sibs) {
-            s.amount += portion * (0.5 / sibs.length);
-            s.receive = Math.min(1, s.receive + portion * 2);
-          }
-          pool = Math.min(pool + portion * 0.05, 8);
-        } else {
-          t.amount += portion;
-          t.receive = Math.min(1, t.receive + portion * 6);
+    if (grab && grab.targetIdx != null && grab.str >= REROUTE_STR) {
+      const t = glasses[grab.targetIdx];
+      if (grab.d.sprayT > 0) {
+        const sibs = [];
+        if (t.i > 0) sibs.push(glassAt(t.r, t.i - 1));
+        if (t.i < t.r) sibs.push(glassAt(t.r, t.i + 1));
+        t.amount += portion * 0.45;
+        t.receive = Math.min(1, t.receive + portion * 2.5);
+        for (const s of sibs) {
+          s.amount += portion * (0.45 / sibs.length);
+          s.receive = Math.min(1, s.receive + portion * 2);
         }
-        return;
+        pool = Math.min(pool + portion * 0.1, 8);
+      } else {
+        t.amount += portion;
+        t.receive = Math.min(1, t.receive + portion * 6);
       }
+      return;
     }
     if (defIdx == null) {
       pool = Math.min(pool + portion, 8);
@@ -455,17 +454,53 @@ window.Game = (function () {
     }
   }
 
+  function distToSegSq(px, py, seg) {
+    let best = 1e12;
+    for (let k = 0; k <= 6; k++) {
+      const t = k / 6;
+      const qx = lerp(lerp(seg.x0, seg.cx, t), lerp(seg.cx, seg.x1, t), t);
+      const qy = lerp(lerp(seg.y0, seg.cy, t), lerp(seg.cy, seg.y1, t), t);
+      const d = (px - qx) * (px - qx) + (py - qy) * (py - qy);
+      if (d < best) best = d;
+    }
+    return best;
+  }
+
+  function deflectRadius() { return Math.max(58, glassW * 1.9); }
+
+  // every stream inside a finger's field bends toward it — no aiming needed
+  function rebuildGrabs(dt) {
+    grabs.clear();
+    for (const d of deflectors.values()) d.sprayT = Math.max(0, d.sprayT - dt);
+    if (deflectors.size && streamSegs.length) {
+      const R = deflectRadius(), R2 = R * R;
+      for (const seg of streamSegs) {
+        if (seg.intensity < 0.12) continue;
+        let bestD = null, bd = R2;
+        for (const d of deflectors.values()) {
+          const dd = distToSegSq(d.x, d.y, seg);
+          if (dd < bd) { bd = dd; bestD = d; }
+        }
+        if (bestD) {
+          // falloff: streams under the fingertip bend fully, the outer ones
+          // only lean toward it — reads as a force field, not a magnet
+          const str = clamp(1 - Math.sqrt(bd) / R, 0, 1);
+          const ti = nearestCandidate(seg.key, bestD.x);
+          if (ti != null) grabs.set(seg.key, { d: bestD, targetIdx: ti, str });
+        }
+      }
+    }
+    for (const [k, v] of forcedGrabs) grabs.set(k, v);
+  }
+
   // ---------- simulation ----------
   function update(dt) {
     time += dt;
     glowPulse = Math.max(0, glowPulse - dt * 1.4);
-    pouring = state === 'play' && (simPour || hasPourPointer());
+    if (state !== 'play') autoPour = false;
+    pouring = state === 'play' && (autoPour || simPour);
 
-    // resolve grab targets from finger position, tick spray timers
-    for (const [key, grab] of grabs) {
-      grab.targetIdx = resolveGrabTarget(grab, key);
-      grab.sprayT = Math.max(0, grab.sprayT - dt);
-    }
+    rebuildGrabs(dt);
 
     // --- pouring from the cloud ---
     const top = glasses[0];
@@ -492,20 +527,16 @@ window.Game = (function () {
         g.bias += (g.biasT - g.bias) * Math.min(1, dt * 12);
         g.biasV = 0;
       } else if (g.bias !== 0 || g.biasV !== 0) {
-        // springy return with a jelly wobble
         g.biasV += (-g.bias * 70 - g.biasV * 8) * dt;
         g.bias += g.biasV * dt;
         if (Math.abs(g.bias) < 0.002 && Math.abs(g.biasV) < 0.01) { g.bias = 0; g.biasV = 0; }
       }
     }
 
-    // --- subtree "thirst", propagated undamped via max() so deep corners
-    //     still steer the flow near the top of tall towers ---
+    // --- subtree "thirst" (floor keeps deep towers from stalling) ---
     const need = new Float32Array(glasses.length);
     for (let k = glasses.length - 1; k >= 0; k--) {
       const g = glasses[k];
-      // floor of 0.25: a nearly-full glass must still project a clear demand,
-      // or deep towers develop an exponentially slow fill tail
       let n = g.full ? 0 : Math.max(0.25, CAP - g.amount);
       if (g.r < rows - 1) {
         n += Math.max(need[gIdx(g.r + 1, g.i)], need[gIdx(g.r + 1, g.i + 1)]) * 0.98;
@@ -520,7 +551,6 @@ window.Game = (function () {
     for (let k = 0; k < glasses.length; k++) {
       const g = glasses[k];
       let flowL = 0, flowR = 0;
-      // strong tilt lets a full glass actively dump a little
       const capEff = CAP - Math.max(0, Math.abs(g.bias) - 0.5) * 0.3;
       if (g.amount > capEff) {
         const excess = g.amount - capEff;
@@ -537,7 +567,6 @@ window.Game = (function () {
           const idxL = gIdx(g.r + 1, g.i), idxR = gIdx(g.r + 1, g.i + 1);
           const wl = need[idxL] + eps, wr = need[idxR] + eps;
           let s = wl / (wl + wr);
-          // tilt override: 0.5 bias ≈ 80:20, full bias = 100:0
           const b = g.bias;
           if (Math.abs(b) > 0.03) s = lerp(s, b > 0 ? 0 : 1, Math.min(1, Math.abs(b) * 1.15));
           deliver(out * s, idxL, k + ':L');
@@ -552,8 +581,7 @@ window.Game = (function () {
       }
       const sm = Math.min(1, dt * 7);
       const norm = 1 / Math.max(0.6, paceK());
-      // any active stream stays clearly visible even when the flow is split
-      // across many columns; stronger flow still reads thicker/brighter
+      // any live stream stays clearly visible even when split many ways
       const visL = flowL * norm > 0.02 ? 0.4 + 0.6 * Math.min(1, flowL * 1.5 * norm) : 0;
       const visR = flowR * norm > 0.02 ? 0.4 + 0.6 * Math.min(1, flowR * 1.5 * norm) : 0;
       g.streamL += (visL - g.streamL) * sm;
@@ -586,7 +614,7 @@ window.Game = (function () {
         }
       }
 
-      if (g.receive > 0.1 && Math.random() < g.receive * 0.4 * bubScale * 2) {
+      if (g.receive > 0.1 && Math.random() < g.receive * 0.8 * bubScale) {
         const sp = surfaceWorld(g);
         spawnSplash(sp.x + rnd(-g.w * 0.2, g.w * 0.2), sp.y, g.receive);
       }
@@ -605,8 +633,9 @@ window.Game = (function () {
     if (state === 'play' && fullCount === glasses.length) {
       state = 'celebrate';
       celebT = 0;
+      autoPour = false;
       for (const g of glasses) { g.amount = Math.max(g.amount, CAP); g.tiltHeld = false; }
-      grabs.clear();
+      grabs.clear(); forcedGrabs.clear(); deflectors.clear();
       stickers = Math.min(99, stickers + 1);
       try { localStorage.setItem('rgt_stars', String(stickers)); } catch (e) {}
       Sound.setPour(false);
@@ -633,32 +662,23 @@ window.Game = (function () {
     }
 
     // --- hints ---
-    const wantHint = state === 'play' && !pouring &&
-                     (totalPoured < 0.05 ? idleT > 1.0 : idleT > 7);
+    // 👆 on the cloud whenever the water is off
+    const wantHint = state === 'play' && !pouring && idleT > 0.8;
     hintT += ((wantHint ? 1 : 0) - hintT) * Math.min(1, dt * 4);
-    // one-time wordless "you can touch the stream" hint
-    if (!streamHintShown && state === 'play' && topOverflowed && !everGrabbed &&
+    if (!streamHintShown && state === 'play' && topOverflowed && !everDeflected &&
         time - overflowAt > 5 && pourVis > 0.3) {
       streamHintShown = true;
       streamHintT = 0;
     }
     if (streamHintT >= 0) {
       streamHintT += dt;
-      if (streamHintT > 4.5 || everGrabbed) streamHintT = -1;
+      if (streamHintT > 4.5 || everDeflected) streamHintT = -1;
     }
 
-    // --- cloud drifts toward the top glass (slight nudge from finger) ---
-    let tx = glasses[0].x;
-    if (pointerX != null && pouring) tx += clamp((pointerX - W / 2) * 0.12, -glassW * 0.5, glassW * 0.5);
-    cloud.targetX = tx;
+    cloud.targetX = glasses[0].x;
     cloud.x += (cloud.targetX - cloud.x) * Math.min(1, dt * 3);
 
     updateParticles(dt);
-  }
-
-  function hasPourPointer() {
-    for (const p of pointers.values()) if (p.role === 'pour') return true;
-    return false;
   }
 
   // ---------- performance monitor ----------
@@ -670,14 +690,11 @@ window.Game = (function () {
       frameMsAcc = 0; frameMsN = 0; perfTimer = 0;
       if (time > 3 && avgFrameMs > 12 && tier < TIER.length - 1) {
         tier++;
-        applyTier();
+        resizeInternal();
       } else if (time > 3 && avgFrameMs > 14 && tier === TIER.length - 1) {
-        rowPenalty = Math.min(rowPenalty + 2, 6);   // takes effect on next reset
+        rowPenalty = Math.min(rowPenalty + 2, 6);   // applies on next reset
       }
     }
-  }
-  function applyTier() {
-    resizeInternal();   // re-apply DPR cap
   }
 
   // ---------- particles ----------
@@ -705,9 +722,8 @@ window.Game = (function () {
   function spawnFirework(x, y) {
     const hue = rnd(0, 360);
     spawnRing(x, y, rnd(30, 70), 'hsl(' + hue + ' 90% 75%)');
-    const n = 18;
-    for (let k = 0; k < n; k++) {
-      const a = (k / n) * TAU + rnd(-0.1, 0.1);
+    for (let k = 0; k < 18; k++) {
+      const a = (k / 18) * TAU + rnd(-0.1, 0.1);
       const sp = rnd(60, 170);
       push({ type: 'spark', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
              t: 0, life: rnd(0.7, 1.3), size: rnd(2, 4), hue: hue + rnd(-25, 25) });
@@ -720,7 +736,7 @@ window.Game = (function () {
     Sound.pop();
   }
   function spawnSpray(x, y, dir) {
-    for (let k = 0; k < 5; k++) {
+    for (let k = 0; k < 4; k++) {
       push({ type: 'drop', x: x + rnd(-4, 4), y: y + rnd(-4, 4),
              vx: dir * rnd(60, 220) + rnd(-40, 40), vy: rnd(-120, 30),
              t: 0, life: rnd(0.3, 0.6), size: rnd(1.5, 3) });
@@ -810,101 +826,83 @@ window.Game = (function () {
     c.restore();
   }
 
-  // ---------- glass rendering (glass-local space, tilt-aware) ----------
-  let sharedLiquidGrad = null;   // rebuilt once per frame, used by every glass
-
-  function halfWidthLocal(g, ly) {
-    return lerp(g.w / 2, g.w * 0.34, clamp(ly / g.h, 0, 1));
-  }
-
+  // ---------- glass rendering ----------
   function drawGlass(c, g) {
     const ang = tiltAngle(g);
     const w = g.w, h = g.h;
     c.save();
     c.translate(g.x, g.y + h);
     if (ang !== 0) c.rotate(ang);
-    c.translate(0, -h);                       // origin = rim center (local)
+    c.translate(0, -h);                        // origin = rim center (local)
 
     const sw = w + sprPad * 2, sh = h + sprPad * 2;
-    let pt = profOn ? performance.now() : 0;
     c.drawImage(sprBack, -w / 2 - sprPad, -sprPad, sw, sh);
-    pt = mark('g_back', pt);
 
     if (g.disp > 0.015) {
       const wob = Math.sin(time * 6 + g.seed) * (0.6 + Math.min(g.receive * 5, 3)) * h * 0.008;
       const surfY = Math.max(0, surfLocal(g) + wob);
-      const shw = halfWidthLocal(g, surfY) - 0.8;
+      const shw = halfWidthLocal(g, surfY) - 1.1;
 
-      // liquid: blit the below-surface part of the shared liquid sprite
-      const srcY = Math.min(liquidSpr.height - 1, (surfY + LQ_PAD) * liquidSprScl);
+      const srcY = clamp((surfY + LQ_PAD) * liquidSprScl, 0, liquidSpr.height);
       const srcH = liquidSpr.height - srcY;
-      c.globalAlpha = 0.92;
-      c.drawImage(liquidSpr, 0, srcY, liquidSpr.width, srcH,
-                  -w / 2 - LQ_PAD, surfY, w + LQ_PAD * 2, srcH / liquidSprScl);
-      pt = mark('g_liq', pt);
-
-      // soft inner glow near the bottom (cached radial sprite)
-      if (tier < 2) {
-        c.globalAlpha = 0.20;
-        c.drawImage(radialSpr, -w * 0.55, h - w * 1.0, w * 1.1, w * 1.1);
+      if (srcH > 0.5) {
+        c.globalAlpha = 0.93;
+        c.drawImage(liquidSpr, 0, srcY, liquidSpr.width, srcH,
+                    -w / 2 - LQ_PAD, surfY, w + LQ_PAD * 2, srcH / liquidSprScl);
         c.globalAlpha = 1;
       }
-      pt = mark('g_glow', pt);
 
-      // bubbles
       if (g.bubbles.length) {
         c.fillStyle = 'rgba(255,255,255,0.75)';
         for (const bb of g.bubbles) {
-          const byy = lerp(h - 4, surfY + 3, bb.t);
+          const byy = lerp(h * BOWL_H - 3, surfY + 3, bb.t);
           if (byy < surfY + 2) continue;
-          const bx = bb.u * halfWidthLocal(g, byy) * 0.8 + Math.sin(bb.t * 9 + g.seed) * 2;
+          const bx = bb.u * halfWidthLocal(g, byy) * 0.75 + Math.sin(bb.t * 9 + g.seed) * 1.5;
           c.globalAlpha = 0.35 + 0.4 * bb.t;
           c.beginPath(); c.arc(bx, byy, bb.r, 0, TAU); c.fill();
         }
         c.globalAlpha = 1;
       }
 
-      // a twinkle inside the drink (skipped on low tiers)
-      if (tier < 2) {
-        const tw = (Math.sin(time * 2.7 + g.seed) + 1) / 2;
-        if (tw > 0.55) {
-          const px = (hash(g.seed + 13.7) - 0.5) * w * 0.55;
-          const py = lerp(h - 5, surfY + 5, hash(g.seed + 31.3));
-          if (py > surfY + 3) {
-            c.globalAlpha = (tw - 0.55) * 1.6;
-            c.fillStyle = '#ffffff';
-            c.beginPath(); c.arc(px, py, 1.3, 0, TAU); c.fill();
-            c.globalAlpha = 1;
-          }
-        }
-      }
-
       // liquid surface — stays level in world space while the glass tilts
-      c.save();
-      c.translate(0, surfY);
-      if (ang !== 0) c.rotate(-ang);
-      c.fillStyle = 'rgba(255,255,255,0.30)';
-      c.beginPath();
-      c.ellipse(0, 0, shw * 0.97, g.rimRy * 0.75 + Math.abs(wob) * 0.4, 0, 0, TAU);
-      c.fill();
-      if (tier < 1) {
-        c.strokeStyle = 'rgba(255,255,255,0.45)';
-        c.lineWidth = 1;
-        c.stroke();
+      if (shw > 1) {
+        c.save();
+        c.translate(0, surfY);
+        if (ang !== 0) c.rotate(-ang);
+        c.fillStyle = 'rgba(255,255,255,0.32)';
+        c.beginPath();
+        c.ellipse(0, 0, shw, g.rimRy * 0.7 + Math.abs(wob) * 0.4, 0, 0, TAU);
+        c.fill();
+        if (tier < 1) {
+          c.strokeStyle = 'rgba(255,255,255,0.5)';
+          c.lineWidth = 1;
+          c.stroke();
+        }
+        c.restore();
       }
-      c.restore();
-      pt = mark('g_surf', pt);
     }
 
     c.drawImage(sprFront, -w / 2 - sprPad, -sprPad, sw, sh);
-    mark('g_front', pt);
     c.restore();
 
-    // rim accents (full glow / overflow foam) are batched into one pass
     if (g.full || g.foam > 0.05) glowQueue.push(g);
   }
 
-  // one composite pass for every glowing/foaming rim (state changes are costly)
+  // soft magic light under every foot — justifies the levitating rows
+  function drawFootGlows(c) {
+    if (!TIER[tier].extras) return;
+    const gw = glassW * 0.8, gh = glassW * 0.34;
+    c.save();
+    c.globalCompositeOperation = 'lighter';
+    c.globalAlpha = 0.16;
+    for (const g of glasses) {
+      const p = localToWorld(g, 0, g.h + gh * 0.15);
+      c.drawImage(radialSpr, p.x - gw / 2, p.y - gh / 2, gw, gh);
+    }
+    c.restore();
+  }
+
+  // one composite pass for every glowing / foaming rim
   function drawGlowPass(c) {
     if (!glowQueue.length) return;
     c.save();
@@ -913,9 +911,8 @@ window.Game = (function () {
     c.lineWidth = 4;
     for (const g of glowQueue) {
       if (!g.full) continue;
-      const fullGlow = 0.55 + 0.45 * Math.sin(time * 5 + g.seed);
       const rc = rimPoint(g, 0);
-      c.globalAlpha = 0.35 * fullGlow;
+      c.globalAlpha = 0.35 * (0.55 + 0.45 * Math.sin(time * 5 + g.seed));
       c.beginPath(); c.ellipse(rc.x, rc.y, g.w / 2, g.rimRy, tiltAngle(g), 0, TAU); c.stroke();
     }
     c.restore();
@@ -931,101 +928,106 @@ window.Game = (function () {
     glowQueue.length = 0;
   }
 
-  // ---------- streams (overflow ribbons, grabbable) ----------
-  function drawStreamRibbon(c, key, x0, y0, x1, y1, w, intensity, gradKey, ctrl) {
+  // ---------- streams ----------
+  function drawStream(c, key, x0, y0, x1, y1, w, intensity, ctrl) {
     if (intensity < 0.03) return;
-    const midX = ctrl ? ctrl.x : (x0 + x1) / 2 + (x0 < x1 ? 1 : -1) * w * 0.4;
-    const midY = ctrl ? ctrl.y : (y0 + y1) / 2;
-    c.save();
-    c.lineCap = 'round';
-    const wig = 0.85 + 0.15 * Math.sin(time * 22 + x0 * 0.3);
-    c.globalAlpha = clamp(intensity, 0, 1) * 0.9;
-    c.strokeStyle = streamGrad(gradKey, Math.min(y0, y1), Math.max(y0, y1) + 1);
-    c.lineWidth = w * wig;
-    c.beginPath();
-    c.moveTo(x0, y0);
-    c.quadraticCurveTo(midX, midY, x1, y1);
-    c.stroke();
-    if (TIER[tier].core) {
-      c.globalAlpha *= 0.55;
-      c.strokeStyle = 'rgba(255,255,255,0.9)';
-      c.lineWidth = w * 0.32 * wig;
-      c.stroke();
+    const a = Math.min(1, 0.55 + clamp(intensity, 0, 1) * 0.45);
+    const wig = 0.88 + 0.12 * Math.sin(time * 22 + x0 * 0.3);
+    if (ctrl) {
+      // bent by a finger: two blits through the control point
+      drawStraight(c, x0, y0, ctrl.x, ctrl.y, w * wig, a);
+      drawStraight(c, ctrl.x, ctrl.y, x1, y1, w * wig, a);
+    } else {
+      drawStraight(c, x0, y0, x1, y1, w * wig, a);
     }
-    c.restore();
     if (key) {
-      streamSegs.push({ key, x0, y0, cx: midX, cy: midY, x1, y1, intensity });
+      streamSegs.push({ key, x0, y0,
+                        cx: ctrl ? ctrl.x : (x0 + x1) / 2,
+                        cy: ctrl ? ctrl.y : (y0 + y1) / 2,
+                        x1, y1, intensity });
     }
-    if (TIER[tier].glints && Math.random() < intensity * 0.3) {
+    if (TIER[tier].glints && Math.random() < intensity * 0.25) {
       const t = Math.random();
-      const qx = lerp(lerp(x0, midX, t), lerp(midX, x1, t), t);
-      const qy = lerp(lerp(y0, midY, t), lerp(midY, y1, t), t);
-      push({ type: 'drop', x: qx + rnd(-2, 2), y: qy, vx: rnd(-10, 10), vy: rnd(20, 60),
-             t: 0, life: 0.3, size: rnd(1, 2.2) });
+      push({ type: 'drop', x: lerp(x0, x1, t) + rnd(-2, 2), y: lerp(y0, y1, t),
+             vx: rnd(-10, 10), vy: rnd(20, 60), t: 0, life: 0.3, size: rnd(1, 2.2) });
     }
   }
 
-  // a grabbed stream bends through the finger to its new target
-  function drawGrabbedStream(c, key, grab, x0, y0, w, intensity, gradKey) {
-    const ti = grab.targetIdx;
-    if (ti == null) return;
-    const t = glasses[ti];
-    const end = surfaceWorld(t);
-    if (grab.sprayT > 0) {
-      // spray: stream reaches the finger, then bursts
-      drawStreamRibbon(c, key, x0, y0, grab.x, grab.y, w, intensity, gradKey,
-                       { x: (x0 + grab.x) / 2, y: (y0 + grab.y) / 2 });
-      spawnSpray(grab.x, grab.y, grab.vx >= 0 ? 1 : -1);
-    } else {
-      drawStreamRibbon(c, key, x0, y0, end.x, end.y - 2, w, intensity, gradKey,
-                       { x: grab.x, y: grab.y });
-    }
-    // the finger as a transparent spoon: a lens glow where flow is held
+  function drawStraight(c, x0, y0, x1, y1, w, alpha) {
+    const dx = x1 - x0, dy = y1 - y0;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len < 1.5) return;
     c.save();
-    c.globalCompositeOperation = 'lighter';
-    c.globalAlpha = 0.55 * intensity;
-    c.drawImage(radialSpr, grab.x - 18, grab.y - 18, 36, 36);
-    c.globalAlpha = 0.8 * intensity;
-    c.strokeStyle = 'rgba(255,255,255,0.9)';
-    c.lineWidth = 2;
-    c.beginPath();
-    c.arc(grab.x, grab.y + 4, 11, Math.PI * 0.1, Math.PI * 0.9);
-    c.stroke();
+    c.translate(x0, y0);
+    c.rotate(Math.atan2(dy, dx) - Math.PI / 2);
+    c.globalAlpha = alpha;
+    c.drawImage(streamSpr, -w * 0.75, -2, w * 1.5, len + 4);
     c.restore();
   }
 
   function drawStreams(c) {
-    const sw = Math.max(4.5, glassW * 0.16);
+    const sw = Math.max(7, glassW * 0.26);
     for (let k = 0; k < glasses.length; k++) {
       const g = glasses[k];
       if (g.streamL < 0.03 && g.streamR < 0.03) continue;
-      const pl = rimPoint(g, -g.w * 0.46);
-      const pr = rimPoint(g, g.w * 0.46);
-      const gradKey = 'r' + g.r;
+      const pl = rimPoint(g, -g.w * 0.47);
+      const pr = rimPoint(g, g.w * 0.47);
       if (g.r < rows - 1) {
-        const kl = k + ':L', kr = k + ':R';
-        const grabL = grabs.get(kl), grabR = grabs.get(kr);
-        if (grabL) {
-          drawGrabbedStream(c, kl, grabL, pl.x, pl.y + 1, sw, g.streamL, gradKey);
-        } else {
-          const L = glassAt(g.r + 1, g.i);
-          drawStreamSprite(c, kl, pl.x, pl.y + 1, L.x + L.w * 0.1, L.y + 2, sw, g.streamL);
-        }
-        if (grabR) {
-          drawGrabbedStream(c, kr, grabR, pr.x, pr.y + 1, sw, g.streamR, gradKey);
-        } else {
-          const R = glassAt(g.r + 1, g.i + 1);
-          drawStreamSprite(c, kr, pr.x, pr.y + 1, R.x - R.w * 0.1, R.y + 2, sw, g.streamR);
-        }
+        const L = glassAt(g.r + 1, g.i), R = glassAt(g.r + 1, g.i + 1);
+        emitStream(c, k + ':L', pl, g.streamL, sw, L.x + L.w * 0.1, L.y + 2);
+        emitStream(c, k + ':R', pr, g.streamR, sw, R.x - R.w * 0.1, R.y + 2);
       } else {
-        // bottom row spills to the table pool (not grabbable)
-        drawStreamSprite(c, null, pl.x, pl.y + 1, pl.x - g.w * 0.06, tableY + 3, sw * 0.9, g.streamL);
-        drawStreamSprite(c, null, pr.x, pr.y + 1, pr.x + g.w * 0.06, tableY + 3, sw * 0.9, g.streamR);
+        drawStream(c, null, pl.x, pl.y + 1, pl.x - g.w * 0.06, tableY + 3, sw * 0.9, g.streamL);
+        drawStream(c, null, pr.x, pr.y + 1, pr.x + g.w * 0.06, tableY + 3, sw * 0.9, g.streamR);
       }
     }
   }
 
-  // ---------- cloud (the pourer) ----------
+  function emitStream(c, key, from, intensity, sw, defX, defY) {
+    if (intensity < 0.03) return;
+    const grab = grabs.get(key);
+    let ex = defX, ey = defY;
+    if (!grab || grab.targetIdx == null) {
+      drawStream(c, key, from.x, from.y + 1, ex, ey, sw, intensity);
+      return;
+    }
+    if (grab.str >= REROUTE_STR) {
+      if (grab.d.sprayT > 0) {                    // fast swipe shatters the flow
+        drawStream(c, key, from.x, from.y + 1, grab.d.x, grab.d.y, sw, intensity);
+        spawnSpray(grab.d.x, grab.d.y, grab.d.vx >= 0 ? 1 : -1);
+        return;
+      }
+      const e = surfaceWorld(glasses[grab.targetIdx]);
+      ex = e.x; ey = e.y - 2;
+    }
+    drawStream(c, key, from.x, from.y + 1, ex, ey, sw, intensity, {
+      x: lerp((from.x + ex) / 2, grab.d.x, grab.str),
+      y: lerp((from.y + ey) / 2, grab.d.y, grab.str),
+    });
+  }
+
+  // the finger, rendered as a transparent spoon catching the flow
+  function drawDeflectors(c) {
+    if (!deflectors.size) return;
+    c.save();
+    c.globalCompositeOperation = 'lighter';
+    const R = deflectRadius();
+    for (const d of deflectors.values()) {
+      c.globalAlpha = 0.13;
+      c.drawImage(radialSpr, d.x - R, d.y - R, R * 2, R * 2);
+      c.globalAlpha = 0.6;
+      c.drawImage(radialSpr, d.x - 20, d.y - 20, 40, 40);
+      c.globalAlpha = 0.85;
+      c.strokeStyle = 'rgba(255,255,255,0.95)';
+      c.lineWidth = 2.5;
+      c.beginPath();
+      c.arc(d.x, d.y + 4, 12, Math.PI * 0.08, Math.PI * 0.92);
+      c.stroke();
+    }
+    c.restore();
+  }
+
+  // ---------- cloud (the pourer / on-off switch) ----------
   function drawCloud(c) {
     const s = cloudS;
     const x = cloud.x;
@@ -1035,15 +1037,20 @@ window.Game = (function () {
     if (pourVis > 0.03) {
       const top = glasses[0];
       const sy0 = y + s * 0.28;
-      const w = Math.max(7, glassW * 0.2) * (0.7 + 0.3 * Math.min(1, pourRate() / (1.7 * paceK())));
-      const grab = grabs.get('cloud');
-      if (grab) {
-        drawGrabbedStream(c, 'cloud', grab, x, sy0, w, pourVis, 'cloud');
-      } else {
-        const end = surfaceWorld(top);
-        drawStreamRibbon(c, 'cloud', x, sy0, top.x, Math.min(end.y + 2, top.y + top.h - 4),
-                         w, pourVis, 'cloud');
-      }
+      const w = Math.max(10, glassW * 0.34) * (0.75 + 0.25 * Math.min(1, pourRate() / (1.7 * paceK())));
+      const end = surfaceWorld(top);
+      emitStream(c, 'cloud', { x, y: sy0 - 1 }, pourVis, w, top.x, end.y);
+    }
+
+    // tappable affordance while the water is off
+    if (!pouring && state === 'play') {
+      const pulse = (time * 0.9) % 1;
+      c.save();
+      c.globalAlpha = (1 - pulse) * 0.55;
+      c.strokeStyle = '#ffffff';
+      c.lineWidth = 3;
+      c.beginPath(); c.arc(x, y, s * (0.55 + pulse * 0.5), 0, TAU); c.stroke();
+      c.restore();
     }
 
     c.save();
@@ -1099,7 +1106,6 @@ window.Game = (function () {
   function drawBackground(c) {
     c.fillStyle = skyGrad;
     c.fillRect(0, 0, W, H);
-
     c.save();
     for (let k = 0; k < 34; k++) {
       const sx = hash(k * 3.7) * W;
@@ -1117,20 +1123,16 @@ window.Game = (function () {
       c.drawImage(radialSpr, bx - br, by - br, br * 2, br * 2);
     }
     c.restore();
-
-    const archA = state === 'celebrate' ? Math.min(0.55, 0.12 + celebT * 0.2) : 0.10;
-    drawRainbowArch(c, towerCx, tableY, Math.min(W, H) * 0.52, Math.max(6, glassW * 0.16), archA);
-  }
-
-  function drawRainbowArch(c, cx, cy, r0, w, alpha) {
+    const aw = Math.max(6, glassW * 0.16);
     c.save();
-    c.globalAlpha = alpha;
+    c.globalAlpha = state === 'celebrate' ? Math.min(0.55, 0.12 + celebT * 0.2) : 0.10;
     c.lineCap = 'butt';
+    const r0 = Math.min(W, H) * 0.52;
     for (let k = 0; k < RAINBOW.length; k++) {
       c.strokeStyle = RAINBOW[k];
-      c.lineWidth = w;
+      c.lineWidth = aw;
       c.beginPath();
-      c.arc(cx, cy, r0 - k * w, Math.PI, TAU);
+      c.arc(towerCx, tableY, r0 - k * aw, Math.PI, TAU);
       c.stroke();
     }
     c.restore();
@@ -1171,12 +1173,11 @@ window.Game = (function () {
     c.restore();
   }
 
-  // ---------- HUD: sticker stars + hints + title ----------
+  // ---------- HUD ----------
   function drawStickers(c) {
     if (stickers <= 0) return;
     const n = Math.min(stickers, 8);
-    const sz = 9;
-    const gap = sz * 2.4;
+    const sz = 9, gap = sz * 2.4;
     const y0 = Math.min(tableY + (H - tableY) * 0.55, H - 18);
     const x0 = W / 2 - ((n - 1) * gap + (stickers > 8 ? 34 : 0)) / 2;
     c.save();
@@ -1194,35 +1195,26 @@ window.Game = (function () {
     c.restore();
   }
 
+  // 👆 pointing at the cloud: tap it to start the water
   function drawHint(c) {
     if (hintT < 0.05) return;
-    const hx = Math.min(W - 60, cloud.x + cloudS * 2.0);
-    const hy = cloud.drawY + cloudS * 1.0;
+    const hx = cloud.x + cloudS * 0.1;
+    const hy = cloud.drawY + cloudS * 0.75;
     const pulse = (time * 1.1) % 1;
     c.save();
-    for (let k = 0; k < 2; k++) {
-      const t = (pulse + k * 0.5) % 1;
-      c.globalAlpha = hintT * (1 - t) * 0.7;
-      c.strokeStyle = '#ffffff';
-      c.lineWidth = 2.5;
-      c.beginPath(); c.arc(hx, hy, 14 + t * 30, 0, TAU); c.stroke();
-    }
     c.globalAlpha = hintT;
-    c.fillStyle = 'rgba(255,255,255,0.95)';
-    c.beginPath(); c.arc(hx, hy, 13 - Math.sin(pulse * TAU) * 2.5, 0, TAU); c.fill();
-    c.font = (26 - Math.sin(pulse * TAU) * 3) + 'px sans-serif';
+    c.font = (30 - Math.sin(pulse * TAU) * 4) + 'px sans-serif';
     c.textAlign = 'center'; c.textBaseline = 'middle';
-    c.fillText('👆', hx, hy + 22 + Math.sin(pulse * TAU) * 4);
+    c.fillText('👆', hx, hy + Math.sin(pulse * TAU) * 5);
     c.restore();
   }
 
-  // one-time wordless hint: a ghost finger slides across the top pour stream
+  // one-time wordless hint: a ghost finger slides across the pour stream
   function drawStreamHint(c) {
     if (streamHintT < 0) return;
     const top = glasses[0];
-    const a = Math.min(1, streamHintT * 2) * Math.min(1, (4.5 - streamHintT));
-    const sway = Math.sin(streamHintT * 2.2) * glassW * 1.1;
-    const hx = top.x + sway;
+    const a = Math.min(1, streamHintT * 2) * Math.min(1, 4.5 - streamHintT);
+    const hx = top.x + Math.sin(streamHintT * 2.2) * glassW * 1.2;
     const hy = (cloud.drawY + cloudS * 0.28 + top.y) / 2;
     c.save();
     c.globalAlpha = clamp(a, 0, 1) * 0.9;
@@ -1262,9 +1254,7 @@ window.Game = (function () {
   function render() {
     const c = ctx;
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
-    streamGradCache = {};
     streamSegs = [];
-    sharedLiquidGrad = liquidGradient(c, 0, glassH);   // for the pool & accents
     buildStreamSprite();
     buildLiquidSprite();
 
@@ -1272,16 +1262,22 @@ window.Game = (function () {
     drawBackground(c);
     drawTable(c);
     drawPool(c);
+    drawFootGlows(c);
     t = mark('bg', t);
-    for (const g of glasses) drawGlass(c, g);
+    // a glass the child is tipping goes on top, so it never hides behind a neighbor
+    for (const g of glasses) {
+      if (g.bias > 0.02 || g.bias < -0.02) tiltedQueue.push(g); else drawGlass(c, g);
+    }
+    for (const g of tiltedQueue) drawGlass(c, g);
+    tiltedQueue.length = 0;
     t = mark('glasses', t);
     drawStreams(c);
     t = mark('streams', t);
     drawGlowPass(c);
-    t = mark('glow', t);
+    drawDeflectors(c);
     drawCloud(c);
     drawParticles(c);
-    t = mark('parts', t);
+    mark('parts', t);
     drawTitle(c);
     drawStickers(c);
     drawHint(c);
@@ -1297,46 +1293,36 @@ window.Game = (function () {
     }
   }
 
-  // ---------- input (roles decided by what the finger lands on) ----------
-  function distToSegSq(px, py, seg) {
-    // sample the quadratic at a few points
-    let best = 1e12;
-    for (let k = 0; k <= 6; k++) {
-      const t = k / 6;
-      const qx = lerp(lerp(seg.x0, seg.cx, t), lerp(seg.cx, seg.x1, t), t);
-      const qy = lerp(lerp(seg.y0, seg.cy, t), lerp(seg.cy, seg.y1, t), t);
-      const d = (px - qx) * (px - qx) + (py - qy) * (py - qy);
-      if (d < best) best = d;
-    }
-    return best;
-  }
-
-  function hitStream(x, y) {
-    const rad = Math.max(22, glassW * 0.55);
-    let bestKey = null, bd = rad * rad;
-    for (const seg of streamSegs) {
-      if (seg.intensity < 0.15 || grabs.has(seg.key)) continue;
-      const d = distToSegSq(x, y, seg);
-      if (d < bd) { bd = d; bestKey = seg.key; }
-    }
-    return bestKey;
-  }
-
-  function hitGlass(x, y, strict) {
+  // ---------- input ----------
+  // the bowl is the tilt handle; everything below it is open water
+  function hitBowl(x, y) {
     let best = null, bd = 1e12;
-    const rx = strict ? glassW * 0.42 : Math.max(glassW * 0.62, 22);
     for (let k = 0; k < glasses.length; k++) {
       const g = glasses[k];
-      if (strict) {
-        if (y < g.y + g.rimRy || y > g.y + g.h) continue;
-      } else {
-        if (y < g.y - g.rimRy * 2.5 || y > g.y + g.h + 8) continue;
-      }
+      if (y < g.y - g.rimRy * 1.8 || y > g.y + g.h * 0.62) continue;
       const dx = Math.abs(x - g.x);
-      if (dx > rx) continue;
+      if (dx > Math.max(g.w * 0.52, 20)) continue;
       if (dx < bd) { bd = dx; best = k; }
     }
     return best;
+  }
+
+  function hitCloud(x, y) {
+    return Math.abs(x - cloud.x) < cloudS * 0.8 && Math.abs(y - cloud.drawY) < cloudS * 0.65;
+  }
+
+  function streamsNear(x, y) {
+    const R2 = deflectRadius() * deflectRadius();
+    for (const seg of streamSegs) {
+      if (seg.intensity < 0.12) continue;
+      if (distToSegSq(x, y, seg) < R2) return true;
+    }
+    return false;
+  }
+
+  function setPour(on) {
+    autoPour = on && state === 'play';
+    Sound.setPour(autoPour);
   }
 
   function pointerDown(id, x, y) {
@@ -1345,61 +1331,49 @@ window.Game = (function () {
       pointers.set(id, { role: 'none' });
       return;
     }
-    // a touch well inside a glass body always tilts that glass; streams win
-    // only in the open space between glasses
-    const strictGi = hitGlass(x, y, true);
-    if (strictGi != null) {
-      glasses[strictGi].tiltHeld = true;
-      pointers.set(id, { role: 'tilt', gi: strictGi, startX: x });
+    if (hitCloud(x, y)) {                       // the cloud is the on/off switch
+      setPour(!autoPour);
+      Sound.pop();
+      pointers.set(id, { role: 'none' });
       idleT = 0;
       return;
     }
-    const sk = hitStream(x, y);
-    if (sk) {
-      grabs.set(sk, { x, y, vx: 0, speed: 0, sprayT: 0, lastX: x, lastT: performance.now(), targetIdx: null });
-      pointers.set(id, { role: 'stream', key: sk });
-      everGrabbed = true;
+    const bi = hitBowl(x, y);
+    if (bi != null) {
+      glasses[bi].tiltHeld = true;
+      pointers.set(id, { role: 'tilt', gi: bi, startX: x });
       idleT = 0;
       return;
     }
-    const gi = hitGlass(x, y, false);
-    if (gi != null) {
-      const g = glasses[gi];
-      g.tiltHeld = true;
-      pointers.set(id, { role: 'tilt', gi, startX: x });
-      idleT = 0;
-      return;
-    }
-    pointers.set(id, { role: 'pour' });
-    pointerX = x;
-    Sound.setPour(true);
+    // open water: always arm the magic finger; if nothing is flowing here
+    // yet, the same touch also starts the pour
+    const wasDry = !streamsNear(x, y);
+    deflectors.set(id, { x, y, vx: 0, speed: 0, sprayT: 0,
+                         lastX: x, lastT: performance.now() });
+    pointers.set(id, { role: 'deflect' });
+    if (!wasDry) everDeflected = true;
+    if (wasDry && !autoPour) setPour(true);
+    idleT = 0;
   }
 
   function pointerMove(id, x, y) {
     const p = pointers.get(id);
     if (!p) return;
-    if (p.role === 'pour') {
-      pointerX = x;
-    } else if (p.role === 'tilt') {
+    if (p.role === 'tilt') {
       const g = glasses[p.gi];
       if (g) g.biasT = clamp((x - p.startX) / (glassW * 1.3), -1, 1);
-    } else if (p.role === 'stream') {
-      const grab = grabs.get(p.key);
-      if (!grab) return;
+    } else if (p.role === 'deflect') {
+      const d = deflectors.get(id);
+      if (!d) return;
       const now = performance.now();
-      const dtms = Math.max(1, now - grab.lastT);
-      const vx = (x - grab.lastX) / dtms * 1000;
-      grab.vx = grab.vx * 0.6 + vx * 0.4;
-      grab.speed = Math.abs(grab.vx);
-      grab.lastX = x; grab.lastT = now;
-      grab.x = x; grab.y = y;
-      // fast swipe → spray for a moment
-      if (grab.speed > Math.max(700, glassW * 20)) grab.sprayT = 0.22;
+      const dtms = Math.max(1, now - d.lastT);
+      d.vx = d.vx * 0.6 + ((x - d.lastX) / dtms * 1000) * 0.4;
+      d.speed = Math.abs(d.vx);
+      d.lastX = x; d.lastT = now;
+      d.x = x; d.y = y;
+      if (d.speed > Math.max(700, glassW * 20)) d.sprayT = 0.22;
+      everDeflected = true;
     }
-  }
-
-  function releaseAll() {
-    for (const id of [...pointers.keys()]) pointerUp(id);
   }
 
   function pointerUp(id) {
@@ -1412,10 +1386,13 @@ window.Game = (function () {
         g.tiltHeld = false;
         if (Math.abs(g.bias) > 0.3) Sound.boing();
       }
-    } else if (p.role === 'stream') {
-      grabs.delete(p.key);
+    } else if (p.role === 'deflect') {
+      deflectors.delete(id);
     }
-    if (!hasPourPointer()) Sound.setPour(false);
+  }
+
+  function releaseAll() {
+    for (const id of [...pointers.keys()]) pointerUp(id);
   }
 
   // ---------- loop / lifecycle ----------
@@ -1450,7 +1427,6 @@ window.Game = (function () {
     forceRows = (opts && opts.forceRows) || 0;
     roundNum = (opts && opts.round) || 0;
     theme = THEMES[roundNum % THEMES.length];
-    // needs W/H before computing rows
     W = window.innerWidth; H = window.innerHeight;
     rows = computeRows();
     buildTower();
@@ -1459,41 +1435,34 @@ window.Game = (function () {
     requestAnimationFrame(frame);
   }
 
-  // kept for demo/auto mode and tests
-  function setPouring(on, px) {
-    if (px != null) pointerX = px;
-    simPour = !!on && state === 'play';
-  }
-
   function reset(next) {
     if (next) roundNum++;
     theme = THEMES[roundNum % THEMES.length];
     rows = computeRows();
-    simPour = false;
     Sound.setPour(false);
     buildTower();
     layout();
     cloud.x = glasses[0].x;
   }
 
-  // Deterministic fast-forward used by headless tests (?sim=N).
+  // ---------- test / demo hooks ----------
+  function setPouring(on) { simPour = !!on && state === 'play'; }
+
   function simulate(sec) {
     const dt = 1 / 60;
-    const steps = Math.floor(sec / dt);
-    for (let k = 0; k < steps; k++) {
+    for (let k = 0, n = Math.floor(sec / dt); k < n; k++) {
       simPour = (state === 'play');
       update(dt);
     }
     simPour = false;
   }
 
-  // Synchronous CPU benchmark (?bench): worst-case load, returns avg/max ms.
   function bench(frames) {
-    simulate(30 / Math.max(1, turbo ? 6 : 1));   // get the cascade fully active
+    simulate(30 / Math.max(1, turbo ? 6 : 1));
     simPour = true;
     profOn = true;
     for (const k in prof) delete prof[k];
-    for (let k = 0; k < 20; k++) { update(1 / 60); render(); }   // warm-up
+    for (let k = 0; k < 20; k++) { update(1 / 60); render(); }
     for (const k in prof) delete prof[k];
     let acc = 0, mx = 0, updAcc = 0;
     for (let k = 0; k < frames; k++) {
@@ -1514,31 +1483,43 @@ window.Game = (function () {
              rows, glasses: glasses.length, dpr: +dpr.toFixed(2), tier };
   }
 
-  // scripted-input hooks for headless verification (?script=...)
   const test = {
     tilt(r, i, b) { const g = glassAt(r, i); g.tiltHeld = true; g.biasT = b; },
     untilt(r, i) { glassAt(r, i).tiltHeld = false; },
-    grab(r, i, side, tr, ti, x, y) {
+    grab(r, i, side, tr, ti) {
       const s = glassAt(r, i), t = glassAt(tr, ti);
-      grabs.set(gIdx(r, i) + ':' + side,
-        { x: x != null ? x : (s.x + t.x) / 2, y: y != null ? y : (s.y + t.y) / 2,
-          vx: 0, speed: 0, sprayT: 0, lastX: 0, lastT: 0,
-          targetIdx: null, targetIdxForce: gIdx(tr, ti) });
-      everGrabbed = true;
+      forcedGrabs.set(gIdx(r, i) + ':' + side, {
+        d: { x: (s.x + t.x) / 2, y: (s.y + t.y) / 2, vx: 0, speed: 0, sprayT: 0 },
+        targetIdx: gIdx(tr, ti), str: 1 });
+      everDeflected = true;
     },
-    grabCloud(tr, ti, x, y) {
+    grabCloud(tr, ti) {
       const t = glassAt(tr, ti);
-      grabs.set('cloud',
-        { x: x != null ? x : (cloud.x + t.x) / 2, y: y != null ? y : (cloud.y + t.y) / 2,
-          vx: 0, speed: 0, sprayT: 0, lastX: 0, lastT: 0,
-          targetIdx: null, targetIdxForce: gIdx(tr, ti) });
-      everGrabbed = true;
+      forcedGrabs.set('cloud', {
+        d: { x: (cloud.x + t.x) / 2, y: (cloud.y + t.y) / 2, vx: 0, speed: 0, sprayT: 0 },
+        targetIdx: gIdx(tr, ti), str: 1 });
+      everDeflected = true;
     },
-    release() { grabs.clear(); for (const g of glasses) g.tiltHeld = false; },
+    release() { forcedGrabs.clear(); for (const g of glasses) g.tiltHeld = false; },
     at(r, i) { return +glassAt(r, i).amount.toFixed(3); },
-    pos(r, i) { const g = glassAt(r, i); return { x: g.x, y: g.y, w: g.w, h: g.h }; },
+    pos(r, i) {
+      const g = glassAt(r, i);
+      return { x: g.x, y: g.y, w: g.w, h: g.h,
+               bowlY: g.y + g.h * 0.3, stemY: g.y + g.h * 0.8 };
+    },
     bias(r, i) { return +glassAt(r, i).bias.toFixed(3); },
     grabCount() { return grabs.size; },
+    deflectorCount() { return deflectors.size; },
+    isPouring() { return pouring; },
+    cloudPos() { return { x: cloud.x, y: cloud.drawY, s: cloudS }; },
+    geom() {
+      return { glassW: +glassW.toFixed(1), spanX: +spanX.toFixed(1),
+               rowStep: +rowStep.toFixed(1),
+               rimGap: +(spanX - glassW).toFixed(1),
+               stemCorridor: +(spanX - glassW * STEM_HW * 2).toFixed(1),
+               rowGap: +(rowStep - glassH).toFixed(1),
+               deflectR: +deflectRadius().toFixed(1) };
+    },
   };
 
   return {
