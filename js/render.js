@@ -122,7 +122,14 @@
     view.hCss = hCss;
     view.dpr = dpr || 1;
     // main.js が canvas.width/height と style.width/height を既に設定している。
-    // ここでは以後の描画で使う基準値を更新するのみ。
+    // render() 前でも screenToLocal/getView が破綻しないよう、暫定のcx/cy/scaleを先に計算しておく。
+    var CAM = (window.NCFG && window.NCFG.CAMERA) || {};
+    var baseScale = CAM.baseScale != null ? CAM.baseScale : 0.30;
+    var centerYShift = CAM.centerYShift != null ? CAM.centerYShift : -0.04;
+    var shortSide = Math.min(wCss, hCss);
+    view.scale = shortSide * baseScale * (camInited ? camZoom : 1.0);
+    view.cx = wCss / 2;
+    view.cy = hCss / 2 + shortSide * centerYShift;
   }
 
   // ============ 和紙背景テクスチャ（一度だけ生成してパターン化） ============
@@ -384,16 +391,17 @@
   // outerLen/width=world単位, lift=0..1
   function drawPetal(theme, angle, baseRadius, outerLen, width, lift, isOuterRing) {
     var t = easeOutBack(lift);
-    var reach = baseRadius + outerLen * (0.15 + 0.85 * clamp(t, 0, 1.15)) + 0.08 * clamp(lift, 0, 1) * (isOuterRing ? 1.0 : 0.8);
+    var liftC = clamp(lift, 0, 1);
     var scaleT = 0.35 + 0.65 * clamp(t, 0, 1.15);
+    // 切り込みから起き上がるにつれ、根元がほんの少し外側へせり出す(0.06〜0.1world)
+    var rootRadius = baseRadius + (isOuterRing ? 0.10 : 0.06) * clamp(t, 0, 1.15);
 
-    var rootX = view.cx + Math.cos(angle) * baseRadius * view.scale;
-    var rootY = view.cy + Math.sin(angle) * baseRadius * view.scale;
+    var rootX = view.cx + Math.cos(angle) * rootRadius * view.scale;
+    var rootY = view.cy + Math.sin(angle) * rootRadius * view.scale;
 
     var lenPx = outerLen * view.scale * scaleT;
     var widPx = width * view.scale * scaleT;
     var path = getPetalPath(1, 1); // 単位パス、transformでスケール
-    var liftC = clamp(lift, 0, 1);
 
     // 根元の接地陰(花びらが本体から起き上がって見えるコントラクトシャドウ)
     ctx.save();
@@ -664,39 +672,38 @@
 
   // ============ メインレンダー ============
   function render(state, dt) {
-    if (!ctx || !canvas) return;
+    if (!ctx || !canvas || !state) return;
     dt = (typeof dt === 'number' && isFinite(dt)) ? dt : 0;
 
     try {
       ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
-    } catch (e) { /* noop */ }
+      updateCamera(state, dt);
 
-    updateCamera(state, dt);
+      var theme = getTheme(state);
 
-    var theme = getTheme(state);
+      // 背景
+      drawBackground(state);
 
-    // 背景
-    drawBackground(state);
+      // 呼吸(finishing/reveal のみ)
+      var breathScale = 1;
+      if (state.phase === 'finishing' || state.phase === 'reveal') {
+        breathT += dt;
+        breathScale = 1 + Math.sin(breathT * 1.6) * 0.012;
+      }
 
-    // 呼吸(finishing/reveal のみ)
-    var breathScale = 1;
-    if (state.phase === 'finishing' || state.phase === 'reveal') {
-      breathT += dt;
-      breathScale = 1 + Math.sin(breathT * 1.6) * 0.012;
-    }
+      // 皿(回さない)
+      drawPlate();
 
-    // 皿(回さない)
-    drawPlate();
+      // 練り切り+花びらは rotation を適用済みの角度で描画(drawPetal内でview.rotationを加算)
+      drawMochiBase(state, theme, breathScale);
+      if (state.rings) drawAllPetals(state, theme);
+      drawCenter(state, theme, breathScale);
 
-    // 練り切り+花びらは rotation を適用済みの角度で描画(drawPetal内でview.rotationを加算)
-    drawMochiBase(state, theme, breathScale);
-    if (state.rings) drawAllPetals(state, theme);
-    drawCenter(state, theme, breathScale);
-
-    // ガイド
-    try {
+      // ガイド
       drawHint(state, dt);
-    } catch (e) { console.error('render: hint error', e); }
+    } catch (e) {
+      console.error('NerikiriRender.render error', e);
+    }
   }
 
   window.NerikiriRender = {
