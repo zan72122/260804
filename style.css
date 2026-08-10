@@ -47,6 +47,15 @@ text { pointer-events:none; }
   50%     { opacity:.95; }
 }
 
+/* ---- armed button internal illumination ---- */
+.btnArmed {
+  animation:btnGlow 1.6s ease-in-out infinite;
+}
+@keyframes btnGlow {
+  0%,100% { opacity:.08; }
+  50%     { opacity:.42; }
+}
+
 /* ---- machine shake on GATAN ---- */
 .shake { animation:shakeIt .28s linear; }
 @keyframes shakeIt {

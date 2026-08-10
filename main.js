@@ -107,6 +107,9 @@ radGrad('gradGlow', [[0, '#ffffff', 0.9], [1, '#ffffff', 0]]);
 radGrad('gradPortLamp', [[0, '#ffe9b0', 0.85], [1, '#ffe9b0', 0]]);
 radGrad('gradWarmGlow', [[0, '#ffeaa8', 0.68], [0.55, '#ffdf8a', 0.28], [1, '#ffdf8a', 0]]);
 linGrad('gradShine', [[0, '#ffffff', 0], [0.5, '#ffffff', 0.55], [1, '#ffffff', 0]], 0, 0, 1, 0);
+linGrad('gradLid', [[0, '#f4f7fa'], [0.55, '#d4dae2'], [1, '#b0b8c4']], 0, 0, 0, 1);
+linGrad('gradTab', [[0, '#e6ebf1'], [1, '#a4adba']], 0, 0, 0, 1);
+linGrad('gradFloor', [[0, '#332c39'], [1, '#1b1720']], 0, 0, 0, 1);
 PRODUCTS.forEach(p => {
   linGrad('gp_' + p.id, [[0, p.c1], [0.42, p.c1], [1, p.c2]], 0, 0, 1, 0);
 });
@@ -134,6 +137,16 @@ function buildFruit(g, fruit, y) {
   }
 }
 
+// 結露：少数の固定水滴＋一筋の垂れ跡（パーティクル不使用の低コスト表現）
+const DEW_SPOTS = [[-0.72, 0.18, 1.6], [-0.35, 0.55, 1.1], [-0.52, 0.82, 2.0], [0.18, 0.32, 1.3], [0.55, 0.62, 1.8], [0.76, 0.22, 1.1], [0.3, 0.86, 1.5], [-0.08, 0.68, 1.0]];
+function addDew(g, hw, y0, y1, op) {
+  const dg = grp(g, { opacity: op == null ? 0.55 : op, 'pointer-events': 'none' });
+  for (const [fx, fy, r] of DEW_SPOTS) {
+    el('circle', { cx: fx * hw, cy: y0 + (y1 - y0) * fy, r, fill: '#f2faff' }, dg);
+  }
+  el('line', { x1: hw * 0.55, y1: y0 + (y1 - y0) * 0.62 - 13, x2: hw * 0.55, y2: y0 + (y1 - y0) * 0.62, stroke: '#f2faff', 'stroke-width': 1, opacity: 0.6 }, dg);
+}
+
 function buildProduct(p, parent) {
   const g = grp(parent);
   if (p.type === 'can') {
@@ -142,13 +155,23 @@ function buildProduct(p, parent) {
     // ラベル帯
     el('path', { d: 'M-24 -6 L-24 18 L24 18 L24 -6 Z', fill: '#ffffff', opacity: 0.88 }, g);
     buildFruit(g, p.fruit, 6);
-    // 縦ハイライト
-    el('rect', { x: -17, y: -28, width: 7, height: 58, rx: 3.5, fill: '#ffffff', opacity: 0.4 }, g);
-    el('rect', { x: 12, y: -26, width: 4, height: 54, rx: 2, fill: '#000000', opacity: 0.12 }, g);
-    // 上蓋
-    el('ellipse', { cx: 0, cy: -30, rx: 24, ry: 7, fill: p.lid }, g);
-    el('ellipse', { cx: 0, cy: -30, rx: 18, ry: 5, fill: 'none', stroke: '#b8c0cc', 'stroke-width': 1.4 }, g);
-    el('ellipse', { cx: 0, cy: -29.4, rx: 6, ry: 2.2, fill: '#a8b0bc' }, g); // プルタブの示唆
+    // 曲面の巻き込み陰影（ラベルごと巻く）＋右エッジの拾い光
+    el('rect', { x: -24, y: -30, width: 3.5, height: 60, fill: '#000000', opacity: 0.18 }, g);
+    el('rect', { x: 20.5, y: -30, width: 3.5, height: 60, fill: '#000000', opacity: 0.16 }, g);
+    el('rect', { x: 22, y: -28, width: 1.2, height: 56, fill: '#ffffff', opacity: 0.14 }, g);
+    // 鋭いスペキュラ＋広いシーン（曲面に沿った二段ハイライト）
+    el('rect', { x: -16, y: -28, width: 3.5, height: 58, rx: 1.75, fill: '#ffffff', opacity: 0.6 }, g);
+    el('rect', { x: -11, y: -27, width: 9, height: 56, rx: 4, fill: '#ffffff', opacity: 0.13 }, g);
+    // 首の絞り影・底の巻き込み
+    el('rect', { x: -24, y: -30, width: 48, height: 5, fill: '#000000', opacity: 0.1 }, g);
+    el('path', { d: 'M-23 27 A23 8 0 0 0 23 27', fill: 'none', stroke: '#000000', opacity: 0.22, 'stroke-width': 2.4 }, g);
+    addDew(g, 22, -4, 28);
+    // 蓋（縁の厚み＋巻き締めの段差）
+    el('ellipse', { cx: 0, cy: -29.2, rx: 24, ry: 7, fill: '#87909d' }, g);
+    el('ellipse', { cx: 0, cy: -30.6, rx: 24, ry: 7, fill: 'url(#gradLid)' }, g);
+    el('ellipse', { cx: 0, cy: -30.4, rx: 20.5, ry: 5.6, fill: 'none', stroke: '#a6aeba', 'stroke-width': 1.2 }, g);
+    el('ellipse', { cx: 0, cy: -30.2, rx: 14, ry: 3.8, fill: '#ccd3db' }, g);
+    el('ellipse', { cx: 0, cy: -29.8, rx: 6, ry: 2.2, fill: '#a8b0bc' }, g); // プルタブの示唆
   } else {
     // PET / ボトル
     const clear = p.id === 'mizu' || p.id === 'budou';
@@ -157,16 +180,38 @@ function buildProduct(p, parent) {
       d: 'M-20 34 L-20 -10 C-20 -20 -10 -24 -10 -30 L-10 -33 L10 -33 L10 -30 C10 -24 20 -20 20 -10 L20 34 Z',
       fill: `url(#gp_${p.id})`, opacity: clear ? 0.82 : 1
     }, g);
-    if (clear) { // 液面
+    if (clear) {
+      // 液体：壁際の厚み・屈折の明るい芯・メニスカス
       el('path', { d: 'M-17 -4 L-17 30 A17 5 0 0 0 17 30 L17 -4 Z', fill: p.c2, opacity: 0.55 }, g);
+      el('rect', { x: -17, y: -2, width: 3, height: 30, fill: p.c2, opacity: 0.5 }, g);
+      el('rect', { x: 14, y: -2, width: 3, height: 30, fill: p.c2, opacity: 0.38 }, g);
+      el('rect', { x: -4, y: 0, width: 8, height: 28, rx: 4, fill: '#ffffff', opacity: 0.18 }, g);
       el('ellipse', { cx: 0, cy: -4, rx: 17, ry: 4, fill: '#ffffff', opacity: 0.5 }, g);
+      el('ellipse', { cx: 0, cy: -3, rx: 16.5, ry: 3.8, fill: 'none', stroke: p.c2, opacity: 0.45, 'stroke-width': 1 }, g);
     }
-    el('path', { d: 'M-14 2 L-14 24 L14 24 L14 2 Z', fill: '#ffffff', opacity: p.id === 'miruku' ? 0.0 : 0.9 }, g);
-    buildFruit(g, p.fruit, 13);
-    el('rect', { x: -14, y: -26, width: 6, height: 56, rx: 3, fill: '#ffffff', opacity: 0.5 }, g);
-    // キャップ
+    if (p.fruit === 'none') {
+      // 水：小さな半透明ラベルと波模様（液体を隠さない）
+      el('path', { d: 'M-14 7 L-14 20 L14 20 L14 7 Z', fill: '#ffffff', opacity: 0.6 }, g);
+      el('path', { d: 'M-10 13.5 Q-5 9.5 0 13.5 T10 13.5', fill: 'none', stroke: '#4fb0e4', 'stroke-width': 2.2, opacity: 0.95 }, g);
+    } else {
+      el('path', { d: 'M-14 2 L-14 24 L14 24 L14 2 Z', fill: '#ffffff', opacity: p.id === 'miruku' ? 0.0 : 0.9 }, g);
+      buildFruit(g, p.fruit, 13);
+    }
+    // ボトル壁のエッジ（透明体の輪郭反射）
+    el('line', { x1: -18.3, y1: -6, x2: -18.3, y2: 32, stroke: '#ffffff', opacity: 0.5, 'stroke-width': 1.2 }, g);
+    el('line', { x1: 18.3, y1: -6, x2: 18.3, y2: 32, stroke: '#ffffff', opacity: 0.22, 'stroke-width': 1.2 }, g);
+    // スペキュラ二段＋肩のハイライト
+    el('rect', { x: -13, y: -24, width: 3, height: 54, rx: 1.5, fill: '#ffffff', opacity: 0.6 }, g);
+    el('rect', { x: -8, y: -20, width: 7, height: 50, rx: 3.5, fill: '#ffffff', opacity: 0.12 }, g);
+    el('path', { d: 'M-10 -26 Q-16 -20 -18 -11', fill: 'none', stroke: '#ffffff', opacity: 0.45, 'stroke-width': 1.8 }, g);
+    // 底の座
+    el('path', { d: 'M-16 31 A16 4 0 0 0 16 31', fill: 'none', stroke: '#000000', opacity: 0.18, 'stroke-width': 2 }, g);
+    addDew(g, 18, -2, 30, p.id === 'miruku' ? 0.45 : 0.55);
+    // キャップ（ローレット・天面の光・セーフティリング）
     el('rect', { x: -11, y: -43, width: 22, height: 11, rx: 3, fill: p.lid }, g);
-    el('path', { d: 'M-11 -39 H11 M-11 -36 H11', stroke: '#00000030', 'stroke-width': 1.2 }, g);
+    for (const kx of [-7, -3.5, 0, 3.5, 7]) el('line', { x1: kx, y1: -42.2, x2: kx, y2: -33.4, stroke: '#000000', opacity: 0.22, 'stroke-width': 1 }, g);
+    el('rect', { x: -9.5, y: -43.4, width: 19, height: 2.2, rx: 1.1, fill: '#ffffff', opacity: 0.4 }, g);
+    el('line', { x1: -10, y1: -32.6, x2: 10, y2: -32.6, stroke: '#000000', opacity: 0.3, 'stroke-width': 1.2 }, g);
   }
   return g;
 }
@@ -205,10 +250,19 @@ for (let i = 0; i < 3; i++) el('rect', { x: 339, y: 613, width: 4, height: 15, r
 function drawRail(parent, x1, y1, x2, y2) {
   el('line', { x1, y1: y1 + 3.5, x2, y2: y2 + 3.5, stroke: '#0d0c11', 'stroke-width': 8, 'stroke-linecap': 'round', opacity: 0.6 }, parent);
   el('line', { x1, y1, x2, y2, stroke: '#6b7484', 'stroke-width': 7, 'stroke-linecap': 'round' }, parent);
+  // 圧延鋼の段差＋パンチ穴（軽量な質感表現）
+  el('line', { x1, y1: y1 + 1.7, x2, y2: y2 + 1.7, stroke: '#4e5563', 'stroke-width': 2.2, 'stroke-linecap': 'round', opacity: 0.85 }, parent);
+  el('line', { x1: x1 + 8, y1: y1 + 0.2, x2: x2 - 8, y2: y2 + 0.2, stroke: '#39404c', 'stroke-width': 1.8, 'stroke-dasharray': '2.4 9', opacity: 0.9 }, parent);
   // ハイライト線を返す（商品が乗っている間だけ明るく点灯させる）
   return el('line', { x1, y1: y1 - 2.2, x2, y2: y2 - 2.2, stroke: '#cfd8e4', 'stroke-width': 2, 'stroke-linecap': 'round', opacity: 0.95 }, parent);
 }
+// レールの取り付け金具
+function bracket(x, y) {
+  el('path', { d: `M${x - 5} ${y + 2} L${x + 5} ${y + 2} L${x + 3.5} ${y + 13} L${x - 3.5} ${y + 13} Z`, fill: '#454b57', stroke: '#242830', 'stroke-width': 1 }, interiorG);
+}
 const railHi = {};
+bracket(RAIL_A.x1, RAIL_A.y1); bracket(RAIL_A.x2, RAIL_A.y2);
+bracket(FUN_L.x1, FUN_L.y1); bracket(FUN_R.x2, FUN_R.y2);
 railHi.A = drawRail(interiorG, RAIL_A.x1, RAIL_A.y1, RAIL_A.x2, RAIL_A.y2);
 // レールB（プレイヤーが傾けられる）
 const railBG = grp(interiorG, { id: 'railB' });
@@ -230,6 +284,13 @@ function setRailLit(name) {
 }
 // 転がる商品のレイヤー
 const rollLayer = grp(interiorG, { id: 'rollLayer' });
+
+// --- 透明化時に現れる「ガラス板」層（前面が消えたのではなく透けたと分かる） ---
+const paneG = grp(machineG, { id: 'pane', class: 'fadeable', opacity: 0, 'pointer-events': 'none' });
+el('rect', { x: 50, y: 74, width: 320, height: 496, rx: 10, fill: '#cfe2ff', opacity: 0.05 }, paneG);
+el('rect', { x: 50, y: 74, width: 320, height: 496, rx: 10, fill: 'none', stroke: '#dcecff', opacity: 0.22, 'stroke-width': 2 }, paneG);
+el('polygon', { points: '96,570 252,74 298,74 142,570', fill: '#ffffff', opacity: 0.055 }, paneG);
+el('line', { x1: 330, y1: 74, x2: 262, y2: 570, stroke: '#ffffff', opacity: 0.07, 'stroke-width': 7 }, paneG);
 
 // --- 前面ガラス＋見本 ---
 const frontGlassG = grp(machineG, { id: 'frontGlass', class: 'fadeable' });
@@ -259,11 +320,19 @@ const buttonEls = PRODUCTS.map((p, i) => {
   const press = grp(bg);
   el('rect', { x: -46, y: -27, width: 92, height: 52, rx: 12, fill: '#ffffff', stroke: '#c9b998', 'stroke-width': 2 }, press);
   el('rect', { x: -40, y: -21, width: 80, height: 40, rx: 9, fill: p.c1, opacity: 0.92 }, press);
+  // 内部照明（点灯可能な樹脂の中身）
+  const innerLight = el('ellipse', { cx: 0, cy: 1, rx: 36, ry: 17, fill: 'url(#gradWarmGlow)', opacity: 0 }, press);
+  // 樹脂の厚み：下端の暗部・左右のベベル
+  el('rect', { x: -40, y: 13, width: 80, height: 6, rx: 3, fill: '#000000', opacity: 0.16 }, press);
+  el('rect', { x: -40, y: -21, width: 2.5, height: 40, rx: 1.2, fill: '#ffffff', opacity: 0.4 }, press);
+  el('rect', { x: 37.5, y: -21, width: 2.5, height: 40, rx: 1.2, fill: '#000000', opacity: 0.14 }, press);
+  // 前面ガラスの湾曲反射
   el('rect', { x: -40, y: -21, width: 80, height: 16, rx: 8, fill: '#ffffff', opacity: 0.45 }, press);
+  el('rect', { x: -34, y: 8, width: 68, height: 3, rx: 1.5, fill: '#ffffff', opacity: 0.18 }, press);
   const mini = grp(press, { transform: 'translate(-20 -1) scale(0.42)' });
   buildProduct(p, mini);
   const lamp = el('circle', { cx: 26, cy: -1, r: 7, fill: '#e8e2d2', stroke: '#b8a988', 'stroke-width': 1.5 }, press);
-  return { g: bg, press, lamp, x: bx, y: by };
+  return { g: bg, press, lamp, innerLight, x: bx, y: by };
 });
 // 料金表示
 el('rect', { x: 62, y: 502, width: 110, height: 58, rx: 10, fill: '#3a3234', stroke: '#241f21', 'stroke-width': 2 }, frontPanelG);
@@ -279,11 +348,24 @@ el('rect', { x: SLOT.x - 2.5, y: 514, width: 5, height: 36, rx: 2, fill: '#00000
 // --- 取り出し口（常に不透明） ---
 const portG = grp(machineG, { id: 'port' });
 el('rect', { x: 92, y: 576, width: 236, height: 140, rx: 14, fill: 'url(#gradBezel)', stroke: '#8a7a5c', 'stroke-width': 2 }, portG);
-el('rect', { x: 108, y: 590, width: 204, height: 114, rx: 10, fill: 'url(#gradPortDark)' }, portG);
+// 取り出し口内部：奥へすぼまる箱（天井・側壁・床・奥壁で奥行きを作る）
+el('rect', { x: 108, y: 590, width: 204, height: 114, rx: 10, fill: '#0d0b10' }, portG);
+el('polygon', { points: '108,590 312,590 280,602 140,602', fill: '#0a080d' }, portG);           // 天井
+el('polygon', { points: '108,590 140,602 140,676 108,704', fill: '#1c1822' }, portG);           // 左壁
+el('polygon', { points: '312,590 280,602 280,676 312,704', fill: '#221d27' }, portG);           // 右壁
+el('rect', { x: 140, y: 602, width: 140, height: 74, fill: '#151119' }, portG);                 // 奥壁
+el('polygon', { points: '108,704 140,676 280,676 312,704', fill: 'url(#gradFloor)' }, portG);   // 床（商品が着地する面）
+el('line', { x1: 140, y1: 676, x2: 280, y2: 676, stroke: '#000000', opacity: 0.5, 'stroke-width': 1.5 }, portG); // 床と奥壁の境目
+el('line', { x1: 110, y1: 703, x2: 310, y2: 703, stroke: '#55505e', opacity: 0.8, 'stroke-width': 1.5 }, portG); // 手前の縁の拾い光
 const portLamp = el('rect', { x: 108, y: 590, width: 204, height: 114, rx: 10, fill: 'url(#gradPortLamp)', opacity: 0 }, portG);
 const portProdLayer = grp(portG, { id: 'portProd' });
 const flapG = grp(portG, { id: 'flapG' });
 el('rect', { x: 112, y: 592, width: 196, height: 108, rx: 9, fill: 'url(#gradFlap)' }, flapG);
+// ゴムフラップの厚み：上端の光る縁・下端の厚み・左右の丸み陰影
+el('line', { x1: 118, y1: 594.5, x2: 302, y2: 594.5, stroke: '#6f6878', opacity: 0.8, 'stroke-width': 1.8 }, flapG);
+el('rect', { x: 112, y: 696, width: 196, height: 4, rx: 2, fill: '#0f0d12' }, flapG);
+el('rect', { x: 112, y: 592, width: 6, height: 108, rx: 3, fill: '#000000', opacity: 0.3 }, flapG);
+el('rect', { x: 302, y: 592, width: 6, height: 108, rx: 3, fill: '#000000', opacity: 0.3 }, flapG);
 for (let i = 1; i <= 3; i++) el('rect', { x: 124, y: 592 + i * 26, width: 172, height: 3.5, rx: 1.75, fill: '#000000', opacity: 0.35 }, flapG);
 el('path', { d: 'M178 700 A32 20 0 0 1 242 700 Z', fill: '#141218', transform: 'rotate(180 210 700)' }, flapG);
 el('rect', { x: 168, y: 676, width: 84, height: 12, rx: 6, fill: '#5c5664' }, flapG); // 取っ手
@@ -303,10 +385,20 @@ el('ellipse', { cx: TRAY.x, cy: TRAY.y + 10, rx: 74, ry: 19, fill: '#3c4a60' }, 
 const coinG = grp(worldG, { id: 'coin' });
 const coinShadow = el('circle', { cx: 3, cy: 9, r: 33, fill: '#000000', opacity: 0.22 }, coinG);
 const coinInner = grp(coinG);
-el('circle', { cx: 0, cy: 0, r: COIN_R, fill: 'url(#gradCoin)', stroke: '#8a90a0', 'stroke-width': 2 }, coinInner);
-el('circle', { cx: 0, cy: 0, r: COIN_R - 2.5, fill: 'none', stroke: '#ffffff', 'stroke-width': 1.4, opacity: 0.6, 'stroke-dasharray': '2 3' }, coinInner);
+// 縁の厚み（下へ2.6pxの円柱側面）とギザ（reeded edge）
+el('circle', { cx: 0, cy: 2.6, r: COIN_R, fill: '#767c88' }, coinInner);
+el('circle', { cx: 0, cy: 2.6, r: COIN_R - 0.6, fill: 'none', stroke: '#565b66', 'stroke-width': 1.4, 'stroke-dasharray': '1.8 2.4' }, coinInner);
+// 上面
+el('circle', { cx: 0, cy: 0, r: COIN_R, fill: 'url(#gradCoin)', stroke: '#9aa0ac', 'stroke-width': 1.5 }, coinInner);
+// ヘアライン（異方性の弧状シーン）
+el('path', { d: 'M-25 -17 A31 31 0 0 1 16 -26', fill: 'none', stroke: '#ffffff', opacity: 0.5, 'stroke-width': 3 }, coinInner);
+el('path', { d: 'M23 15 A31 31 0 0 1 -13 27', fill: 'none', stroke: '#6f7580', opacity: 0.4, 'stroke-width': 2.5 }, coinInner);
+// 内周の段差（ベベルの明暗ペア）
 el('circle', { cx: 0, cy: 0, r: COIN_R - 8, fill: 'none', stroke: '#9aa0ac', 'stroke-width': 1.6 }, coinInner);
-el('text', { x: 0, y: 8, 'font-size': 22, 'font-weight': 800, fill: '#7d838f', 'text-anchor': 'middle', 'font-family': 'system-ui, sans-serif' }, coinInner).textContent = '100';
+el('circle', { cx: 0, cy: 0.9, r: COIN_R - 8, fill: 'none', stroke: '#ffffff', opacity: 0.45, 'stroke-width': 0.9 }, coinInner);
+// 「100」の刻印（下側の光で彫りを表現）
+el('text', { x: 0, y: 8.9, 'font-size': 22, 'font-weight': 800, fill: '#fbfcfe', 'text-anchor': 'middle', 'font-family': 'system-ui, sans-serif' }, coinInner).textContent = '100';
+el('text', { x: 0, y: 8, 'font-size': 22, 'font-weight': 800, fill: '#757b87', 'text-anchor': 'middle', 'font-family': 'system-ui, sans-serif' }, coinInner).textContent = '100';
 el('rect', { x: -6, y: -COIN_R, width: 12, height: COIN_R * 2, fill: 'url(#gradShine)', class: 'glint', transform: 'rotate(24)' }, coinInner);
 // ワールド座標パーティクル層（カメラと一緒に動く）
 const worldFxG = grp(worldG, { id: 'worldFx' });
@@ -541,6 +633,7 @@ function toView(e) {
 // ---------------------------------------------------------------
 function cutaway(on) {
   interiorG.style.opacity = on ? 1 : 0;
+  paneG.style.opacity = on ? 1 : 0;
   // 前面は「色つきガラス」程度まで薄く（内部が白っぽく濁らないように）
   frontGlassG.style.opacity = on ? 0.1 : 1;
   frontPanelG.style.opacity = on ? 0.15 : 1;
@@ -583,7 +676,7 @@ function insertCoin() {
       after(110, () => {
         SFX.credit();
         creditLamp.setAttribute('fill', 'url(#gradLampOn)');
-        buttonEls.forEach(b => b.lamp.classList.add('lampArmed'));
+        buttonEls.forEach(b => { b.lamp.classList.add('lampArmed'); b.innerLight.classList.add('btnArmed'); });
         setState('CREDIT_READY');
       });
     }, easeInQuad);
@@ -631,7 +724,8 @@ function pressButton(i) {
   b.lamp.setAttribute('fill', 'url(#gradLampOn)');
   SFX.click();
   after(200, () => tween(140, k => b.press.setAttribute('transform', `translate(0 ${4 * (1 - k)})`)));
-  buttonEls.forEach(bb => bb.lamp.classList.remove('lampArmed'));
+  buttonEls.forEach(bb => { bb.lamp.classList.remove('lampArmed'); bb.innerLight.classList.remove('btnArmed'); bb.innerLight.setAttribute('opacity', 0); });
+  b.innerLight.setAttribute('opacity', 0.95);
   creditLamp.setAttribute('fill', '#5a5250');
   motorStart();
   rollStart();
@@ -980,16 +1074,26 @@ function startTakeout() {
 function buildOpenables(p, inner) {
   if (p.type === 'can') {
     const tg = grp(inner, { transform: 'translate(0 -30)' });
+    // スコアライン（開く部分の刻印）
+    el('ellipse', { cx: 0, cy: -3.4, rx: 5.2, ry: 2.5, fill: 'none', stroke: '#8a92a0', 'stroke-width': 0.8, opacity: 0.8 }, tg);
     const rot = grp(tg);
-    el('ellipse', { cx: 0, cy: 1.5, rx: 7, ry: 3.4, fill: 'none', stroke: '#8a92a0', 'stroke-width': 2.2 }, rot);
-    el('rect', { x: -3.4, y: -4.5, width: 6.8, height: 6.5, rx: 2, fill: '#c8ced8', stroke: '#8a92a0', 'stroke-width': 1 }, rot);
+    // タブ本体プレート＋厚みのあるリング＋リベット
+    el('rect', { x: -3.6, y: -4.8, width: 7.2, height: 7, rx: 2.2, fill: 'url(#gradTab)', stroke: '#7b8290', 'stroke-width': 0.9 }, rot);
+    el('ellipse', { cx: 0, cy: 2.2, rx: 7, ry: 3.6, fill: 'none', stroke: '#7b8290', 'stroke-width': 2.6 }, rot);
+    el('ellipse', { cx: 0, cy: 1.9, rx: 7, ry: 3.6, fill: 'none', stroke: '#e8edf3', 'stroke-width': 1 }, rot);
+    el('circle', { cx: 0, cy: -2.6, r: 1.7, fill: '#b8c0cc', stroke: '#7b8290', 'stroke-width': 0.7 }, rot);
+    el('circle', { cx: -0.5, cy: -3.1, r: 0.5, fill: '#ffffff', opacity: 0.8 }, rot);
     const hole = el('ellipse', { cx: 0, cy: -3.4, rx: 5, ry: 2.4, fill: '#14161c', opacity: 0 }, tg);
     return { kind: 'can', rot, hole, tg };
   } else {
     const capG = grp(inner);
     el('rect', { x: -11, y: -43, width: 22, height: 11, rx: 3, fill: p.lid }, capG);
-    el('path', { d: 'M-11 -39 H11 M-11 -36 H11', stroke: '#00000030', 'stroke-width': 1.2 }, capG);
-    const neck = el('rect', { x: -7, y: -36, width: 14, height: 5, rx: 2, fill: '#e8e2d0', opacity: 0 }, capG);
+    for (const kx of [-7, -3.5, 0, 3.5, 7]) el('line', { x1: kx, y1: -42.2, x2: kx, y2: -33.4, stroke: '#000000', opacity: 0.22, 'stroke-width': 1 }, capG);
+    el('rect', { x: -9.5, y: -43.4, width: 19, height: 2.2, rx: 1.1, fill: '#ffffff', opacity: 0.4 }, capG);
+    // ねじ山付きの口（キャップが飛んだ後に見える）
+    const neck = grp(capG, { opacity: 0 });
+    el('rect', { x: -7, y: -37, width: 14, height: 6, rx: 2, fill: '#e8e2d0' }, neck);
+    el('path', { d: 'M-6.5 -35.6 H6.5 M-6.5 -33.6 H6.5', stroke: '#b8ac8e', 'stroke-width': 1 }, neck);
     return { kind: 'cap', capG, neck };
   }
 }
@@ -1052,7 +1156,7 @@ function startReset() {
     openItemG = null; openParts = null; opened = false; tabPull = 0;
     // 機械を元に戻す
     if (selected >= 0) sampleEls[selected].style.opacity = 1;
-    buttonEls.forEach(b => { b.press.setAttribute('transform', ''); b.lamp.setAttribute('fill', '#e8e2d2'); });
+    buttonEls.forEach(b => { b.press.setAttribute('transform', ''); b.lamp.setAttribute('fill', '#e8e2d2'); b.innerLight.setAttribute('opacity', 0); });
     flapK = 1; flapLatched = false; flapJit = 0; renderFlap();
     portLamp.setAttribute('opacity', 0);
     rollLayer.innerHTML = '';
