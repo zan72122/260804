@@ -71,6 +71,11 @@ let mode = 'play';
 let collection = loadCollection();
 updateCount();
 
+// index (into `collection`) of the toy that should visibly drop into the
+// room the next time it opens — set on a win, consumed once by the reveal's
+// おへや button, and never touched by the plain play-screen room button.
+let pendingArrival = null;
+
 function setMode(next) {
   if (mode === next) return;
   if (next === 'play' && game.state === 'won') game.resumeAfterReveal();
@@ -90,8 +95,12 @@ function updateCount() {
 
 game.onWin = (record) => {
   collection = addToCollection(record.species, record.variant);
+  pendingArrival = collection.length - 1;
   updateCount();
-  reveal.show(record, quality);
+  // fromPos/fromQuat may not have arrived yet from upstream (or this build
+  // of game.js may predate them) — RevealScene.show() degrades gracefully
+  // to a neutral entrance when they are undefined.
+  reveal.show(record, quality, { fromPos: record.fromPos, fromQuat: record.fromQuat });
   reveal.resize(size.w, size.h);
   ui.revealName.textContent = SPECIES_INFO[record.species]?.name ?? '';
   setMode('reveal');
@@ -195,6 +204,7 @@ bindButton(ui.grab, () => {
   }
 });
 bindButton(ui.room, () => {
+  // opened from the play screen, not off a fresh win — nothing "arrives"
   room.populate(collection, quality);
   room.resize(size.w, size.h);
   ui.roomEmpty.classList.toggle('hidden', collection.length > 0);
@@ -204,7 +214,9 @@ bindButton(ui.room, () => {
 bindButton(ui.back, () => { setMode('play'); audio.blip(520); });
 bindButton(ui.again, () => { setMode('play'); audio.blip(660); });
 bindButton(ui.toRoom, () => {
-  room.populate(collection, quality);
+  const arrivingIndex = pendingArrival;
+  pendingArrival = null;
+  room.populate(collection, quality, arrivingIndex != null ? { arrivingIndex } : undefined);
   room.resize(size.w, size.h);
   ui.roomEmpty.classList.toggle('hidden', collection.length > 0);
   setMode('room');
@@ -255,23 +267,30 @@ resize();
 
 const perf = { acc: 0, n: 0, cooldown: 2 };
 
+// The scene got heavier for this rework (twelve prizes instead of six, plus
+// the drama/arrival extras), which raises the steady-state frame cost and
+// pushes it closer to the old down-shift threshold. Widen the dead zone
+// between the down- and up-shift triggers, average over a longer window,
+// and take a smaller step on the way back up, so a device that idles near
+// the boundary settles on a pixel ratio instead of oscillating every couple
+// of seconds.
 function tuneQuality(dt) {
   perf.cooldown -= dt;
   perf.acc += dt; perf.n++;
-  if (perf.n < 45 || perf.cooldown > 0) return;
+  if (perf.n < 60 || perf.cooldown > 0) return;
   const avg = perf.acc / perf.n;
   perf.acc = 0; perf.n = 0;
-  if (avg > 0.0235 && dpr > 0.85) {
-    dpr = Math.max(0.85, dpr - 0.22);
-    perf.cooldown = 2.5;
+  if (avg > 0.024 && dpr > 0.85) {
+    dpr = Math.max(0.85, dpr - 0.2);
+    perf.cooldown = 3;
     resize();
     if (dpr <= 1.0 && quality > 0.4) {
       quality = 0.35;
       game.setQuality(quality);
     }
-  } else if (avg < 0.0135 && dpr < maxDpr - 0.05) {
-    dpr = Math.min(maxDpr, dpr + 0.15);
-    perf.cooldown = 4;
+  } else if (avg < 0.0115 && dpr < maxDpr - 0.05) {
+    dpr = Math.min(maxDpr, dpr + 0.1);
+    perf.cooldown = 5;
     resize();
   }
 }

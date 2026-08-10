@@ -9,18 +9,30 @@ import {
 import { matTexture, marqueeTexture, smudgeMap, softBlob, backdropTexture } from './textures.js';
 import { mergeStatic } from './merge.js';
 
+// Single source of truth for every dimension in the game. The case is only
+// slightly wider than before but much deeper: depth foreshortens under the 3/4
+// camera, so it buys room for a twelve-toy heap without shrinking any toy on
+// screen (widening the case would, because the camera fits to its width).
 export const CAB = {
-  inX: 1.16,          // interior half width
-  inZ: 0.86,          // interior half depth
+  inX: 1.28,          // interior half width
+  inZ: 1.16,          // interior half depth
   floorY: 0,
-  ceilY: 2.06,
-  railY: 1.86,
-  clawHomeY: 1.52,
-  clawFloorY: 0.30,   // lowest the claw tip goes over the pile
+  ceilY: 2.10,
+  railY: 1.90,
+  clawHomeY: 1.56,
+  clawFloorY: 0.34,   // lowest the claw tip goes over the pile
   baseBottom: -1.5,
-  hole: { x: -0.78, z: 0.50, r: 0.29, rim: 0.35 },
+  hole: { x: -0.84, z: 0.70, r: 0.34, rim: 0.40 },
   binY: -1.18,
-  aim: { minX: -0.94, maxX: 0.94, minZ: -0.62, maxZ: 0.46 },
+  /** delivery tray under the chute */
+  bin: { x: -0.84, halfW: 0.48, zFrom: -0.24, zTo: 0.92 },
+  /** opening in the front of the base you see the prize land through */
+  // raised lintel: the biggest prize resting on the tray floor reaches y ≈ -0.36,
+  // so an opening that stopped at -0.44 clipped the top of it off
+  win: { l: -1.32, r: -0.34, b: -1.26, t: -0.28 },
+  /** walls a falling prize is kept inside on its way down the chute */
+  chute: { minX: -1.22, maxX: -0.46, minZ: -0.10, maxZ: 0.94 },
+  aim: { minX: -1.04, maxX: 1.04, minZ: -0.92, maxZ: 0.68 },
 };
 
 // The cabinet is all boxes; the chrome trims read as the bevels, which is far
@@ -78,36 +90,44 @@ export function buildCabinet(scene, { quality = 1 } = {}) {
   box(group, 0.09, baseH, OZ * 2, shellMat, [OX - 0.045, baseTopY - baseH / 2, 0]);
   box(group, OX * 2, baseH, 0.09, shellMat, [0, baseTopY - baseH / 2, -OZ + 0.045]);
   // front of the base: split around the delivery window (left side)
-  const winL = -1.14, winR = -0.34, winB = -1.24, winT = -0.46;
+  const { l: winL, r: winR, b: winB, t: winT } = CAB.win;
   const fz = OZ - 0.045;
   box(group, OX * 2, baseTopY - winT, 0.09, accentMat, [0, (baseTopY + winT) / 2, fz]);                       // above window
   box(group, OX * 2, winB - CAB.baseBottom, 0.09, shellMat, [0, (winB + CAB.baseBottom) / 2, fz]);             // below window
   box(group, winL + OX, winT - winB, 0.09, shellMat, [(-OX + winL) / 2, (winT + winB) / 2, fz]);               // left of window
   box(group, OX - winR, winT - winB, 0.09, shellMat, [(OX + winR) / 2, (winT + winB) / 2, fz]);                // right of window
-  // window frame
+  // window frame; clamped so its mitred overlap can't poke past the shell —
+  // at this width the window's left edge sits only ~0.01 from the case's own
+  // outer wall (winL -1.34 vs -OX -1.35), far tighter than the old cabinet
+  const hL = Math.max(winL - 0.05, -OX + 0.005), hR = Math.min(winR + 0.05, OX - 0.005);
+  const vL = Math.max(winL - 0.02, -OX + 0.03), vR = Math.min(winR + 0.02, OX - 0.03);
   const frameMat = chrome;
-  box(group, winR - winL + 0.1, 0.05, 0.13, frameMat, [(winL + winR) / 2, winT + 0.02, fz]);
-  box(group, winR - winL + 0.1, 0.05, 0.13, frameMat, [(winL + winR) / 2, winB - 0.02, fz]);
-  box(group, 0.05, winT - winB + 0.1, 0.13, frameMat, [winL - 0.02, (winT + winB) / 2, fz]);
-  box(group, 0.05, winT - winB + 0.1, 0.13, frameMat, [winR + 0.02, (winT + winB) / 2, fz]);
+  box(group, hR - hL, 0.05, 0.13, frameMat, [(hL + hR) / 2, winT + 0.02, fz]);
+  box(group, hR - hL, 0.05, 0.13, frameMat, [(hL + hR) / 2, winB - 0.02, fz]);
+  box(group, 0.05, winT - winB + 0.1, 0.13, frameMat, [vL, (winT + winB) / 2, fz]);
+  box(group, 0.05, winT - winB + 0.1, 0.13, frameMat, [vR, (winT + winB) / 2, fz]);
 
   // base top deck (everything except the interior opening is solid)
   box(group, OX * 2, 0.06, OZ * 2, shellMat, [0, baseTopY - 0.03, 0]);
 
-  // delivery bin: a tray you can see into through the window
+  // delivery bin: a tray you can see into through the window, centered under
+  // the hole so a straight drop lands inside it with no lateral drift needed
   const binMat = plasticMaterial(0x59617a, { roughness: 0.62, metalness: 0.1, clearcoat: 0.2 });
   const bin = new THREE.Group();
   group.add(bin);
-  const binFloor = box(bin, 0.86, 0.05, 1.0, binMat, [-0.74, CAB.binY, 0.3]);
+  const { x: bx, halfW: bHalf, zFrom: bz0, zTo: bz1 } = CAB.bin;
+  const bw = bHalf * 2, bzLen = bz1 - bz0, bzMid = (bz0 + bz1) / 2;
+  const binFloor = box(bin, bw, 0.05, bzLen, binMat, [bx, CAB.binY, bzMid]);
   binFloor.receiveShadow = true;
-  box(bin, 0.05, 0.5, 1.0, binMat, [-1.16, CAB.binY + 0.25, 0.3]);
-  box(bin, 0.05, 0.5, 1.0, binMat, [-0.32, CAB.binY + 0.25, 0.3]);
-  box(bin, 0.86, 0.5, 0.05, binMat, [-0.74, CAB.binY + 0.25, -0.19]);
-  // chute back wall, slanted, so a falling prize is guided forward
-  box(bin, 0.86, 0.9, 0.04, binMat, [-0.74, -0.62, -0.16], [0.32, 0, 0]);
+  box(bin, 0.05, 0.5, bzLen, binMat, [bx - bHalf, CAB.binY + 0.25, bzMid]);
+  box(bin, 0.05, 0.5, bzLen, binMat, [bx + bHalf, CAB.binY + 0.25, bzMid]);
+  box(bin, bw, 0.5, 0.05, binMat, [bx, CAB.binY + 0.25, bz0]);
+  // chute back wall, slanted, so a falling prize is guided forward toward
+  // the open front (the window looks in from the +z side)
+  box(bin, bw, 0.9, 0.04, binMat, [bx, -0.62, bz0 + 0.03], [0.32, 0, 0]);
   // soft light inside the bin so the landed prize is readable
   const binLight = new THREE.PointLight(0xffe6c8, 4.5, 2.4, 2);
-  binLight.position.set(-0.74, CAB.binY + 0.42, 0.34);
+  binLight.position.set(bx, CAB.binY + 0.42, bzMid);
   group.add(binLight);
 
   /* ---------------- showcase floor ---------------- */
@@ -118,22 +138,27 @@ export function buildCabinet(scene, { quality = 1 } = {}) {
   floor.receiveShadow = true;
   group.add(floor);
 
-  // hole rim: chrome ring + a glowing lip so a 4-year-old can see the goal
-  const rim = new THREE.Mesh(new THREE.TorusGeometry(CAB.hole.r + 0.03, 0.035, 8, 32), chrome);
+  // hole rim: chrome ring + a glowing lip so a 4-year-old can see the goal.
+  // CAB.hole.rim is the ring's own radius (bigger than the hole itself, since
+  // the interior fills more of the screen now the rim needs to read from far
+  // across the case), the glow sits just outside it.
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(CAB.hole.rim, 0.04, 8, 32), chrome);
   rim.rotation.x = Math.PI / 2;
   rim.position.set(CAB.hole.x, CAB.floorY + 0.012, CAB.hole.z);
   group.add(rim);
   const glowMat = emissiveMaterial(0xffd166, 2.4);
-  const glow = new THREE.Mesh(new THREE.TorusGeometry(CAB.hole.r + 0.075, 0.022, 6, 32), glowMat);
+  const glow = new THREE.Mesh(new THREE.TorusGeometry(CAB.hole.rim + 0.045, 0.026, 6, 32), glowMat);
   glow.rotation.x = Math.PI / 2;
   glow.position.set(CAB.hole.x, CAB.floorY + 0.006, CAB.hole.z);
   group.add(glow);
-  // chute throat
+  // chute throat: deep enough that a steep viewing angle still hits its dark
+  // wall instead of seeing past it into the void below the floor
+  const throatLen = 0.7;
   const throat = new THREE.Mesh(
-    new THREE.CylinderGeometry(CAB.hole.r + 0.02, CAB.hole.r + 0.02, 0.5, 24, 1, true),
+    new THREE.CylinderGeometry(CAB.hole.r + 0.02, CAB.hole.r + 0.02, throatLen, 24, 1, true),
     new THREE.MeshStandardMaterial({ color: 0x232833, roughness: 0.8, side: THREE.BackSide })
   );
-  throat.position.set(CAB.hole.x, CAB.floorY - 0.25, CAB.hole.z);
+  throat.position.set(CAB.hole.x, CAB.floorY - throatLen / 2, CAB.hole.z);
   group.add(throat);
 
   /* ---------------- showcase walls ---------------- */
@@ -141,10 +166,12 @@ export function buildCabinet(scene, { quality = 1 } = {}) {
   const back = box(group, CAB.inX * 2 + 0.1, CAB.ceilY - CAB.floorY, 0.05, backMat,
     [0, (CAB.ceilY + CAB.floorY) / 2, -CAB.inZ - 0.03]);
   back.receiveShadow = true;
-  // depth cue: a big soft star painted on the back wall
+  // depth cue: a big soft star painted on the back wall, sized as a fixed
+  // fraction of wall width so it still reads at the wider case
   const starTex = softBlob('255,190,215', 1.0);
   const starMat = new THREE.MeshBasicMaterial({ map: starTex, transparent: true, opacity: 0.75, depthWrite: false });
-  const starQ = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 1.7), starMat);
+  const starSize = (CAB.inX * 2 + 0.1) * 0.7;
+  const starQ = new THREE.Mesh(new THREE.PlaneGeometry(starSize, starSize), starMat);
   starQ.position.set(0, 1.1, -CAB.inZ + 0.01);
   group.add(starQ);
 
@@ -260,8 +287,10 @@ export function buildBackdrop(scene, { quality = 1 } = {}) {
     const signMats = [emissiveMaterial(0xc2e6ff, 0.55), emissiveMaterial(0xffc2e0, 0.55)];
     for (let i = 0; i < 6; i++) {
       const side = i % 2 ? 1 : -1;
-      const x = side * (3.6 + Math.floor(i / 2) * 2.0);
-      const z = -5.0 - Math.floor(i / 2) * 1.6;
+      // pushed out from the old spacing so the now-deeper cabinet (inZ 1.16,
+      // outer edge ~1.23) still clears the nearest sibling with margin
+      const x = side * (4.0 + Math.floor(i / 2) * 2.0);
+      const z = -5.6 - Math.floor(i / 2) * 1.6;
       const h = 3.6 + (i % 3) * 0.35;
       const m = new THREE.Mesh(new THREE.BoxGeometry(1.5, h, 1.2), bodyMats[i % bodyMats.length]);
       m.position.set(x, CAB.baseBottom + h / 2, z);
@@ -277,6 +306,6 @@ export function buildBackdrop(scene, { quality = 1 } = {}) {
   mergeStatic(g);
 
   scene.background = backdropTexture('#241d3a', '#5b4a72');
-  scene.fog = new THREE.Fog(0x3d3352, 6, 20);
+  scene.fog = new THREE.Fog(0x3d3352, 6.5, 21);
   return g;
 }

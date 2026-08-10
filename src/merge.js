@@ -47,27 +47,35 @@ function mergeGeometries(geos) {
  * Collapse every descendant of `root` marked `userData.mergeable` into one mesh
  * per material. Transforms are baked, so only use it on things that never move
  * relative to `root`.
+ *
+ * `skip` lets a caller fence off subtrees that *do* move — a plush's spring
+ * pivots, for instance, sit inside the same group as its static trim.
  */
-export function mergeStatic(root) {
-  root.updateMatrixWorld(true);
+export function mergeStatic(root, { skip = null } = {}) {
   const groups = new Map();
   const victims = [];
 
-  root.traverse((o) => {
-    if (!o.isMesh || !o.userData.mergeable) return;
-    if (!o.geometry?.attributes?.position) return;
-    const key = o.material.uuid;
-    if (!groups.has(key)) groups.set(key, { material: o.material, geos: [], cast: false, receive: false });
-    const g = groups.get(key);
-    const geo = o.geometry.clone();
-    // bake into root space
-    geo.applyMatrix4(_m.copy(root.matrixWorld).invert().multiply(o.matrixWorld));
-    if (!geo.attributes.normal) geo.computeVertexNormals();
-    g.geos.push(geo);
-    g.cast = g.cast || o.castShadow;
-    g.receive = g.receive || o.receiveShadow;
-    victims.push(o);
-  });
+  const walk = (o, mat) => {
+    for (const child of o.children.slice()) {
+      if (skip && skip(child)) continue;
+      child.updateMatrix();
+      const m = new THREE.Matrix4().multiplyMatrices(mat, child.matrix);
+      if (child.isMesh && child.userData.mergeable && child.geometry?.attributes?.position) {
+        const key = child.material.uuid;
+        if (!groups.has(key)) groups.set(key, { material: child.material, geos: [], cast: false, receive: false });
+        const g = groups.get(key);
+        const geo = child.geometry.clone();
+        geo.applyMatrix4(m);
+        if (!geo.attributes.normal) geo.computeVertexNormals();
+        g.geos.push(geo);
+        g.cast = g.cast || child.castShadow;
+        g.receive = g.receive || child.receiveShadow;
+        victims.push(child);
+      }
+      if (child.children.length) walk(child, m);
+    }
+  };
+  walk(root, _root.identity());
 
   for (const o of victims) o.parent?.remove(o);
 
@@ -85,4 +93,4 @@ export function mergeStatic(root) {
   return saved;
 }
 
-const _m = new THREE.Matrix4();
+const _root = new THREE.Matrix4();

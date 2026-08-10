@@ -1,16 +1,28 @@
 // The play scene: framing, input, the grab state machine and the "hero moment"
-// choreography (descend -> touch -> close -> lift -> swing -> carry -> drop).
+// choreography.
+//
+// Sequence: intro -> aim -> open -> descend -> touch -> close -> settle ->
+// [regrip] -> lift -> carry -> teeter? -> release -> fall -> won -> (aim).
+// Every beat length comes from contracts.js's BEAT table so the pile, the
+// drama director and this file cannot drift apart. The rule the whole
+// machine is built around: there is no beat in which nothing is moving, and
+// a caught toy always hangs from the exact point the fingers closed on,
+// rotating around that pinned point rather than floating from its centre.
 
 import * as THREE from '../vendor/three/three.module.min.js';
 import { CAB, buildCabinet, buildBackdrop } from './cabinet.js';
 import { Claw } from './claw.js';
 import { Pile } from './pile.js';
+import { Drama, forceDrag } from './drama.js';
+import { SLIP_HOLD, MIN_DRAMA, BEAT, PILE, CHUTE } from './contracts.js';
 import { softBlob } from './textures.js';
 import { clamp, damp, lerp, easeInOutCubic, easeOutCubic, makeRng, smoothstep } from './util.js';
 
 /* aim / capture tuning — the invisible kindness lives here */
-const CAPTURE_DIST = 0.50;   // clean win
-const SLIP_DIST = 0.74;      // grabbed but slips out during the lift
+const CAPTURE_DIST = 0.50;   // aim-assist "close enough" band
+const ATTACH_DIST = 0.74;    // within this the claw always gets a grip on *something*;
+                              // whether it holds is choice.hold's job now, not distance
+const PUSH_DIST = 1.25;      // beyond ATTACH_DIST but within this: a miss that still shoves
 const ASSIST_PULL_NEAR = 0.63; // silently pulled into the win band
 const ASSIST_PULL_FAR = 0.95;
 
@@ -35,6 +47,20 @@ export class Game {
     this.pile = new Pile(this.scene, { quality });
     this.pile.onSoftHit = (b, s) => this.audio.softTouch(s * 0.7);
 
+    // radial reach of an open finger from the claw's vertical axis, derived
+    // from the same joint offsets/angles claw.js builds its OPEN pose from
+    // (not guessed — see _deriveClawReach)
+    this.clawReach = this._deriveClawReach();
+
+    // the drama director: decides what a body gets caught by and whether a
+    // grab earned its keep. Guarded so a not-yet-landed drama.js cannot take
+    // the whole scene down with it.
+    try {
+      this.drama = new Drama(this.pile);
+    } catch (e) {
+      this.drama = { begin() {}, evaluate: () => ({ score: MIN_DRAMA, events: [], maxMove: 0, maxRotDeg: 0, neighbours: 0 }) };
+    }
+
     this._lights(quality);
     this._aimMarker();
     this._contactRing();
@@ -47,9 +73,11 @@ export class Game {
     this.pending = null;       // outcome of the current grab
     this.hasInteracted = false;
     this.roundSeed = (Math.random() * 1e9) | 0;
+    this.pileCount = PILE.count;
 
     this.pendulum = { x: 0, z: 0, vx: 0, vz: 0 };
     this.hero = 0;             // 0 = wide, 1 = hero close-up
+    this.heroTarget = new THREE.Vector3();
     this.binFocus = 0;
     this._camPos = new THREE.Vector3();
     this._camTarget = new THREE.Vector3();
@@ -57,8 +85,26 @@ export class Game {
     this._tmpV = new THREE.Vector3();
     this._tmpQ = new THREE.Quaternion();
     this._prevClawVel = new THREE.Vector3();
+    this._touchStart = { x: 0, z: 0 };
 
-    this.onWin = null;         // ({species, variant}) => void
+    // grab-point hang state (see _attach / _computeHangQuat / _updateHeld)
+    this.grabChoice = null;
+    this.grabStartQuat = new THREE.Quaternion();
+    this.hangQuat = new THREE.Quaternion();
+    this.hangBlend = 1;
+    this.hangBlendDur = 0.2;
+    this.gripClose = 0.58;
+
+    // per-grab director bookkeeping
+    this.regripped = false;
+    this.lastEval = null;
+    this.chuteResult = null;
+    this.teeterBody = null;
+    this.carrySwingPeak = 0;
+    this.lastGrab = null;
+    this.dramaLog = [];        // last ~50 entries, oldest first
+
+    this.onWin = null;         // ({species, variant, fromPos, fromQuat}) => void
     this.onStateChange = null;
     this.framing = {
       fov: 44, dist: 8, portrait: true,
@@ -154,6 +200,24 @@ export class Game {
     this.puff = { mesh: m, t: 0, active: false };
   }
 
+  /**
+   * Radius from the claw's central Y-axis to an open fingertip, worked out
+   * from claw.js's own OPEN-pose joint chain (upperPivot offset (0,-0.062,
+   * 0.085) rotated -0.62 rad, a further 0.24 to the lower joint rotated
+   * +0.12 rad more, then 0.27 to the tip), scaled by the head's 1.15x. Kept
+   * here as real forward kinematics rather than a guessed constant so it
+   * cannot silently drift from the rig if the claw's proportions change.
+   */
+  _deriveClawReach() {
+    const rotX = (y, z, a) => ({ y: y * Math.cos(a) - z * Math.sin(a), z: y * Math.sin(a) + z * Math.cos(a) });
+    const upperAngle = -0.62, lowerAngle = 0.12;
+    const upper = { y: -0.062, z: 0.085 };
+    const lower = rotX(-0.24, 0, upperAngle);
+    const tip = rotX(-0.27, 0, upperAngle + lowerAngle);
+    const z = upper.z + lower.z + tip.z;
+    return Math.hypot(0, z) * 1.15;
+  }
+
   setEnvironment(envTexture) {
     this.scene.environment = envTexture;
   }
@@ -163,10 +227,10 @@ export class Game {
   /* ------------------------------------------------------------------ */
 
   newRound(force = false) {
-    if (!force && this.pile.bodies.length >= 4) return;
+    if (!force && this.pile.bodies.length >= 5) return;
     this.roundSeed = (this.roundSeed * 1103515245 + 12345) & 0x7fffffff;
     const rng = makeRng(this.roundSeed);
-    this.pile.layout(rng, { count: 6, quality: this.quality });
+    this.pile.layout(rng, { count: this.pileCount, quality: this.quality });
   }
 
   /* ------------------------------------------------------------------ */
@@ -257,45 +321,101 @@ export class Game {
   }
 
   _setState(s) {
+    // the drag scrape is only ever legitimate during touch/close — stopping
+    // it on every other transition means it can never hang on, however the
+    // state machine gets there
+    if (s !== 'touch' && s !== 'close') this._stopDrag();
     this.state = s;
     this.stateT = 0;
     this.onStateChange?.(s);
   }
 
+  _stopDrag() {
+    if (typeof this.audio.stopDrag === 'function') this.audio.stopDrag();
+  }
+
   _resolveContact() {
     const cx = this.claw.pos.x, cz = this.claw.pos.z;
-    const near = this.pile.nearestTo(cx, cz, 1.25);
+    const near = this.pile.nearestTo(cx, cz, PUSH_DIST);
     this.pending = { kind: 'air', body: null };
     if (!near) return;
     const { body, dist } = near;
-    if (dist <= CAPTURE_DIST) this.pending = { kind: 'catch', body, dist };
-    else if (dist <= SLIP_DIST) this.pending = { kind: 'slip', body, dist };
+    if (dist <= ATTACH_DIST) this.pending = { kind: 'catch', body, dist };
     else this.pending = { kind: 'push', body, dist };
   }
 
-  _attach(body) {
+  /** Ask the drama director for a grab point, falling back to a plain centre
+   *  grab if drama.js hasn't landed yet or throws — never lets a missing
+   *  contract module break the sequence. */
+  _resolveGrab(body, gx, gz, gy) {
+    try {
+      const c = Drama.resolveGrabPoint(body, gx, gz, gy, this.clawReach);
+      if (c) return c;
+    } catch (e) { /* fall through */ }
+    return { index: -1, type: 'body', hold: 1, spin: 0, local: new THREE.Vector3(0, body.radius * 0.3, 0) };
+  }
+
+  _chuteFinish(grabType, swingMag) {
+    try {
+      if (typeof Drama.chuteFinish === 'function') return Drama.chuteFinish(grabType, swingMag) || CHUTE.CLEAN;
+    } catch (e) { /* fall through */ }
+    return CHUTE.CLEAN;
+  }
+
+  /** Guarantees that a stalled grab (nothing dramatic happened even after a
+   *  regrip) still drags the toy over its neighbours during the lift. */
+  _forceDud(body) {
+    if (!body) return;
+    try {
+      if (typeof forceDrag === 'function') {
+        const dx = 0 - body.pos.x, dz = 0.18 - body.pos.z;
+        const d = Math.hypot(dx, dz) || 1;
+        forceDrag(body, dx / d, dz / d, 1);
+        return;
+      }
+    } catch (e) { /* fall through */ }
+    // last-resort fallback if drama.js landed without forceDrag: still shove
+    // the pile so the beat is never empty
+    if (typeof this.pile.wakeAround === 'function') {
+      this.pile.wakeAround(body.pos.x, body.pos.y, body.pos.z, body.radius * 3);
+    }
+  }
+
+  /** Orientation that hangs the toy from `choice.local`: that point ends up
+   *  pointing straight up (so it sits at the grip), with a partial yaw so
+   *  the toy turns to face the room instead of staying however it landed. */
+  _computeHangQuat(body, choice) {
+    this.grabStartQuat.copy(body.quat);
+    const localDir = _localDir.copy(choice.local);
+    if (localDir.lengthSq() < 1e-8) localDir.set(0, 1, 0); else localDir.normalize();
+    this.hangQuat.setFromUnitVectors(localDir, _UP);
+    const e = _eTmp.setFromQuaternion(body.quat, 'YXZ');
+    const yaw = Math.atan2(Math.sin(e.y), Math.cos(e.y));
+    const faceBlend = lerp(0.35, 0.65, choice.spin);
+    _faceQ.setFromAxisAngle(_UP, yaw * faceBlend);
+    this.hangQuat.premultiply(_faceQ);
+    // a body grab settles almost immediately; an ear grab visibly swings the
+    // whole toy round over most of the settle beat
+    this.hangBlendDur = lerp(BEAT.settle * 0.32, BEAT.settle * 1.05, choice.spin);
+  }
+
+  _attach(body, choice) {
     body.held = true;
     body.wake();
     this.held = body;
-    const grip = this.claw.gripWorld(this._grip);
-    // hang from exactly where the fingers closed, so the toy never pops
-    this.hangLen = clamp(grip.y - body.pos.y, body.radius * 0.3, body.radius * 1.15);
-    this.grabOffset = new THREE.Vector3(body.pos.x - grip.x, 0, body.pos.z - grip.z);
-    this.grabStartQuat = body.quat.clone();
-    // where it will settle to while hanging: mostly upright, leaning by the offset
-    const e = new THREE.Euler().setFromQuaternion(body.quat, 'YXZ');
-    const tiltX = clamp(this.grabOffset.z * 1.9, -0.55, 0.55);
-    const tiltZ = clamp(-this.grabOffset.x * 1.9, -0.55, 0.55);
-    // wrap the yaw to the shortest way round, then let it swing most of the way
-    // toward the player: hanging by one arm, a plush turns to face the room
-    let yaw = Math.atan2(Math.sin(e.y), Math.cos(e.y));
-    yaw *= 0.35;
-    this.hangQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(tiltX, yaw, tiltZ, 'YXZ'));
+    this.grabChoice = choice;
+    this.gripClose = 0.58;
+    this._computeHangQuat(body, choice);
     this.hangBlend = 0;
-    this.pendulum.x = clamp(-this.grabOffset.z * 1.1, -0.4, 0.4);
-    this.pendulum.z = clamp(this.grabOffset.x * 1.1, -0.4, 0.4);
-    this.pendulum.vx = 0; this.pendulum.vz = 0;
+    this.pendulum.x = 0; this.pendulum.z = 0; this.pendulum.vx = 0; this.pendulum.vz = 0;
     body.plush.setSquash(0.24);
+
+    // the pile visibly subsides where the toy used to sit — a free, honest
+    // "something big moved" on every successful grab
+    if (typeof this.pile.wakeAround === 'function') {
+      this.pile.wakeAround(body.pos.x, body.pos.y, body.pos.z, body.radius * 2.2);
+    }
+    if (typeof this.pile.refreshCoverage === 'function') this.pile.refreshCoverage();
   }
 
   _detach(extraVel) {
@@ -303,11 +423,13 @@ export class Game {
     if (!b) return null;
     b.held = false;
     b.plush.setSquash(0);
+    const grip = this.claw.gripWorld(this._grip);
+    const armLen = Math.max(0.05, grip.distanceTo(b.pos));
     // hand the pendulum's swing over as real velocity
     const swingV = new THREE.Vector3(
-      Math.cos(this.pendulum.z) * this.pendulum.vz * this.hangLen,
+      Math.cos(this.pendulum.z) * this.pendulum.vz * armLen,
       0,
-      -Math.cos(this.pendulum.x) * this.pendulum.vx * this.hangLen
+      -Math.cos(this.pendulum.x) * this.pendulum.vx * armLen
     );
     b.vel.copy(this.claw.velocity).multiplyScalar(0.55).add(swingV);
     if (extraVel) b.vel.add(extraVel);
@@ -359,6 +481,85 @@ export class Game {
     body.plush.impact(0.7);
   }
 
+  /** A light impulse to whatever is standing near (x,z) — the readable
+   *  "neighbours got shoved" beat during touch, independent of exactly how
+   *  pile.js's own collision response behaves. */
+  _shoveNearby(x, z, radius, strength, exclude) {
+    let hit = false;
+    for (const b of this.pile.bodies) {
+      if (b === exclude || b.held || b.inChute) continue;
+      const dx = b.pos.x - x, dz = b.pos.z - z;
+      const d = Math.hypot(dx, dz);
+      if (d > radius || d < 1e-4) continue;
+      const k = (1 - d / radius) * strength;
+      b.applyImpulse(
+        _tmpImp.set((dx / d) * 0.5 * k, 0.22 * k, (dz / d) * 0.5 * k),
+        _tmpImp2.set((Math.random() - 0.5) * 1.2 * k, 0, (Math.random() - 0.5) * 1.2 * k)
+      );
+      b.plush.impact(0.3 * k);
+      if (k > 0.25) hit = true;
+    }
+    if (hit) this.audio.topple(0.6);
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* grab beat helpers                                                   */
+  /* ------------------------------------------------------------------ */
+
+  _beginClose() {
+    const kind = this.pending.kind;
+    const b = this.pending.body;
+    if (kind === 'catch' && b) {
+      // resolve the grab point at the START of the close beat, from the
+      // claw's real grip position and its real open-finger reach
+      const grip = this.claw.gripWorld(this._grip);
+      this.grabChoice = this._resolveGrab(b, grip.x, grip.z, grip.y);
+      this._closeStartX = b.pos.x; this._closeStartZ = b.pos.z;
+    }
+    this.closeAttached = false;
+    this._setState('close');
+  }
+
+  _beginRegrip() {
+    this.audio.regrip();
+    const b = this.held;
+    const grip = this.claw.gripWorld(this._grip);
+    // shift the claw a few centimetres toward the toy's centre, then pick a
+    // fresh grab point from there — this is what actually changes the read
+    const dx = clamp(b.pos.x - grip.x, -0.05, 0.05);
+    const dz = clamp(b.pos.z - grip.z, -0.05, 0.05);
+    this.claw.setAim(this.claw.pos.x + dx, this.claw.pos.z + dz);
+    const choice = this._resolveGrab(b, grip.x + dx, grip.z + dz, grip.y);
+    this.grabChoice = choice;
+    this._computeHangQuat(b, choice);
+    this.hangBlend = 0.1;   // partial continuity, still a visible re-settle
+    this._setState('regrip');
+  }
+
+  _beginLift() {
+    this.gripClose = this.claw.closeTarget;
+    this.liftFrom = this.claw.pos.y;
+    this.liftTo = CAB.clawHomeY;
+    this.liftDur = Math.max(BEAT.liftMin, (this.liftTo - this.liftFrom) / 1.05);
+    this.slipped = false;
+    this.carrySwingPeak = 0;
+    this._setState('lift');
+  }
+
+  _logGrab(outcome, evalResult, chute) {
+    const entry = {
+      grabType: this.grabChoice?.type ?? null,
+      outcome,
+      chute: chute ?? null,
+      events: evalResult?.events ?? [],
+      score: evalResult?.score ?? 0,
+      retried: !!this.regripped,
+    };
+    this.lastGrab = entry;
+    this.dramaLog.push(entry);
+    if (this.dramaLog.length > 50) this.dramaLog.shift();
+  }
+
   /* ------------------------------------------------------------------ */
   /* per-frame                                                           */
   /* ------------------------------------------------------------------ */
@@ -384,11 +585,12 @@ export class Game {
         if (this.assistTarget) {
           // slide the crane the last few centimetres — reads as the machine
           // settling, not as an auto-aim
-          const t = smoothstep(this.stateT / 0.34);
+          const t = smoothstep(this.stateT / BEAT.open);
           claw.setAim(lerp(this.aim.x, this.assistTarget.x, t), lerp(this.aim.y, this.assistTarget.z, t));
         }
-        this.hero = damp(this.hero, 0.75, 4.0, dt);
-        if (this.stateT > 0.34) {
+        this.hero = damp(this.hero, 0.7, 4.0, dt);
+        this.heroTarget.copy(claw.gripWorld(_gp));
+        if (this.stateT > BEAT.open) {
           const t = this.descendTarget;
           const stopY = t
             ? t.pos.y + t.radius * 0.55 + 0.30
@@ -396,7 +598,6 @@ export class Game {
           this.descendFrom = claw.pos.y;
           this.descendTo = clamp(stopY, CAB.clawFloorY, CAB.clawHomeY);
           this.descendDur = Math.max(0.62, (this.descendFrom - this.descendTo) / 1.45);
-          this.touched = false;
           this._setState('descend');
         }
         break;
@@ -406,14 +607,24 @@ export class Game {
         const t = clamp(this.stateT / this.descendDur, 0, 1);
         claw.targetY = lerp(this.descendFrom, this.descendTo, easeInOutCubic(t));
         this.hero = damp(this.hero, 1, 4.0, dt);
-        this.audio.setMotor(0.85, 0.86);
-        if (!this.touched && t > 0.86) {
-          this.touched = true;
+        this.heroTarget.copy(claw.gripWorld(_gp));
+        this.audio.setMotor(0.85, 0.86, 0);
+        if (t >= 1) {
           this._resolveContact();
+          this.drama.begin();
+          this.regripped = false;
+          this.grabChoice = null;
+          this.lastEval = null;
+          this.chuteResult = null;
           const b = this.pending.body;
+          this.touchFromY = claw.pos.y;
+          this._touchStart.x = b ? b.pos.x : claw.pos.x;
+          this._touchStart.z = b ? b.pos.z : claw.pos.z;
+          this.nudged = false;
           if (this.pending.kind !== 'air' && b) {
             this.audio.softTouch(1);
             b.plush.impact(0.55);
+            b.applyImpulse(_tmpV.set(0, -0.3, 0));
             b.wake();
             this._puffAt(b.pos.x, b.pos.y + b.radius * 0.6, b.pos.z, b.radius * 3.4);
           } else {
@@ -423,70 +634,145 @@ export class Game {
             this._puffAt(claw.pos.x, 0.02, claw.pos.z, 1.0);
             this._floorJolt(claw.pos.x, claw.pos.z);
           }
-        }
-        if (t >= 1) {
-          if (!this.touched) { this.touched = true; this._resolveContact(); }
-          this._setState('close');
           this.audio.servo(false);
-          this.audio.setMotor(0);
+          this.audio.setMotor(0, 1, 0);
+          this._setState('touch');
+        }
+        break;
+      }
+
+      case 'touch': {
+        const kind = this.pending.kind;
+        const b = this.pending.body;
+        const p = clamp(this.stateT / BEAT.touch, 0, 1);
+        // the claw keeps sinking a couple of centimetres — the beat is never static
+        claw.targetY = this.touchFromY - 0.045 * smoothstep(p);
+        this.heroTarget.copy(claw.gripWorld(_gp));
+        this.hero = damp(this.hero, 1, 5.0, dt);
+        // the sustained scrape only makes sense while there's fabric or a
+        // toy under the fingers, not while pressing on bare acrylic floor
+        if (kind !== 'air') this.audio.startDrag(0.3 + 0.4 * p);
+        if (kind === 'catch' && b) {
+          // the fabric dents, and the toy is pressed down and drawn a touch
+          // toward the claw axis; its neighbours feel it too
+          b.plush.setSquash(0.16 * p);
+          const pull = 0.10 * p;
+          b.pos.x = lerp(this._touchStart.x, claw.pos.x, pull);
+          b.pos.z = lerp(this._touchStart.z, claw.pos.z, pull);
+          b.wake();
+          if (p > 0.45 && !this.nudged) {
+            this.nudged = true;
+            this._shoveNearby(b.pos.x, b.pos.z, b.radius * 2.4, 0.55, b);
+          }
+        } else if (kind === 'push' && b && !this.nudged) {
+          this.nudged = true;
+          this._nudge(b, 1);
+          this.audio.wobble();
+        }
+        if (p >= 1) {
+          this.nudged = false;
+          this._beginClose();
         }
         break;
       }
 
       case 'close': {
-        // when there is a toy in the way the fingers stop against it — you can
-        // see the grip, and the fabric gives instead of the metal passing through
-        const holding = this.pending && (this.pending.kind === 'catch' || this.pending.kind === 'slip');
+        const kind = this.pending.kind;
+        const b = this.pending.body;
+        const holding = kind === 'catch';
         claw.closeTarget = holding ? 0.58 : 1;
-        const p = clamp(this.stateT / 0.42, 0, 1);
-        const b = this.pending?.body;
-        if (b && !b.held && this.pending.kind !== 'push' && this.pending.kind !== 'air') {
-          // the fabric gives before the fingers stop
-          b.plush.setSquash(0.24 * p);
-          if (p > 0.55) this._attach(b);
-        } else if (b && p > 0.5 && !this.nudged) {
-          this.nudged = true;
-          this._nudge(b, 1);
-          this.audio.wobble();
+        const p = clamp(this.stateT / BEAT.close, 0, 1);
+        this.heroTarget.copy(claw.gripWorld(_gp));
+        this.hero = damp(this.hero, 1, 5.0, dt);
+        if (kind !== 'air') this.audio.startDrag(0.55 + 0.4 * p);
+        if (holding && b && !this.closeAttached) {
+          // fingers converge and *drag* the toy toward the claw axis — this
+          // is where "the claw hooked its ear and pulled" reads
+          b.plush.setSquash(0.26 * p);
+          const e = easeInOutCubic(p);
+          b.pos.x = lerp(this._closeStartX, claw.pos.x, e * 0.85);
+          b.pos.z = lerp(this._closeStartZ, claw.pos.z, e * 0.85);
+          b.wake();
+          if (p > 0.6) { this.closeAttached = true; this._attach(b, this.grabChoice); }
         }
-        if (this.stateT > 0.46) {
-          this.nudged = false;
-          this.gripClose = claw.closeTarget;
-          this.liftFrom = claw.pos.y;
-          this.liftTo = CAB.clawHomeY;
-          this.liftDur = Math.max(0.8, (this.liftTo - this.liftFrom) / 1.05);
-          this.slipped = false;
-          this._setState('lift');
+        if (this.stateT >= BEAT.close) {
+          if (this.held) {
+            this._setState('settle');
+          } else {
+            this.lastEval = this.drama.evaluate(null);
+            this._beginLift();
+          }
+        }
+        break;
+      }
+
+      case 'settle': {
+        claw.closeTarget = this.gripClose;
+        // the claw holds still; the camera holds on the toy, which rotates
+        // into its hanging pose continuously in _updateHeld
+        this.heroTarget.copy(this.held ? this.held.pos : claw.gripWorld(_gp));
+        this.hero = damp(this.hero, 1, 4.0, dt);
+        if (this.stateT >= BEAT.settle) {
+          this.lastEval = this.drama.evaluate(this.held);
+          if (this.lastEval.score < MIN_DRAMA && !this.regripped) {
+            this.regripped = true;
+            this._beginRegrip();
+          } else {
+            this._beginLift();
+          }
+        }
+        break;
+      }
+
+      case 'regrip': {
+        const p = clamp(this.stateT / BEAT.retry, 0, 1);
+        const openness = Math.sin(p * Math.PI);
+        claw.closeTarget = clamp(this.gripClose - openness * 0.22, 0.15, 1);
+        this.heroTarget.copy(this.held ? this.held.pos : claw.gripWorld(_gp));
+        this.hero = damp(this.hero, 1, 4.0, dt);
+        if (this.stateT >= BEAT.retry) {
+          this.lastEval = this.drama.evaluate(this.held);
+          if (this.lastEval.score < MIN_DRAMA) this._forceDud(this.held);
+          this._beginLift();
         }
         break;
       }
 
       case 'lift': {
-        claw.closeTarget = this.slipped ? 0.25 : (this.gripClose ?? 1);
+        claw.closeTarget = this.slipped ? 0.25 : this.gripClose;
         const t = clamp(this.stateT / this.liftDur, 0, 1);
         claw.targetY = lerp(this.liftFrom, this.liftTo, easeInOutCubic(t));
-        this.audio.setMotor(0.7, 1.15);
+        this.audio.setMotor(0.7, 1.15, this.held ? 1 : 0);
         this.hero = damp(this.hero, 1, 3.4, dt);
-        if (this.held && this.pending.kind === 'slip' && !this.slipped && t > 0.42) {
-          // deterministic, readable: aimed a bit off -> the fingers lose it
+        this.heroTarget.copy(this.held ? this.held.pos : claw.gripWorld(_gp));
+        // slip is a property of what was caught: a weak grab point comes
+        // loose partway through the lift, and always lands somewhere easier
+        if (this.held && this.grabChoice.hold < SLIP_HOLD && !this.slipped && t > 0.42) {
           this.slipped = true;
           claw.closeTarget = 0.25;
           const b = this._detach(new THREE.Vector3(
             (0 - claw.pos.x) * 0.5 + (Math.random() - 0.5) * 0.4,
-            0.2,
+            0.25,
             (0.18 - claw.pos.z) * 0.6 + (Math.random() - 0.5) * 0.3
           ));
-          b?.plush.impact(0.5);
+          if (b) {
+            b.plush.impact(0.5);
+            // mostly a yaw spin, not a tumble — it should land upright
+            b.angVel.set(0, (Math.random() - 0.5) * 1.5, 0);
+          }
           this.audio.servo(true);
           this.audio.wobble();
+          this._logGrab('slip', this.lastEval, null);
         }
         if (t >= 1) {
-          this.audio.setMotor(0);
+          this.audio.setMotor(0, 1, 0);
           if (this.held) {
             this.carryFromX = claw.pos.x; this.carryFromZ = claw.pos.z;
-            this.carryDur = Math.max(0.9, Math.hypot(claw.pos.x - CAB.hole.x, claw.pos.z - CAB.hole.z) / 1.05);
+            this.carryDist = Math.hypot(claw.pos.x - CAB.hole.x, claw.pos.z - CAB.hole.z);
+            this.carryDur = Math.max(BEAT.carryMin, this.carryDist / 1.05);
             this._setState('carry');
           } else {
+            if (this.pending.kind !== 'catch') this._logGrab(this.pending.kind, this.lastEval, null);
             this._setState('recover');
           }
         }
@@ -494,16 +780,21 @@ export class Game {
       }
 
       case 'carry': {
-        claw.closeTarget = this.gripClose ?? 1;
+        claw.closeTarget = this.gripClose;
         const t = clamp(this.stateT / this.carryDur, 0, 1);
         const e = easeInOutCubic(t);
         claw.setAim(lerp(this.carryFromX, CAB.hole.x, e), lerp(this.carryFromZ, CAB.hole.z, e));
         claw.followSpeed = 9.0;
-        this.audio.setMotor(0.9, 1.0);
+        this.audio.setMotor(0.9, 1.0, this.held ? 1 : 0);
+        // ease back out so the swinging toy stays in frame rather than
+        // filling the whole screen for the entire carry
         this.hero = damp(this.hero, 0.55, 2.6, dt);
+        this.heroTarget.copy(this.held ? this.held.pos : claw.gripWorld(_gp));
+        this.carrySwingPeak = Math.max(this.carrySwingPeak, Math.abs(this.pendulum.x), Math.abs(this.pendulum.z));
         if (t >= 1 && this.stateT > this.carryDur + 0.28) {
-          this.audio.setMotor(0);
+          this.audio.setMotor(0, 1, 0);
           this.audio.servo(true);
+          this.chuteResult = this._chuteFinish(this.grabChoice?.type, this.carrySwingPeak);
           this._setState('release');
         }
         break;
@@ -511,11 +802,58 @@ export class Game {
 
       case 'release': {
         claw.closeTarget = 0;
-        if (this.held && this.stateT > 0.16) {
+        this.hero = damp(this.hero, 0.4, 3.0, dt);
+        this.heroTarget.copy(this.held ? this.held.pos : claw.gripWorld(_gp));
+        this.binFocus = damp(this.binFocus, 0.5, 3.0, dt);
+        if (this.held && this.stateT > BEAT.release) {
           const b = this._detach();
+          if (this.chuteResult === CHUTE.RIM) {
+            // lands half on the rim first — guaranteed to tip in afterward,
+            // never back into the case
+            b.pos.set(
+              CAB.hole.x + (Math.random() - 0.5) * CAB.hole.r * 0.6,
+              CAB.floorY + b.radius * 0.9,
+              CAB.hole.z + (Math.random() - 0.5) * CAB.hole.r * 0.6
+            );
+            b.vel.set(0, 0, 0);
+            this.teeterBody = b;
+            this._teeterLastPhase = -1;
+            this.teeterDir = Math.random() < 0.5 ? -1 : 1;
+            this._setState('teeter');
+          } else {
+            if (this.chuteResult === CHUTE.BOUNCE) {
+              // clip the chute wall on the way down for a visible carom
+              b.vel.x += (Math.random() < 0.5 ? -1 : 1) * 1.1;
+            }
+            b.inChute = true;
+            this.falling = b;
+            this.fallLanded = false;
+            this._setState('fall');
+          }
+        }
+        break;
+      }
+
+      case 'teeter': {
+        const b = this.teeterBody;
+        const p = clamp(this.stateT / BEAT.teeter, 0, 1);
+        // 2-3 decaying rocks, then tips past the balance point
+        const rocks = 2.5;
+        const amp = (1 - p) * 0.45;
+        const angle = Math.sin(p * Math.PI * 2 * rocks) * amp * this.teeterDir;
+        b.quat.setFromEuler(_eTeeter.set(0, 0, angle, 'XYZ'));
+        b.syncMesh();
+        const phase = Math.floor(p * rocks * 2);
+        if (phase !== this._teeterLastPhase) { this._teeterLastPhase = phase; this.audio.creak(phase); }
+        this.binFocus = damp(this.binFocus, 1, 3.0, dt);
+        this.hero = damp(this.hero, 0, 3.0, dt);
+        if (p >= 1) {
+          // guaranteed: it always tips in, never back into the case
           b.inChute = true;
+          b.vel.set((CAB.hole.x - b.pos.x) * 1.4, -0.2, (CAB.hole.z - b.pos.z) * 1.4);
           this.falling = b;
           this.fallLanded = false;
+          this.teeterBody = null;
           this._setState('fall');
         }
         break;
@@ -531,9 +869,12 @@ export class Game {
             this._tmpQ.setFromAxisAngle(this._tmpV.copy(b.angVel).divideScalar(wl), wl * dt);
             b.quat.premultiply(this._tmpQ).normalize();
           }
-          // keep it inside the chute walls
-          b.pos.x = clamp(b.pos.x, -1.08, -0.40);
-          b.pos.z = clamp(b.pos.z, -0.10, 0.72);
+          // keep it inside the chute walls (a small bounce off them for BOUNCE finishes)
+          const C = CAB.chute;
+          if (b.pos.x < C.minX) { b.pos.x = C.minX; b.vel.x = Math.abs(b.vel.x) * 0.4; }
+          if (b.pos.x > C.maxX) { b.pos.x = C.maxX; b.vel.x = -Math.abs(b.vel.x) * 0.4; }
+          if (b.pos.z < C.minZ) { b.pos.z = C.minZ; b.vel.z = Math.abs(b.vel.z) * 0.4; }
+          if (b.pos.z > C.maxZ) { b.pos.z = C.maxZ; b.vel.z = -Math.abs(b.vel.z) * 0.4; }
           const landY = CAB.binY + 0.03 + b.radius * 0.95;
           if (b.pos.y <= landY) {
             b.pos.y = landY;
@@ -556,15 +897,18 @@ export class Game {
         }
         this.binFocus = damp(this.binFocus, 1, 3.6, dt);
         this.hero = damp(this.hero, 0, 3.0, dt);
-        if (this.fallLanded && this.stateT > 1.15) {
+        if (this.fallLanded && this.stateT > BEAT.landHold) {
           this.audio.success();
-          const rec = { species: b.plush.species, variant: b.plush.variant };
+          const fromPos = b.pos.clone();
+          const fromQuat = b.quat.clone();
+          this._logGrab('win', this.lastEval, this.chuteResult);
           this.pile.remove(b);
           this.scene.remove(b.plush.root);
+          const species = b.plush.species, variant = b.plush.variant;
           b.plush.dispose();
           this.falling = null;
           this._setState('won');
-          this.onWin?.(rec);
+          this.onWin?.({ species, variant, fromPos, fromQuat });
         }
         break;
       }
@@ -574,7 +918,7 @@ export class Game {
         claw.closeTarget = 0.42;
         claw.targetY = CAB.clawHomeY;
         this.hero = damp(this.hero, 0, 3.0, dt);
-        if (this.stateT > 0.45) {
+        if (this.stateT > BEAT.recover) {
           this.setAim(claw.pos.x, claw.pos.z);
           this._setState('aim');
         }
@@ -595,10 +939,10 @@ export class Game {
     // the gantry hums whenever it is actually travelling — including while aiming
     if (this.state === 'aim') {
       const sp = Math.hypot(claw.velocity.x, claw.velocity.z);
-      this.audio.setMotor(clamp(sp / 1.1, 0, 1) * 0.8, 0.95);
+      this.audio.setMotor(clamp(sp / 1.1, 0, 1) * 0.8, 0.95, 0);
     }
 
-    if (this.state !== 'fall') this.pile.step(dt);
+    if (this.state !== 'fall' && this.state !== 'teeter') this.pile.step(dt);
     this.pile.render(dt);
 
     if (this.held) this._updateHeld(dt);
@@ -611,6 +955,12 @@ export class Game {
       this.binShake = Math.max(0, this.binShake - dt * 2.6);
     }
 
+    // binFocus decays back to 0 everywhere except the states that actively
+    // drive it toward 1 (they set their own target above)
+    if (this.state !== 'fall' && this.state !== 'won' && this.state !== 'teeter' && this.state !== 'release') {
+      this.binFocus = damp(this.binFocus, 0, 2.2, dt);
+    }
+
     /* ---- camera ---- */
     this._updateCamera(dt);
   }
@@ -619,6 +969,7 @@ export class Game {
     const b = this.held;
     const claw = this.claw;
     const grip = claw.gripWorld(this._grip);
+    const choice = this.grabChoice;
 
     // pendulum driven by the crane's acceleration
     const acc = _acc.copy(claw.velocity).sub(this._prevClawVel).divideScalar(Math.max(dt, 1 / 120));
@@ -638,18 +989,20 @@ export class Game {
     p.x = clamp(p.x, -0.6, 0.6);
     p.z = clamp(p.z, -0.6, 0.6);
 
-    const L = this.hangLen;
-    b.pos.set(
-      grip.x + Math.sin(p.z) * L,
-      grip.y - Math.cos(p.z) * Math.cos(p.x) * L,
-      grip.z - Math.sin(p.x) * L
-    );
-
-    // orientation: settle from "however it was lying" to "hanging from the claw"
-    this.hangBlend = Math.min(1, this.hangBlend + dt * 1.5);
-    b.quat.slerpQuaternions(this.grabStartQuat, this.hangQuat, easeOutCubic(this.hangBlend));
+    // orientation: blend from the pose it was lying in to the hanging pose,
+    // at a rate scaled by choice.spin (see _computeHangQuat), then layer the
+    // pendulum's world-space sway on top
+    if (this.hangBlend < 1) {
+      this.hangBlend = Math.min(1, this.hangBlend + dt / Math.max(0.05, this.hangBlendDur));
+    }
+    _hangNow.slerpQuaternions(this.grabStartQuat, this.hangQuat, easeOutCubic(this.hangBlend));
     _swing.setFromEuler(_e.set(p.x, 0, p.z, 'XYZ'));
-    b.quat.premultiply(_swing);
+    b.quat.copy(_hangNow).premultiply(_swing);
+
+    // the signature effect: solve position from the rotation so the caught
+    // grab point stays pinned under the claw while the body turns around it
+    _localRot.copy(choice.local).applyQuaternion(b.quat);
+    b.pos.set(grip.x - _localRot.x, grip.y - _localRot.y, grip.z - _localRot.z);
 
     // vertical acceleration pumps the squash a little
     const squash = clamp(0.2 + acc.y * 0.004, 0.12, 0.36);
@@ -707,42 +1060,43 @@ export class Game {
   /**
    * Re-frame for the current viewport.
    *
-   * Rather than guessing a distance from a nominal width/height (which breaks
-   * as soon as perspective and the 3/4 yaw are taken into account), the machine's
-   * real bounding box is projected and the rig is solved iteratively, then
-   * nudged in screen space so the controls never sit on top of the glass.
-   * Portrait and landscape use different crops and different anchors.
+   * Fits the glass showcase interior (CAB.inX/inZ, floor to ceiling) plus a
+   * small margin — not the whole cabinet: the marquee and base are meant to
+   * fall off the top/bottom edges now that the case itself is the star. The
+   * real bounding box is projected and the rig solved iteratively (rather
+   * than guessed from a nominal width/height), then nudged in screen space
+   * so the controls never sit on top of the glass. A narrow phone in
+   * portrait is allowed a little horizontal overscan (the frame posts get
+   * cropped) to buy apparent size; landscape and tablets keep the whole
+   * glass comfortably inside.
    */
   resize(w, h) {
     const aspect = w / h;
     const portrait = aspect < 1.0;
     this.camera.aspect = aspect;
 
-    // a phone in portrait is so narrow that the marquee has to be cropped to
-    // keep the showcase big; a tablet has room for the whole machine
     const narrow = portrait && aspect < 0.62;
     const fov = portrait ? (aspect < 0.55 ? 46 : 43) : 38;
     const az = (portrait ? 13 : 17) * Math.PI / 180;
     const el = (portrait ? 21 : 23) * Math.PI / 180;
     this.camera.fov = fov;
 
-    // what must stay on screen: the whole machine, marquee to delivery bin
-    const bx = narrow ? 1.33 : 1.45;
-    const bzz = narrow ? 1.0 : 1.1;
-    const byTop = narrow ? 2.52 : (portrait ? 2.9 : 2.7);
-    const byBot = narrow ? -1.32 : (portrait ? -1.5 : -1.34);
-    // portrait keeps ~16% of the height under the machine for the grab button,
-    // landscape keeps a right margin for the same reason
-    const mx = narrow ? 1.02 : (portrait ? 0.96 : 0.98);
-    const my = narrow ? 1.0 : (portrait ? 0.92 : 1.05);
-    const anchorX = portrait ? 0 : -0.3;
-    const anchorY = narrow ? 0.16 : (portrait ? 0.1 : 0.03);
+    // what must stay on screen: the glass interior plus a small margin
+    const bx = CAB.inX + 0.14;
+    const bzz = CAB.inZ + 0.14;
+    const byTop = CAB.ceilY + 0.1;
+    const byBot = -0.15;
+    // >1 crops (overscan, bigger apparent size); <=1 leaves room to spare
+    const mx = narrow ? 1.09 : (portrait ? 1.0 : 0.96);
+    const my = narrow ? 1.0 : (portrait ? 0.9 : 0.98);
+    const anchorX = portrait ? 0 : -0.2;
+    const anchorY = narrow ? 0.1 : (portrait ? 0.06 : 0.02);
 
     const dir = new THREE.Vector3(
       Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el)
     );
     const target = new THREE.Vector3(0, (byTop + byBot) / 2, 0);
-    let dist = 8;
+    let dist = 6;
 
     const corners = [];
     for (const sx of [-bx, bx]) for (const sy of [byBot, byTop]) for (const sz of [-bzz, bzz]) {
@@ -797,12 +1151,13 @@ export class Game {
     _bp.x += followX; _bt.x += followX * 0.6;
     _bp.z += followZ;
 
-    // hero push-in on the claw during the grab
+    // hero push-in, beat-driven: heroTarget follows the actual subject
+    // (contact point while descending in, the toy itself once it's caught)
     if (this.hero > 0.001) {
-      const grip = this.claw.gripWorld(_gp);
-      _ht.copy(_bt).lerp(grip, 0.55 * this.hero);
-      _hp.copy(_bp).lerp(grip, 0.16 * this.hero);
-      _hp.y = lerp(_bp.y, grip.y + this.framing.dist * 0.22, this.hero * 0.5);
+      const tgt = this.heroTarget;
+      _ht.copy(_bt).lerp(tgt, 0.55 * this.hero);
+      _hp.copy(_bp).lerp(tgt, 0.16 * this.hero);
+      _hp.y = lerp(_bp.y, tgt.y + this.framing.dist * 0.22, this.hero * 0.5);
       _bt.copy(_ht); _bp.copy(_hp);
     }
 
@@ -811,9 +1166,6 @@ export class Game {
       _bin.set(CAB.hole.x + 0.06, CAB.binY + 0.35, 0.45);
       _bt.lerp(_bin, this.binFocus * 0.62);
       _bp.lerp(_bin.clone().add(_binOff), this.binFocus * 0.36);
-    }
-    if (this.state !== 'fall' && this.state !== 'won') {
-      this.binFocus = damp(this.binFocus, 0, 2.2, dt);
     }
 
     const lam = this.state === 'aim' ? 5.0 : 3.2;
@@ -842,6 +1194,9 @@ export class Game {
   setQuality(q) {
     this.quality = q;
     this.keyLight.castShadow = q > 0.35;
+    // weak devices get fewer toys — takes effect on the next layout only,
+    // never mid-grab
+    this.pileCount = q < 0.5 ? PILE.lowCount : PILE.count;
   }
 }
 
@@ -854,6 +1209,7 @@ const _dragP = new THREE.Vector3();
 const _acc = new THREE.Vector3();
 const _swing = new THREE.Quaternion();
 const _e = new THREE.Euler();
+const _eTeeter = new THREE.Euler();
 const _bp = new THREE.Vector3();
 const _bt = new THREE.Vector3();
 const _hp = new THREE.Vector3();
@@ -862,3 +1218,11 @@ const _gp = new THREE.Vector3();
 const _bin = new THREE.Vector3();
 const _binOff = new THREE.Vector3(0.9, 1.15, 2.5);
 const _proj = new THREE.Vector3();
+const _localDir = new THREE.Vector3();
+const _localRot = new THREE.Vector3();
+const _UP = new THREE.Vector3(0, 1, 0);
+const _faceQ = new THREE.Quaternion();
+const _eTmp = new THREE.Euler();
+const _hangNow = new THREE.Quaternion();
+const _tmpImp = new THREE.Vector3();
+const _tmpImp2 = new THREE.Vector3();

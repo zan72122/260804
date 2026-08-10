@@ -6,11 +6,19 @@ import * as THREE from '../vendor/three/three.module.min.js';
 import { Plush, SPECIES_INFO } from './plush.js';
 import { wallpaperTexture, softBlob, matTexture } from './textures.js';
 import { plasticMaterial } from './materials.js';
-import { clamp, easeOutBack, lerp } from './util.js';
+import { clamp, easeInCubic, easeOutBack, easeOutCubic, lerp, smoothstep } from './util.js';
+import { TIER } from './contracts.js';
 
 /* ------------------------------------------------------------------ */
 /* Reveal                                                              */
 /* ------------------------------------------------------------------ */
+
+// how far below frame the entrance starts, and how long the rise/turn take —
+// "roughly the first second" per the brief
+const ENTER_DROP = 2.3;
+const RISE_DUR = 0.85;
+const TURN_DUR = 1.0;
+const FACE_EULER = new THREE.Euler(0, -0.5, 0);
 
 export class RevealScene {
   constructor() {
@@ -53,6 +61,8 @@ export class RevealScene {
     this._sparkles();
     this.t = 0;
     this.plush = null;
+    this._prevPos = new THREE.Vector3();
+    this._settled = false;
   }
 
   _sparkles() {
@@ -77,24 +87,49 @@ export class RevealScene {
     this.scene.add(this.sparkles);
   }
 
-  show(record, quality = 1) {
+  /**
+   * @param {{species:string, variant:number}} record
+   * @param {number} [quality]
+   * @param {{fromPos?:THREE.Vector3, fromQuat?:THREE.Quaternion}} [entrance]
+   *   the pose the prize actually landed in, so the reveal reads as *the
+   *   same toy* being turned to face the player rather than a fresh one
+   *   appearing. Both are optional — missing data just falls back to a
+   *   neutral entrance instead of throwing.
+   */
+  show(record, quality = 1, entrance = {}) {
     this.clear();
-    const p = new Plush(record.species, record.variant, { quality: 1, fuzz: quality > 0.4, seed: 4242 });
+    const p = new Plush(record.species, record.variant, {
+      quality: 1, fuzz: quality > 0.4, seed: 4242, detail: TIER?.HERO ?? 'hero',
+    });
     this.holder.add(p.root);
 
     // fit by measured height, not a magic number — a rabbit's ears and a
     // chick's body must both land at the same size on screen
     p.root.scale.setScalar(1);
+    p.root.rotation.set(0, 0, 0);
     p.root.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(p.root);
     const h = Math.max(0.2, box.max.y - box.min.y);
     const scale = 2.25 / h;
     this.baseScale = scale;
     this.baseY = -((box.min.y + box.max.y) / 2) * scale - 0.05;
-    p.root.scale.setScalar(scale);
-    p.root.position.y = this.baseY;
     this.shadow.position.y = box.min.y * scale + this.baseY - 0.1;
     this.shadow.scale.setScalar(Math.max(0.6, (box.max.x - box.min.x) * scale * 0.8));
+
+    // continuity: start in the pose it landed in (or upright, if the win
+    // arrived without one) and turn to face the player over the intro.
+    this.startQuat = entrance.fromQuat ? entrance.fromQuat.clone().normalize() : new THREE.Quaternion();
+    this.faceQuat = new THREE.Quaternion().setFromEuler(FACE_EULER);
+    // which side of the bin it came from, purely as a lift-in direction hint
+    this.enterX = entrance.fromPos ? Math.sign(entrance.fromPos.x || 0) * 0.55 : 0;
+    this.enterY = this.baseY - ENTER_DROP;
+
+    p.root.quaternion.copy(this.startQuat);
+    p.root.position.set(this.enterX, this.enterY, 0);
+    p.root.scale.setScalar(this.baseScale * 0.55);
+
+    this._prevPos.set(this.enterX, this.enterY, 0);
+    this._settled = false;
 
     this.plush = p;
     this.t = 0;
@@ -123,17 +158,46 @@ export class RevealScene {
     this.t += dt;
     const t = this.t;
     if (this.plush) {
-      const pop = easeOutBack(clamp(t / 0.55, 0, 1));
-      const s = this.baseScale * lerp(0.55, 1, pop);
-      this.plush.root.scale.setScalar(s);
-      this.plush.root.rotation.y = -0.5 + Math.sin(t * 0.55) * 0.55;
-      this.plush.root.position.y = this.baseY + Math.sin(t * 1.5) * 0.045;
-      // let the limbs swing from the presentation turn
-      _v.set(Math.cos(t * 0.55) * 0.3, Math.cos(t * 1.5) * 0.07, 0);
-      this.plush.update(dt, _v, 1);
-      if (t < 0.6) this.plush.setSquash(0.25 * (1 - t / 0.6));
-      else this.plush.setSquash(0.04 + Math.sin(t * 1.5) * 0.03);
+      const p = this.plush;
+
+      // rise up from below frame with a soft overshoot — reads as being
+      // lifted into view rather than materialising
+      let x, y;
+      if (t < RISE_DUR) {
+        const rp = clamp(t / RISE_DUR, 0, 1);
+        y = lerp(this.enterY, this.baseY, easeOutBack(rp));
+        x = lerp(this.enterX, 0, smoothstep(rp));
+      } else {
+        if (!this._settled) { this._settled = true; p.impact(0.45); }
+        x = 0;
+        y = this.baseY + Math.sin(t * 1.5) * 0.045;
+      }
+      p.root.position.set(x, y, 0);
+
+      // turn from the pose it actually landed in to face the player over
+      // roughly the first second, then settle into a gentle turntable sway
+      if (t < TURN_DUR) {
+        _q.copy(this.startQuat).slerp(this.faceQuat, smoothstep(t / TURN_DUR));
+        p.root.quaternion.copy(_q);
+      } else {
+        p.root.rotation.set(0, -0.5 + Math.sin(t * 0.55) * 0.55, 0);
+      }
+
+      const pop = easeOutBack(clamp(t / RISE_DUR, 0, 1));
+      p.root.scale.setScalar(this.baseScale * lerp(0.55, 1, pop));
+
+      // feed the rig the *real* entrance velocity (position delta), not a
+      // decorative sine, so the limbs lag believably behind the lift
+      _pv.copy(p.root.position).sub(this._prevPos).divideScalar(Math.max(dt, 1 / 120));
+      this._prevPos.copy(p.root.position);
+      const lifted = t < TURN_DUR ? 1 : 0.3;
+      p.update(dt, _pv, lifted);
+
+      if (t < RISE_DUR) p.setSquash(0.25 * (1 - t / RISE_DUR));
+      else p.setSquash(0.04 + Math.sin(t * 1.5) * 0.03);
     }
+    // sparkles fade in as the toy settles so nothing upstages the arrival itself
+    const fade = clamp(t / 1.2, 0, 1);
     const pos = this.sparkles.geometry.attributes.position;
     for (let i = 0; i < this.sparkSeed.length; i++) {
       const s = this.sparkSeed[i];
@@ -143,13 +207,17 @@ export class RevealScene {
       pos.setXYZ(i, Math.cos(a) * r, y, Math.sin(a) * r - 0.4);
     }
     pos.needsUpdate = true;
-    this.sparkles.material.opacity = 0.35 + Math.sin(t * 3) * 0.12;
+    this.sparkles.material.opacity = (0.35 + Math.sin(t * 3) * 0.12) * fade;
   }
 }
 
 /* ------------------------------------------------------------------ */
 /* Collection room                                                     */
 /* ------------------------------------------------------------------ */
+
+// "drop the last few centimetres" — small and quick, not a fall from height
+const ARRIVE_DROP = 0.55;
+const ARRIVE_DUR = 0.4;
 
 export class RoomScene {
   constructor() {
@@ -239,6 +307,9 @@ export class RoomScene {
     this.t = 0;
     this.reactionOrder = ['hop', 'wave', 'tilt', 'spin'];
     this.reactionIdx = 0;
+    this.arriving = null;      // the freshly-won toy dropping onto the rug, if any
+    this._arrivingPos = null;
+    this.dust = null;          // one-shot puff sprite under the arriving toy
   }
 
   clear() {
@@ -252,13 +323,30 @@ export class RoomScene {
     this.picks.length = 0;
     this.shadows.length = 0;
     if (this.ghost) { this.scene.remove(this.ghost); this.ghost = null; }
+    if (this.dust) {
+      this.scene.remove(this.dust.mesh);
+      this.dust.mesh.geometry.dispose();
+      this.dust.mesh.material.dispose();
+      this.dust = null;
+    }
+    this.arriving = null;
+    this._arrivingPos = null;
   }
 
-  /** @param {{species:string,variant:number}[]} records */
-  populate(records, quality = 1) {
+  /**
+   * @param {{species:string,variant:number}[]} records
+   * @param {number} [quality]
+   * @param {{arrivingIndex?:number}} [opts] index *into records* of a
+   *   freshly-won toy that should visibly drop onto the rug instead of
+   *   simply sitting there already. Omit for every other reason the room
+   *   opens (browsing from the play screen, etc).
+   */
+  populate(records, quality = 1, { arrivingIndex } = {}) {
     this.clear();
     const list = records.slice(-24);
     this.count = list.length;
+    const sliceStart = Math.max(0, records.length - 24);
+    const arrivingListIdx = arrivingIndex != null ? arrivingIndex - sliceStart : -1;
 
     if (list.length === 0) {
       // a soft ghost so the empty room still explains itself visually
@@ -293,19 +381,29 @@ export class RoomScene {
       const z = 1.1 - row * gapZ;
       const scale = 1.6;
       p.root.scale.setScalar(scale);
-      p.root.position.set(x, p.size * 0.93 * scale, z);
+      const restY = p.size * 0.93 * scale;
+      const isArriving = i === arrivingListIdx;
+      // the arriving toy starts a touch above its spot and drops in during update()
+      p.root.position.set(x, isArriving ? restY + ARRIVE_DROP : restY, z);
       p.root.rotation.y = -0.35 + ((i * 37) % 70) / 100;
       p.root.traverse((o) => { if (o.isMesh) o.castShadow = o.castShadow || false; });
-      p.rememberPose();
+      if (isArriving) {
+        this.arriving = { plush: p, restY, t: 0 };
+        this._arrivingPos = new THREE.Vector3(x, restY, z);
+      } else {
+        p.rememberPose();
+      }
       this.scene.add(p.root);
       this.plushes.push(p);
 
-      // generous invisible hit sphere — small fingers, no precision required
+      // generous invisible hit sphere — small fingers, no precision required.
+      // Sized at the toy's *resting* spot even while it is still dropping in,
+      // since the fall is only a few centimetres and settles almost at once.
       const hit = new THREE.Mesh(
         new THREE.SphereGeometry(p.size * 1.45 * scale, 8, 6),
         new THREE.MeshBasicMaterial({ visible: false })
       );
-      hit.position.copy(p.root.position);
+      hit.position.set(x, restY, z);
       hit.userData.plush = p;
       this.scene.add(hit);
       this.picks.push(hit);
@@ -354,6 +452,11 @@ export class RoomScene {
 
     const dir = new THREE.Vector3(0, Math.sin(el), Math.cos(el));
     const target = new THREE.Vector3((minX + maxX) / 2, top * 0.45, (minZ + maxZ) / 2);
+    // nudge the look-at toward a freshly-arriving toy so it lands comfortably in shot
+    if (this._arrivingPos) {
+      target.x = lerp(target.x, this._arrivingPos.x, 0.35);
+      target.z = lerp(target.z, this._arrivingPos.z, 0.35);
+    }
     let dist = 7;
     const mx = 0.94, my = 0.9;
     const project = () => {
@@ -397,7 +500,10 @@ export class RoomScene {
     this.raycaster.setFromCamera(_v2.set(nx, ny), this.camera);
     const hits = this.raycaster.intersectObjects(this.picks, false);
     if (!hits.length) return null;
-    return hits[0].object.userData.plush;
+    const plush = hits[0].object.userData.plush;
+    // still dropping in — its pose isn't settled enough to layer a reaction on top
+    if (this.arriving && this.arriving.plush === plush) return null;
+    return plush;
   }
 
   react(plush) {
@@ -413,13 +519,66 @@ export class RoomScene {
     this.t += dt;
     for (const p of this.plushes) {
       p.updateReaction(dt);
+      if (this.arriving && this.arriving.plush === p) continue; // driven by _updateArrival below
       // a barely-there idle sway keeps the room alive without looking animatronic
       const sway = Math.sin(this.t * 0.9 + p.root.position.x * 2.1) * 0.16;
       p.update(dt, _v.set(sway, 0, 0), 0.15);
     }
+    this._updateArrival(dt);
+    if (this.dust) this._updateDust(dt);
     if (this.ghost) {
       this.ghost.position.y = 0.45 + Math.sin(this.t * 1.6) * 0.06;
       this.ghost.material.opacity = 0.16 + Math.sin(this.t * 2.2) * 0.05;
+    }
+  }
+
+  /** The freshly-won toy drops the last bit onto the rug and settles. */
+  _updateArrival(dt) {
+    const a = this.arriving;
+    if (!a) return;
+    a.t += dt;
+    const root = a.plush.root;
+    const p = clamp(a.t / ARRIVE_DUR, 0, 1);
+    const prevY = root.position.y;
+    root.position.y = lerp(a.restY + ARRIVE_DROP, a.restY, easeInCubic(p));
+    // real fall velocity, not decoration — the limb rig lags behind it naturally
+    _v.set(0, (root.position.y - prevY) / Math.max(dt, 1 / 120), 0);
+    a.plush.update(dt, _v, 0.55);
+    if (p >= 1) {
+      a.plush.impact(1.1);          // squash-and-settle on touchdown
+      a.plush.rememberPose();
+      this._spawnDust(root.position.x, root.position.z, root.scale.x);
+      this.arriving = null;
+      this._arrivingPos = null;
+    }
+  }
+
+  _spawnDust(x, z, scaleHint = 1) {
+    const mesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(1, 1),
+      new THREE.MeshBasicMaterial({
+        map: softBlob('255,245,225', 0.75), transparent: true, depthWrite: false,
+        blending: THREE.AdditiveBlending, opacity: 0.85,
+      })
+    );
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.set(x, 0.02, z);
+    mesh.scale.setScalar(0.08);
+    this.scene.add(mesh);
+    this.dust = { mesh, t: 0, size: 0.55 * scaleHint };
+  }
+
+  _updateDust(dt) {
+    const d = this.dust;
+    d.t += dt;
+    const p = clamp(d.t / 0.5, 0, 1);
+    d.mesh.scale.setScalar(lerp(0.08, d.size, easeOutCubic(p)));
+    d.mesh.material.opacity = 0.85 * (1 - p);
+    if (p >= 1) {
+      this.scene.remove(d.mesh);
+      d.mesh.geometry.dispose();
+      d.mesh.material.dispose();
+      this.dust = null;
     }
   }
 }
@@ -427,3 +586,5 @@ export class RoomScene {
 const _v = new THREE.Vector3();
 const _v2 = new THREE.Vector2();
 const _p3 = new THREE.Vector3();
+const _q = new THREE.Quaternion();
+const _pv = new THREE.Vector3();
