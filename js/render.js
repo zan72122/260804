@@ -40,6 +40,11 @@
   var DOME_RIM_R = 1.0;     // このrまではcosプロファイル
   var DOME_FLAT_R = 1.3;    // このrで高さ0(皿面)に収束
 
+  // 光源方向(画面基準・左上/上方)。花びらスプライト自体は個々の向きで焼くため
+  // 固定パターン化しやすいが、これは各インスタンス描画時にctx.filter brightness()で
+  // 掛け合わせ、花全体として単一光源に照らされているように見せる補正。
+  var LIGHT_SCREEN_ANGLE = -2.25; // ラジアン。-π/2(真上)よりやや左寄り
+
   // ============ ユーティリティ ============
   function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
   function lerp(a, b, t) { return a + (b - a) * t; }
@@ -57,6 +62,15 @@
   function hexToRgb(hex) {
     var c = hexCache[hex];
     if (c) return c;
+    // mixHex()の戻り値("rgb(r,g,b)")を再度mixHexへ渡すケースもあるため両対応
+    if (hex.charAt(0) !== '#') {
+      var m = hex.match(/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/);
+      if (m) {
+        c = { r: parseFloat(m[1]) || 0, g: parseFloat(m[2]) || 0, b: parseFloat(m[3]) || 0 };
+        hexCache[hex] = c;
+        return c;
+      }
+    }
     var h = hex.replace('#', '');
     if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
     var num = parseInt(h, 16);
@@ -477,13 +491,19 @@
     o.fillStyle = g;
     o.fill(path);
 
-    // 中央稜線で左右2面に分割: 受光面(明)/影面(暗) — 彫り込みの立体感の核心
+    // 中央稜線で左右2面に分割: 受光面(明)/影面(暗) — 彫り込みの立体感の核心。
+    // ハードな塗り分けは花全体で同じ向きに反復されると人工的な「ハッチング」模様に
+    // 見えてしまうため、なだらかなグラデーションに留める(全体の陰影は描画時に
+    // 実際の光源方向で加味するctx.filter brightness()側が担う)。
     o.save();
     o.clip(path);
-    o.fillStyle = 'rgba(255,255,255,0.24)';
-    o.fillRect(originX - halfW * 1.3 * ppu, originY - len * 1.15 * ppu, halfW * 1.3 * ppu, len * 1.3 * ppu);
-    o.fillStyle = 'rgba(60,35,30,0.20)';
-    o.fillRect(originX, originY - len * 1.15 * ppu, halfW * 1.3 * ppu, len * 1.3 * ppu);
+    var faceGrad = o.createLinearGradient(originX - halfW * ppu, 0, originX + halfW * ppu, 0);
+    faceGrad.addColorStop(0, 'rgba(255,255,255,0.15)');
+    faceGrad.addColorStop(0.48, 'rgba(255,255,255,0)');
+    faceGrad.addColorStop(0.52, 'rgba(50,30,26,0)');
+    faceGrad.addColorStop(1, 'rgba(50,30,26,0.16)');
+    o.fillStyle = faceGrad;
+    o.fillRect(originX - halfW * 1.3 * ppu, originY - len * 1.15 * ppu, halfW * 2.6 * ppu, len * 1.3 * ppu);
     // 稜線の細いハイライト
     o.strokeStyle = 'rgba(255,255,255,0.35)';
     o.lineWidth = Math.max(0.5, ppu * 0.01);
@@ -609,6 +629,14 @@
     return list;
   }
 
+  // outwardAngle(そのインスタンスの外向き方向)が実際の光源方向とどれだけ揃っているかで
+  // 明るさ係数を返す。スプライト内部の固定ハッチングパターンを相殺し、単一光源の
+  // 自然な陰影に近づける(花全体で系統だった模様にならないようにする核心)。
+  function lightFactorFor(outwardAngle) {
+    var d = Math.cos(outwardAngle - LIGHT_SCREEN_ANGLE);
+    return 0.80 + 0.30 * clamp(d, -1, 1);
+  }
+
   function drawPetalInstance(theme, inst, breathMul) {
     var sprites = spriteCache[theme.id];
     if (!sprites) return;
@@ -625,7 +653,10 @@
     ctx.translate(p.sx, p.sy);
     ctx.rotate(outward + Math.PI / 2 + inst.rot);
     var dw = sprite.canvas.width * ratio, dh = sprite.canvas.height * ratio;
+    var bf = lightFactorFor(outward);
+    if (bf !== 1) ctx.filter = 'brightness(' + bf.toFixed(3) + ')';
     ctx.drawImage(sprite.canvas, -sprite.originX * ratio, -sprite.originY * ratio, dw, dh);
+    if (bf !== 1) ctx.filter = 'none';
     ctx.restore();
   }
 
@@ -676,12 +707,17 @@
       ctx.translate(pp.sx, pp.sy);
       ctx.rotate(outward + Math.PI / 2 + e.rot);
       var dw = sprite.canvas.width * ratio, dh = sprite.canvas.height * ratio;
+      var bf = lightFactorFor(outward);
+      if (bf !== 1) ctx.filter = 'brightness(' + bf.toFixed(3) + ')';
       ctx.drawImage(sprite.canvas, -sprite.originX * ratio, -sprite.originY * ratio, dw, dh);
+      if (bf !== 1) ctx.filter = 'none';
       ctx.restore();
     }
   }
 
   // ============ しべ(黄粒)+金箔風の小片 ============
+  // 金箔は丸い黄しべ粒と明確に区別できるよう、しべの環より外側に・平たい不規則四角形・
+  // 白いグリント線(微光沢)を持たせて配置する。
   function drawGoldFlake(spec, breathMul) {
     var worldAngle = spec.a + view.rotation;
     var centerP = project(worldAngle, spec.r, breathMul);
@@ -689,25 +725,35 @@
     ctx.save();
     ctx.translate(centerP.sx, centerP.sy);
     ctx.rotate(spec.rot);
-    var pts = [[-s * 0.5, -s * 0.32], [s * 0.55, -s * 0.42], [s * 0.42, s * 0.5], [-s * 0.48, s * 0.38]];
+    var pts = [[-s * 0.55, -s * 0.30], [s * 0.60, -s * 0.46], [s * 0.46, s * 0.52], [-s * 0.50, s * 0.40]];
     ctx.beginPath();
     ctx.moveTo(pts[0][0], pts[0][1]);
     for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
     ctx.closePath();
     var g = ctx.createLinearGradient(-s * 0.5, -s * 0.5, s * 0.5, s * 0.5);
-    g.addColorStop(0, '#fff3c4');
-    g.addColorStop(0.5, '#e3b34a');
+    g.addColorStop(0, '#fff8dd');
+    g.addColorStop(0.45, '#f0c860');
     g.addColorStop(1, '#b9852a');
     ctx.fillStyle = g;
     ctx.fill();
-    ctx.strokeStyle = 'rgba(255,250,220,0.55)';
-    ctx.lineWidth = Math.max(0.4, s * 0.05);
+    // 微光沢のグリント線
+    ctx.save();
+    ctx.clip();
+    ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+    ctx.lineWidth = Math.max(0.4, s * 0.07);
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.32, -s * 0.30);
+    ctx.lineTo(s * 0.10, s * 0.36);
+    ctx.stroke();
+    ctx.restore();
+    ctx.strokeStyle = 'rgba(150,105,45,0.5)';
+    ctx.lineWidth = Math.max(0.4, s * 0.045);
     ctx.stroke();
     ctx.restore();
   }
 
   function drawStamenAndGold(theme, breathMul) {
-    var grains = 10, gR = 0.062, grainSize = 0.020;
+    var grains = 9, gR = 0.048, grainSize = 0.016;
     for (var i = 0; i < grains; i++) {
       var a = (i / grains) * Math.PI * 2 + 0.3 + view.rotation;
       var pp = project(a, gR, breathMul);
@@ -728,9 +774,9 @@
     ctx.fill();
 
     var flakes = [
-      { a: 0.9, r: 0.075, rot: 0.4, size: 0.045 },
-      { a: 3.4, r: 0.09, rot: -0.6, size: 0.038 },
-      { a: 5.1, r: 0.06, rot: 1.1, size: 0.03 },
+      { a: 0.9, r: 0.095, rot: 0.4, size: 0.070 },
+      { a: 3.35, r: 0.11, rot: -0.6, size: 0.062 },
+      { a: 5.15, r: 0.088, rot: 1.15, size: 0.052 },
     ];
     for (var f = 0; f < flakes.length; f++) drawGoldFlake(flakes[f], breathMul);
   }
