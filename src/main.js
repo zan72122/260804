@@ -977,10 +977,10 @@ const hangBalls = [];
 function enterHang() {
   phaseName = 'hang';
   cutTo('hang', () => {
-    // 各梁に不可視ボックス。userData.line で梁情報を保持
+    // 各梁に不可視ボックス。梁の下の空中もタップできるよう下方に拡大する。userData.line で梁情報を保持
     const proxies = world.beamLines.map((line) => {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(14, 0.9, 0.9), hitMat);
-      m.position.set(0, line.y, line.z);
+      const m = new THREE.Mesh(new THREE.BoxGeometry(14, 2.6, 1.6), hitMat);
+      m.position.set(0, line.y - 0.9, line.z);
       m.userData.line = line;
       return m;
     });
