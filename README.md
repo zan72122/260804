@@ -11,6 +11,16 @@ Play by opening `index.html` from any static server.
 node serve.mjs        # http://localhost:8080
 ```
 
+Verification harness (headless Chromium, see `tools/README.md`):
+
+```sh
+node tools/check.mjs drama 10   # every grab must produce a visible event
+node tools/check.mjs settle 3   # the heap stacks, sleeps and never clips
+node tools/check.mjs beats      # a screenshot per beat of one grab
+node tools/check.mjs shots      # four viewports plus the collection room
+node tools/check.mjs perf       # draw calls and triangles against budget
+```
+
 No build step, no CDN, no binary assets. Three.js is vendored in
 `vendor/three/`; every texture, mesh and sound is generated at runtime.
 
@@ -29,6 +39,39 @@ No build step, no CDN, no binary assets. Three.js is vendored in
 4. **もういちど** to play again, **おへや** to visit the room where every toy
    you have won actually lives. Tap one and it hops, waves, tilts its head, or
    spins. The collection is saved in `localStorage`.
+
+### Every grab is an event
+
+The rule the whole rework is built on: **never let a grab resolve to "nothing
+changed"**. A grab runs as beats, about 6.3 seconds, with two peaks — the catch
+and the delivery — and nothing is ever still:
+
+```
+open → descend → touch → close → settle → [regrip] → lift → carry → teeter → release → fall
+```
+
+`touch` dents the fabric and shoves the neighbours; `close` drags the toy toward
+the claw axis; `settle` is the "what's going to happen?" beat, where the claw
+holds still and the toy rotates into its hanging pose. Only then is the outcome
+committed.
+
+**What the claw catches is a consequence of aim, never a die roll.** Every prize
+carries grab points — body, head, ear, arm, leg, tail — resolved from its real
+geometry. The caught point is pinned under the claw and the body swings around
+it, so hooking a rabbit by one ear turns the whole toy over. The point also
+decides whether the grip holds: an ear or a tail comes loose partway through the
+lift, and the toy that slips lands somewhere easier than where it started.
+
+A director measures what actually moved — rotation, translation, a neighbour
+knocked over, a buried toy surfacing — against a snapshot taken when the claw
+closed. If a grab would have produced nothing it re-grips a few centimetres over
+and tries again, and failing that drags the toy over its neighbours. Scoring is
+a high-water mark, not a final snapshot: a toy lifted clear and dropped back into
+the same dent still counts, because the child watched it happen.
+
+Verified headlessly by `node tools/check.mjs drama` — ten grabs across centre,
+offset and far aims, every one scoring at least one event, cross-checked against
+an independent measurement of every body's position and orientation.
 
 ### Being fair to a four-year-old
 
@@ -57,7 +100,9 @@ nothing at all changes, and no layout where a prize becomes unreachable.
 | `src/game.js` | play scene: framing, aiming, the grab state machine, hero-moment camera |
 | `src/claw.js` | crane rig — rails, bridge, carriage, telescoping tube, three-fingered claw |
 | `src/plush.js` | the six prize species, built procedurally, with their spring rigs |
-| `src/pile.js` | prize-pile simulation and per-round layout |
+| `src/pile.js` | prize-heap layout and simulation |
+| `src/drama.js` | picks what the claw caught, measures what the grab did |
+| `src/contracts.js` | the numbers every module agrees on |
 | `src/cabinet.js` | the machine, the prize chute, the arcade behind it, and `CAB` (all shared dimensions) |
 | `src/showcase.js` | the win close-up and the collection room |
 | `src/materials.js` | plush / metal / acrylic / thread shaders |
@@ -107,7 +152,7 @@ None of it is rigid-body solving — it is all cause-and-effect a child can read
   and `game` (in the case), which drops trim smaller than a stitch.
 - Shared low-poly primitives, one shadow-casting mesh per toy mass, sleeping
   physics bodies, and merged static cabinet geometry.
-- Roughly 56k triangles and ~275 draw calls in the play scene.
+- Roughly 127k triangles and ~306 draw calls in the play scene with twelve prizes.
 
 ### Mobile web
 

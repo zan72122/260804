@@ -565,6 +565,25 @@ export class Game {
     this._setState('lift');
   }
 
+  /**
+   * Score a grab as a high-water mark, not a final snapshot.
+   *
+   * `Drama.evaluate` compares the pile against the state it was in when the
+   * claw closed, so an event that happened and then reverted scores zero at
+   * the end — a toy hooked by its tail, lifted clear, and dropped back into
+   * the same dent reads as "nothing happened" even though the child watched
+   * the whole thing. What was seen was seen: keep the union of every event
+   * observed during the grab and the best score reached.
+   */
+  _evalGrab(body) {
+    const r = this.drama.evaluate(body);
+    if (!this._grabPeak) this._grabPeak = { score: 0, events: [] };
+    const peak = this._grabPeak;
+    for (const e of r.events) if (!peak.events.includes(e)) peak.events.push(e);
+    peak.score = Math.max(peak.score, r.score, peak.events.length);
+    return { ...r, score: peak.score, events: peak.events.slice() };
+  }
+
   _logGrab(outcome, evalResult, chute) {
     const entry = {
       grabType: this.grabChoice?.type ?? null,
@@ -634,6 +653,7 @@ export class Game {
           this.regripped = false;
           this.grabChoice = null;
           this.lastEval = null;
+          this._grabPeak = null;   // fresh high-water mark for this grab
           this.chuteResult = null;
           const b = this.pending.body;
           this.touchFromY = claw.pos.y;
@@ -718,7 +738,7 @@ export class Game {
           if (this.held) {
             this._setState('settle');
           } else {
-            this.lastEval = this.drama.evaluate(null);
+            this.lastEval = this._evalGrab(null);
             this._beginLift();
           }
         }
@@ -732,7 +752,7 @@ export class Game {
         this.heroTarget.copy(this.held ? this.held.pos : claw.gripWorld(_gp));
         this.hero = damp(this.hero, 1, 4.0, dt);
         if (this.stateT >= BEAT.settle) {
-          this.lastEval = this.drama.evaluate(this.held);
+          this.lastEval = this._evalGrab(this.held);
           if (this.lastEval.score < MIN_DRAMA && !this.regripped) {
             this.regripped = true;
             this._beginRegrip();
@@ -750,7 +770,7 @@ export class Game {
         this.heroTarget.copy(this.held ? this.held.pos : claw.gripWorld(_gp));
         this.hero = damp(this.hero, 1, 4.0, dt);
         if (this.stateT >= BEAT.retry) {
-          this.lastEval = this.drama.evaluate(this.held);
+          this.lastEval = this._evalGrab(this.held);
           if (this.lastEval.score < MIN_DRAMA) this._forceDud(this.held);
           this._beginLift();
         }
@@ -797,13 +817,13 @@ export class Game {
             this.carryDur = Math.max(BEAT.carryMin, this.carryDist / 1.05);
             this._setState('carry');
           } else if (this.slippedBody) {
-            this.lastEval = this.drama.evaluate(this.slippedBody);
+            this.lastEval = this._evalGrab(this.slippedBody);
             this._logGrab('slip', this.lastEval, null);
             this.slippedBody = null;
             this._setState('recover');
           } else {
             if (this.pending.kind !== 'catch') {
-              this.lastEval = this.drama.evaluate(null);
+              this.lastEval = this._evalGrab(null);
               if (this.lastEval.score < MIN_DRAMA) {
                 // a miss with nothing else nearby (the 'air' case especially,
                 // an empty-floor whiff has no held body to earn rotate/move
@@ -948,7 +968,7 @@ export class Game {
           // matching comment in the lift/slip branch): a stale lastEval from
           // settle/regrip would understate a win that only became dramatic
           // during carry (the swing) or the drop itself
-          this.lastEval = this.drama.evaluate(b);
+          this.lastEval = this._evalGrab(b);
           this._logGrab('win', this.lastEval, this.chuteResult);
           this.pile.remove(b);
           this.scene.remove(b.plush.root);
@@ -970,7 +990,7 @@ export class Game {
           if (this.pendingMissLog) {
             // the escalation shove applied when this beat began has had the
             // whole recover beat to actually move something -- score it now
-            this.lastEval = this.drama.evaluate(null);
+            this.lastEval = this._evalGrab(null);
             this._logGrab(this.pendingMissLog, this.lastEval, null);
             this.pendingMissLog = null;
           }
