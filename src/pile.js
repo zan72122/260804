@@ -30,7 +30,7 @@ const FLOOR_FRICTION = 0.78;
 // the solver's own contact threshold, meaning no contact force applied and
 // it free-fell straight through to the floor no matter how good the seat
 // math was.
-const REST_SEPARATION = 0.9;
+const REST_SEPARATION = 0.8;
 
 // step()'s own internal sub-step size — see the comment on step() itself for
 // why a large caller-supplied dt has to be broken up before it touches any
@@ -166,11 +166,14 @@ export class Body {
  * reproduces PILE.layers and [4,3,2] exactly.
  */
 function layerCounts(count) {
-  let n0 = Math.max(3, Math.round((count + 3) / 3));
-  let n1 = Math.max(2, n0 - 1);
-  let n2 = Math.max(0, count - n0 - n1);
-  n0 += count - (n0 + n1 + n2);   // absorb any rounding slack into the base layer
-  return [Math.max(1, n0), n1, n2];
+  // Two tiers, not three. A third tier stacks spheres that touch, but a plush
+  // is not a sphere — its mesh is smaller than its collision radius in most
+  // directions, so a tall stack reads on screen as toys hovering with air
+  // between them rather than as a heap. A wide base with one row nestled into
+  // its gaps gives the same burial (something is always underneath something)
+  // while looking like a pile someone dumped in a case.
+  const n0 = Math.max(2, Math.round(count * 0.58));
+  return [n0, Math.max(0, count - n0), 0];
 }
 
 /**

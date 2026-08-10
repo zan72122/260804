@@ -108,8 +108,8 @@ export const BEAT = {
 
 export const PILE = {
   count: 12,
-  /** bodies per layer, front/bottom first */
-  layers: [5, 4, 3],
+  /** bodies per layer, front/bottom first (see layerCounts in pile.js) */
+  layers: [7, 5],
   /** dropped to this when the device cannot keep up */
   lowCount: 9,
 };
