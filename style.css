@@ -1,0 +1,78 @@
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body {
+  height:100%;
+  overflow:hidden;
+  touch-action:none;
+  overscroll-behavior:none;
+  -webkit-user-select:none;
+  user-select:none;
+  -webkit-tap-highlight-color:transparent;
+  -webkit-touch-callout:none;
+  background:#cfd8e8;
+}
+#wrap {
+  position:fixed;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:linear-gradient(180deg,#dce7f5 0%, #c3d2e6 45%, #a9bcd4 78%, #93a8c2 100%);
+}
+#stage {
+  width:100%;
+  height:100%;
+  touch-action:none;
+  display:block;
+}
+text { pointer-events:none; }
+
+/* ---- hint glow (breathes) ---- */
+#hintGlow {
+  fill:url(#gradHint);
+  animation:breathe 1.5s ease-in-out infinite;
+  transform-box:fill-box;
+  transform-origin:center;
+}
+@keyframes breathe {
+  0%,100% { opacity:.0; transform:scale(.85); }
+  45%     { opacity:.75; transform:scale(1.12); }
+}
+
+/* ---- armed button lamps pulse ---- */
+.lampArmed {
+  animation:lampPulse 1.6s ease-in-out infinite;
+}
+@keyframes lampPulse {
+  0%,100% { opacity:.25; }
+  50%     { opacity:.95; }
+}
+
+/* ---- machine shake on GATAN ---- */
+.shake { animation:shakeIt .28s linear; }
+@keyframes shakeIt {
+  0% { transform:translate(0,0); }
+  20% { transform:translate(2.2px,1px); }
+  40% { transform:translate(-2.2px,-1px); }
+  60% { transform:translate(1.6px,.6px); }
+  80% { transform:translate(-1.2px,-.4px); }
+  100% { transform:translate(0,0); }
+}
+
+/* ---- motor fan spin ---- */
+.spin {
+  animation:spinIt .5s linear infinite;
+  transform-box:fill-box;
+  transform-origin:center;
+}
+@keyframes spinIt { to { transform:rotate(360deg); } }
+
+/* ---- coin glint sweep ---- */
+.glint { animation:glintIt 3.2s ease-in-out infinite; }
+@keyframes glintIt {
+  0%,72%,100% { opacity:0; }
+  80% { opacity:.85; }
+  88% { opacity:0; }
+}
+
+/* smooth opacity transitions for cutaway */
+.fadeable { transition:opacity .55s ease; }
