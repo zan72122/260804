@@ -1,0 +1,31 @@
+{
+  "name": "korokoro-hashiwatashi-crane",
+  "version": "1.0.0",
+  "description": "ころころ橋渡しクレーン — a bridge-setting crane game for small children",
+  "main": "index.js",
+  "scripts": {
+    "start": "node server.mjs",
+    "sim": "node test/physics-sim.mjs",
+    "test:e2e": "node test/e2e.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zan72122/260804.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/zan72122/260804/issues"
+  },
+  "homepage": "https://github.com/zan72122/260804#readme",
+  "dependencies": {
+    "@dimforge/rapier3d-compat": "^0.20.0",
+    "three": "^0.185.1"
+  },
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "playwright": "^1.62.1"
+  }
+}

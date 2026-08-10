@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>ころころ橋渡しクレーン</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0a0c14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="description" content="橋渡し設定のクレーンゲーム。指でクレーンを動かして、箱を2本の棒の間へ落とそう。">
+<link rel="stylesheet" href="./styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🧸</text></svg>">
+</head>
+<body>
+<div id="app">
+  <canvas id="stage"></canvas>
+
+  <div id="ui">
+    <!-- top-left: mute.  top-right: new game.  Icons only: no reading required. -->
+    <button id="sound" class="chip" aria-label="音のオン・オフ">
+      <svg viewBox="0 0 32 32" aria-hidden="true">
+        <path class="spk" d="M6 12h5l7-6v20l-7-6H6z"/>
+        <g class="wave"><path d="M22 11a8 8 0 0 1 0 10"/><path d="M25.5 8a13 13 0 0 1 0 16"/></g>
+        <g class="cross"><path d="M22 12l8 8M30 12l-8 8"/></g>
+      </svg>
+    </button>
+
+    <button id="newgame" class="chip" aria-label="つぎのけいひん">
+      <svg viewBox="0 0 32 32" aria-hidden="true">
+        <path d="M26 16a10 10 0 1 1-3.2-7.3"/><path d="M27 5v6h-6"/>
+      </svg>
+    </button>
+
+    <div id="hint" aria-hidden="true">
+      <div class="hand">
+        <svg viewBox="0 0 64 64"><path d="M26 40V16a4 4 0 0 1 8 0v14l3-8a4 4 0 0 1 7.6 2.4L42 34l3-5a4 4 0 0 1 7 3.6l-5 12a14 14 0 0 1-12.6 8H32a12 12 0 0 1-10-5l-6-9a4 4 0 0 1 6-5l4 5z"/></svg>
+      </div>
+      <div class="tapring"></div>
+    </div>
+
+    <button id="grab" aria-label="つかむ">
+      <span class="ring"></span>
+      <svg viewBox="0 0 64 64" aria-hidden="true">
+        <path class="cl" d="M32 6v13"/>
+        <path class="cl" d="M32 19c-8 0-13 5-15 12-1.6 5.4-1 9-1 9"/>
+        <path class="cl" d="M32 19c8 0 13 5 15 12 1.6 5.4 1 9 1 9"/>
+        <circle class="hub" cx="32" cy="19" r="6"/>
+        <path class="pkg" d="M20 46h24v11H20z"/>
+      </svg>
+    </button>
+  </div>
+
+  <div id="boot">
+    <div class="boot-inner">
+      <div class="boot-claw">
+        <svg viewBox="0 0 64 64" aria-hidden="true">
+          <path d="M32 4v14M32 18c-9 0-14 6-16 14M32 18c9 0 14 6 16 14" />
+          <circle cx="32" cy="18" r="7"/>
+        </svg>
+      </div>
+      <div class="boot-bar"><i></i></div>
+    </div>
+  </div>
+</div>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
