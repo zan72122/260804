@@ -5,6 +5,15 @@
 
   var MAX_PARTICLES = 200;
 
+  // ---- チョキン鋏アニメ タイミング定数 (秒) -------------------------------
+  var SCISSOR_TOTAL = 0.28;       // 全体尺(250-350ms内)
+  var SCISSOR_APPEAR = 0.05;      // 0-appear: フェードイン+開いた状態で出現
+  var SCISSOR_CLOSE_END = 0.10;   // appear-closeEnd: 素早く閉じる(チョキ音と同期)
+  var SCISSOR_HOLD_END = 0.16;    // closeEnd-holdEnd: 閉じたバネの軽いスナップ
+  // holdEnd-TOTAL: フェードアウト
+  var SCISSOR_OPEN_HALF = 0.40;   // 開いた時の半開き角(rad)
+  var SCISSOR_CLOSED_HALF = 0.035; // 閉じた時の半開き角(rad, わずかに隙間)
+
   // ---- パーティクルプール --------------------------------------------
   function makeParticle() {
     return {
@@ -60,9 +69,13 @@
   // 時間差発火キュー（ring:complete の順次きらめき、flower:complete の紙吹雪散布用）
   var pendingSpawns = [];
 
+  // 鋏アニメ状態(単一・常に最新1個のみ)
+  var scissorsFx = null;
+
   function clearAllFx() {
     for (var i = 0; i < particles.length; i++) particles[i].active = false;
     pendingSpawns.length = 0;
+    scissorsFx = null;
   }
 
   // ---- 直近の描画情報キャッシュ（emit時点でのcanvasサイズ/viewが必要なため）----
@@ -148,15 +161,34 @@
           p.y -= 8 * dt;
           break;
         case 'petal':
+        case 'gold':
           p.t += dt;
           p.vy = Math.min(p.vy + p.ax * dt, p.vyMax);
           p.x += Math.sin(p.t * p.flutterFreq + p.seed) * p.flutterAmp * dt;
           p.y += p.vy * dt;
           p.rot += p.vrot * dt;
           break;
+        case 'crumb':
+          p.vy += p.ax * dt;
+          p.vx *= (1 - Math.min(1, 0.6 * dt));
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+          p.rot += p.vrot * dt;
+          break;
+        case 'flash':
+          break;
         default:
           break;
       }
+    }
+
+    if (scissorsFx) {
+      scissorsFx.t += dt;
+      if (!scissorsFx.flashDone && scissorsFx.t >= SCISSOR_CLOSE_END) {
+        scissorsFx.flashDone = true;
+        try { triggerCutImpact(scissorsFx.x, scissorsFx.y, scissorsFx.palette); } catch (eImpact) { /* noop */ }
+      }
+      if (scissorsFx.t >= SCISSOR_TOTAL) scissorsFx = null;
     }
   }
 
@@ -237,6 +269,78 @@
     ctx.restore();
   }
 
+  // 金箔風の小さな四角片(祝福演出)。ゆっくり舞い落ち、きらりと明滅する。
+  function drawGold(ctx, p) {
+    var frac = p.life / p.maxLife;
+    var glim = 0.72 + 0.28 * Math.sin(p.t * 9 + p.seed * 3);
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, Math.min(1, frac * 2.2)) * glim;
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.rot);
+    var s = p.size;
+    var g;
+    try {
+      g = ctx.createLinearGradient(-s / 2, -s / 2, s / 2, s / 2);
+      g.addColorStop(0, '#fff3c4');
+      g.addColorStop(0.5, '#e8b84b');
+      g.addColorStop(1, '#c9962c');
+    } catch (e) { g = '#e8b84b'; }
+    ctx.fillStyle = g;
+    ctx.fillRect(-s / 2, -s / 2, s, s);
+    ctx.strokeStyle = 'rgba(255,255,255,0.65)';
+    ctx.lineWidth = Math.max(0.5, s * 0.1);
+    ctx.strokeRect(-s / 2 + s * 0.16, -s / 2 + s * 0.16, s * 0.32, s * 0.32);
+    ctx.restore();
+  }
+
+  // 生地の欠片(クリーム色の小片)。鋏が閉じた瞬間にポロッと落ちる。
+  function drawCrumb(ctx, p) {
+    var frac = p.life / p.maxLife;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, Math.min(1, frac * 2.0));
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.rot);
+    ctx.fillStyle = p.color;
+    var s = p.size;
+    ctx.beginPath();
+    var pts = 6;
+    for (var i = 0; i < pts; i++) {
+      var a = (i / pts) * Math.PI * 2;
+      var rr = s * (0.6 + 0.4 * Math.abs(Math.sin(a * 2.3 + p.seed * 5)));
+      var px = Math.cos(a) * rr, py = Math.sin(a) * rr * 0.85;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha *= 0.4;
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.beginPath();
+    ctx.ellipse(-s * 0.15, -s * 0.15, s * 0.35, s * 0.22, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // 鋏が閉じる瞬間の小さな白いフラッシュ
+  function drawFlash(ctx, p) {
+    var frac = Math.max(0, p.life / p.maxLife);
+    var grow = 1 - frac;
+    var r = Math.max(0.1, p.size0 + grow * p.growAmt);
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, frac * 0.9);
+    var g;
+    try {
+      g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
+      g.addColorStop(0, 'rgba(255,255,255,0.95)');
+      g.addColorStop(0.5, 'rgba(255,255,255,0.45)');
+      g.addColorStop(1, 'rgba(255,255,255,0)');
+    } catch (e) { g = 'rgba(255,255,255,0.6)'; }
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
   function drawParticles(ctx) {
     for (var i = 0; i < particles.length; i++) {
       var p = particles[i];
@@ -248,9 +352,208 @@
         case 'poww': drawPoww(ctx, p); break;
         case 'puff': drawPuff(ctx, p); break;
         case 'petal': drawPetal(ctx, p); break;
+        case 'gold': drawGold(ctx, p); break;
+        case 'crumb': drawCrumb(ctx, p); break;
+        case 'flash': drawFlash(ctx, p); break;
         default: break;
       }
     }
+  }
+
+  // =====================================================================
+  // チョキン鋏アニメ — 様式化した菓子鋏(和鋏)。canvasパスのみ、絵文字禁止。
+  // U字バネの握り(背面)＋2枚の細い刃(前方)。halfOpenで開閉角を制御。
+  // =====================================================================
+  function drawScissorBlade(ctx, pivotX, bladeLen, size) {
+    var w = size * 0.10;
+    ctx.beginPath();
+    ctx.moveTo(pivotX * 0.35, -w * 0.5);
+    ctx.lineTo(pivotX + bladeLen * 0.16, -w * 0.6);
+    ctx.quadraticCurveTo(pivotX + bladeLen * 0.62, -w * 0.20, pivotX + bladeLen, -size * 0.012);
+    ctx.lineTo(pivotX + bladeLen + size * 0.02, 0);
+    ctx.quadraticCurveTo(pivotX + bladeLen * 0.62, w * 0.20, pivotX + bladeLen * 0.16, w * 0.38);
+    ctx.lineTo(pivotX * 0.35, w * 0.42);
+    ctx.closePath();
+    var g;
+    try {
+      g = ctx.createLinearGradient(0, -w * 0.6, 0, w * 0.42);
+      g.addColorStop(0, '#fbfdff');
+      g.addColorStop(0.35, '#dfe6ee');
+      g.addColorStop(0.7, '#b7c1cd');
+      g.addColorStop(1, '#98a3b0');
+    } catch (e) { g = '#c7d0da'; }
+    ctx.fillStyle = g;
+    ctx.fill();
+    // 柔らかい白ハイライト(刃先の峰)
+    ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+    ctx.lineWidth = Math.max(0.6, size * 0.012);
+    ctx.beginPath();
+    ctx.moveTo(pivotX + bladeLen * 0.2, -w * 0.42);
+    ctx.quadraticCurveTo(pivotX + bladeLen * 0.62, -w * 0.16, pivotX + bladeLen * 0.94, -size * 0.01);
+    ctx.stroke();
+  }
+
+  function drawScissorShape(ctx, size, halfOpen) {
+    var pivotX = size * 0.09;
+    var bladeLen = size * 0.60;
+    var legLen = size * 0.36;
+    var legGap = size * 0.135;
+    var backX = -(pivotX + legLen);
+
+    // U字バネ(背面の握り) — 一続きの太い線で表現
+    ctx.beginPath();
+    ctx.moveTo(-pivotX, legGap);
+    ctx.lineTo(backX + legGap, legGap);
+    ctx.arc(backX + legGap, 0, legGap, Math.PI / 2, Math.PI * 1.5, false);
+    ctx.lineTo(-pivotX, -legGap);
+    var sg;
+    try {
+      sg = ctx.createLinearGradient(backX, 0, -pivotX, 0);
+      sg.addColorStop(0, '#c3ccd6');
+      sg.addColorStop(0.5, '#eef2f6');
+      sg.addColorStop(1, '#b0bac6');
+    } catch (e) { sg = '#c7d0da'; }
+    ctx.strokeStyle = sg;
+    ctx.lineWidth = Math.max(1, size * 0.075);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+
+    // 2枚の刃(pivotを中心に±halfOpenで開閉)
+    ctx.save();
+    ctx.rotate(halfOpen);
+    drawScissorBlade(ctx, pivotX, bladeLen, size);
+    ctx.restore();
+
+    ctx.save();
+    ctx.rotate(-halfOpen);
+    drawScissorBlade(ctx, pivotX, bladeLen, size);
+    ctx.restore();
+
+    // 要(かなめ)の小さな金の飾り
+    ctx.beginPath();
+    ctx.arc(0, 0, size * 0.045, 0, Math.PI * 2);
+    ctx.fillStyle = '#e6bd5a';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(-size * 0.012, -size * 0.012, size * 0.018, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.fill();
+  }
+
+  function drawScissorsFx(ctx) {
+    var fx = scissorsFx;
+    if (!fx || !ctx) return;
+    try {
+      var t = fx.t;
+      var alpha, scale, halfOpen, f;
+      if (t < SCISSOR_APPEAR) {
+        f = Math.max(0, Math.min(1, t / SCISSOR_APPEAR));
+        alpha = f;
+        scale = 0.72 + 0.32 * Math.sin(f * Math.PI * 0.5);
+        halfOpen = SCISSOR_OPEN_HALF;
+      } else if (t < SCISSOR_CLOSE_END) {
+        f = (t - SCISSOR_APPEAR) / (SCISSOR_CLOSE_END - SCISSOR_APPEAR);
+        var ease = 1 - Math.pow(1 - f, 3);
+        alpha = 1;
+        scale = 1.0;
+        halfOpen = SCISSOR_OPEN_HALF + (SCISSOR_CLOSED_HALF - SCISSOR_OPEN_HALF) * ease;
+      } else if (t < SCISSOR_HOLD_END) {
+        f = (t - SCISSOR_CLOSE_END) / (SCISSOR_HOLD_END - SCISSOR_CLOSE_END);
+        var wig = Math.sin(f * Math.PI * 2) * 0.018 * (1 - f);
+        alpha = 1;
+        scale = 1.0;
+        halfOpen = Math.max(0.01, SCISSOR_CLOSED_HALF + wig);
+      } else {
+        f = (t - SCISSOR_HOLD_END) / Math.max(0.0001, SCISSOR_TOTAL - SCISSOR_HOLD_END);
+        alpha = Math.max(0, 1 - f);
+        scale = 1.0 + f * 0.05;
+        halfOpen = SCISSOR_CLOSED_HALF;
+      }
+
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+      ctx.translate(fx.x, fx.y);
+      ctx.rotate(fx.rot);
+      ctx.scale(scale, scale);
+      drawScissorShape(ctx, fx.size, halfOpen);
+      ctx.restore();
+    } catch (e) { /* noop */ }
+  }
+
+  function spawnScissors(x, y, rot, palette) {
+    var minSide = Math.min(lastW, lastH);
+    scissorsFx = {
+      x: x, y: y, rot: (typeof rot === 'number' && isFinite(rot)) ? rot : 0,
+      size: minSide * (0.08 + Math.random() * 0.02),
+      t: 0,
+      flashDone: false,
+      palette: palette || ['#ffffff'],
+    };
+  }
+
+  // 鋏が閉じきった瞬間の演出: フラッシュ+生地の欠片+紙吹雪きらめき
+  function triggerCutImpact(x, y, palette) {
+    try {
+      var pal = (palette && palette.length) ? palette : ['#ffffff'];
+      var minSide = Math.min(lastW, lastH);
+
+      var nFrag = 4 + Math.floor(Math.random() * 3); // 4-6
+      for (var i = 0; i < nFrag; i++) {
+        var ang = Math.random() * Math.PI * 2;
+        var spd = 40 + Math.random() * 70;
+        spawn({
+          kind: 'confetti',
+          x: x, y: y,
+          vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd - 25,
+          ax: 150,
+          rot: Math.random() * Math.PI * 2,
+          vrot: (Math.random() * 2 - 1) * 8,
+          size: 4 + Math.random() * 4,
+          color: pal[Math.floor(Math.random() * pal.length)],
+          life: 0.5 + Math.random() * 0.3,
+        });
+      }
+
+      var nSpark = 2 + Math.floor(Math.random() * 2); // 2-3
+      for (var j = 0; j < nSpark; j++) {
+        var a2 = Math.random() * Math.PI * 2;
+        var d2 = Math.random() * 8;
+        spawn({
+          kind: 'sparkle',
+          x: x + Math.cos(a2) * d2, y: y + Math.sin(a2) * d2,
+          rot: Math.random() * Math.PI * 2,
+          vrot: (Math.random() * 2 - 1) * 3,
+          size: 5 + Math.random() * 3,
+          color: '#ffffff',
+          life: 0.26 + Math.random() * 0.16,
+        });
+      }
+
+      spawn({
+        kind: 'flash',
+        x: x, y: y,
+        size0: 2, growAmt: minSide * 0.055,
+        life: 0.13,
+      });
+
+      var nCrumb = 3 + Math.floor(Math.random() * 3); // 3-5
+      for (var k = 0; k < nCrumb; k++) {
+        var a3 = -Math.PI / 2 + (Math.random() * 2 - 1) * 1.1;
+        var spd3 = 18 + Math.random() * 26;
+        spawn({
+          kind: 'crumb',
+          x: x, y: y,
+          vx: Math.cos(a3) * spd3, vy: Math.sin(a3) * spd3 - 6,
+          ax: 130,
+          rot: Math.random() * Math.PI * 2,
+          vrot: (Math.random() * 2 - 1) * 5,
+          size: 2.5 + Math.random() * 2.5,
+          color: '#fbf3df',
+          life: 0.5 + Math.random() * 0.35,
+        });
+      }
+    } catch (e) { /* noop */ }
   }
 
   // =====================================================================
@@ -464,36 +767,12 @@
       var theme = currentTheme();
       var palette = [theme.base, theme.deep, theme.tip, '#ffffff'];
 
-      var nFrag = 4 + Math.floor(Math.random() * 4); // 4-7
-      for (var i = 0; i < nFrag; i++) {
-        var ang = Math.random() * Math.PI * 2;
-        var spd = 40 + Math.random() * 70;
-        spawn({
-          kind: 'confetti',
-          x: pos.x, y: pos.y,
-          vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd - 25,
-          ax: 150,
-          rot: Math.random() * Math.PI * 2,
-          vrot: (Math.random() * 2 - 1) * 8,
-          size: 4 + Math.random() * 4,
-          color: palette[Math.floor(Math.random() * palette.length)],
-          life: 0.5 + Math.random() * 0.3,
-        });
-      }
-      var nSpark = 2 + Math.floor(Math.random() * 2); // 2-3
-      for (var j = 0; j < nSpark; j++) {
-        var a2 = Math.random() * Math.PI * 2;
-        var d2 = Math.random() * 8;
-        spawn({
-          kind: 'sparkle',
-          x: pos.x + Math.cos(a2) * d2, y: pos.y + Math.sin(a2) * d2,
-          rot: Math.random() * Math.PI * 2,
-          vrot: (Math.random() * 2 - 1) * 3,
-          size: 5 + Math.random() * 3,
-          color: '#ffffff',
-          life: 0.26 + Math.random() * 0.16,
-        });
-      }
+      // 菓子鋏が現れて「チョキン」と閉じる。閉じきった瞬間に
+      // triggerCutImpact() がフラッシュ+生地の欠片+紙吹雪きらめきを発火する。
+      var cx = (lastView && typeof lastView.cx === 'number') ? lastView.cx : lastW / 2;
+      var cy = (lastView && typeof lastView.cy === 'number') ? lastView.cy : lastH / 2;
+      var rot = Math.atan2(pos.y - cy, pos.x - cx);
+      spawnScissors(pos.x, pos.y, rot, palette);
     } catch (e) { /* noop */ }
     playCut();
   }
@@ -624,6 +903,34 @@
           });
         })();
       }
+
+      // 金箔風の小さな金色四角片。ゆっくり舞い、上品な余韻(全体2.5秒程度)を添える。
+      var goldCount = 20;
+      for (var k = 0; k < goldCount; k++) {
+        (function () {
+          var delay3 = Math.random() * 1.2;
+          pendingSpawns.push({
+            delay: delay3,
+            fn: function () {
+              spawn({
+                kind: 'gold',
+                x: Math.random() * w,
+                y: -16 - Math.random() * 50,
+                vy: 14 + Math.random() * 18,
+                vyMax: 70,
+                ax: 22,
+                rot: Math.random() * Math.PI * 2,
+                vrot: (Math.random() * 2 - 1) * 1.6,
+                size: 4 + Math.random() * 3.5,
+                flutterFreq: 0.8 + Math.random() * 1.2,
+                flutterAmp: 18 + Math.random() * 22,
+                seed: Math.random() * Math.PI * 2,
+                life: 1.3 + Math.random() * 0.9,
+              });
+            },
+          });
+        })();
+      }
     } catch (e) { /* noop */ }
     playFlowerComplete();
   }
@@ -670,6 +977,9 @@
       if (!ctx) return;
       ctx.save();
       drawParticles(ctx);
+      ctx.restore();
+      ctx.save();
+      drawScissorsFx(ctx);
       ctx.restore();
     } catch (e) { /* noop */ }
   }
