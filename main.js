@@ -240,12 +240,12 @@ frameCamera();
 
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-scene.environmentIntensity = 0.72;
+scene.environmentIntensity = 0.48;
 
 // ---------------------------------------------------------------------------
 // lights
 // ---------------------------------------------------------------------------
-const keyLight = new THREE.DirectionalLight(0xfff1dc, 3.0);   // window daylight, from left
+const keyLight = new THREE.DirectionalLight(0xfff1dc, 3.4);   // window daylight, from left
 keyLight.position.set(-1.4, 2.3, 0.9);
 keyLight.castShadow = true;
 keyLight.shadow.mapSize.set(2048, 2048);
@@ -689,8 +689,8 @@ class Cake {
       clearcoatRoughness: 0.12,
       sheen: 1.0,
       sheenColor: new THREE.Color(0xffffff),
-      sheenRoughness: 0.55,
-      envMapIntensity: 1.0,
+      sheenRoughness: 0.68,
+      envMapIntensity: 0.65,
     });
     mat.defines = { USE_UV: '' };
     const paintTex = this.paintTex;
@@ -709,19 +709,28 @@ class Cake {
         .replace('#include <color_fragment>', `#include <color_fragment>
           vec4 velvetSample = texture2D(uPaint, vUv);
           float velvetCov = smoothstep(0.04, 0.55, velvetSample.a);
+          // even a light dusting of cocoa butter kills the gloss
+          float velvetDust = smoothstep(0.02, 0.3, velvetSample.a);
           // powder grain: droplets darken/lighten the coat unevenly
           float velvetGrain = velvetNoise(vUv * 620.0) * 0.55 + velvetNoise(vUv * 173.0) * 0.45;
           vec3 velvetCol = velvetSample.rgb * (0.9 + velvetGrain * 0.2);
           diffuseColor.rgb = mix(diffuseColor.rgb, velvetCol, velvetCov);`)
-        .replace('float roughnessFactor = roughness;', `float roughnessFactor = mix(roughness, 0.93 + velvetGrain * 0.06, velvetCov);`)
-        .replace('material.clearcoat = clearcoat;', `material.clearcoat = clearcoat * (1.0 - velvetCov);`)
-        .replace('material.sheenColor = sheenColor;', `material.sheenColor = mix(vec3(0.0), velvetSample.rgb * 0.75 + 0.22, velvetCov);`)
+        .replace('float roughnessFactor = roughness;', `float roughnessFactor = mix(roughness, 0.94 + velvetGrain * 0.05, velvetDust);`)
+        .replace('material.clearcoat = clearcoat;', `material.clearcoat = clearcoat * (1.0 - velvetDust);`)
+        .replace(
+          'material.specularColor = mix( min( pow2( ( material.ior - 1.0 ) / ( material.ior + 1.0 ) ) * specularColorFactor, vec3( 1.0 ) ) * specularIntensityFactor, diffuseColor.rgb, metalnessFactor );',
+          `material.specularColor = mix( min( pow2( ( material.ior - 1.0 ) / ( material.ior + 1.0 ) ) * specularColorFactor, vec3( 1.0 ) ) * specularIntensityFactor, diffuseColor.rgb, metalnessFactor );
+          // deep velvet fibres swallow the broad grazing reflection of the base surface
+          material.specularColor *= (1.0 - 0.88 * velvetDust);
+          material.specularF90 *= (1.0 - 0.88 * velvetDust);`
+        )
+        .replace('material.sheenColor = sheenColor;', `material.sheenColor = mix(vec3(0.0), velvetSample.rgb * 0.85 + 0.025, velvetCov);`)
         .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
           // micro-fuzz: static uv-anchored normal jitter where velvet covers
           {
             float nx = velvetNoise(vUv * 540.0) - 0.5;
             float ny = velvetNoise(vUv * 540.0 + 71.3) - 0.5;
-            normal = normalize(normal + velvetCov * 0.5 * vec3(nx, ny, 0.0));
+            normal = normalize(normal + velvetCov * 0.26 * vec3(nx, ny, 0.0));
           }`);
     };
     this.mesh = new THREE.Mesh(geo, mat);
@@ -872,8 +881,8 @@ function buildGun() {
   hoseNut.rotation.x = -0.35;
   gun.add(hoseNut);
   const hoseCurve = new THREE.CatmullRomCurve3([
-    new THREE.Vector3(0, -0.088, 0.058), new THREE.Vector3(0.015, -0.15, 0.09),
-    new THREE.Vector3(0.06, -0.24, 0.16), new THREE.Vector3(0.16, -0.3, 0.26),
+    new THREE.Vector3(0, -0.088, 0.058), new THREE.Vector3(0.012, -0.14, 0.085),
+    new THREE.Vector3(0.05, -0.21, 0.14), new THREE.Vector3(0.11, -0.26, 0.2),
   ]);
   const hose = new THREE.Mesh(new THREE.TubeGeometry(hoseCurve, 24, 0.004, 10), rubberMat);
   gun.add(hose);
@@ -897,14 +906,14 @@ function buildGun() {
     f.rotation.y = -0.18;
     hand.add(f);
   }
-  const thumb = new THREE.Mesh(new THREE.CapsuleGeometry(0.0065, 0.02, 6, 10), gloveMat);
-  thumb.rotation.set(0.5, 0, -0.9);
-  thumb.position.set(0.02, -0.024, 0.046);
+  const thumb = new THREE.Mesh(new THREE.CapsuleGeometry(0.006, 0.016, 6, 10), gloveMat);
+  thumb.rotation.set(1.1, 0, -0.5);
+  thumb.position.set(0.011, -0.026, 0.04);
   hand.add(thumb);
   // sleeve (chef's white jacket cuff) trailing down toward the lower-right, off frame
-  const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.046, 0.22, 18), gloveMat);
-  sleeve.position.set(0.1, -0.15, 0.1);
-  sleeve.rotation.set(0.55, 0, -0.8);
+  const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.034, 0.13, 18), gloveMat);
+  sleeve.position.set(0.055, -0.09, 0.065);
+  sleeve.rotation.set(0.5, 0, -0.75);
   hand.add(sleeve);
   gun.add(hand);
 
@@ -1008,7 +1017,7 @@ class Sparkles {
   constructor() {
     this.group = new THREE.Group();
     this.items = [];
-    for (let i = 0; i < 26; i++) {
+    for (let i = 0; i < 16; i++) {
       const sp = new THREE.Sprite(new THREE.SpriteMaterial({
         map: TEX.sparkle, transparent: true, opacity: 0, depthWrite: false,
         blending: THREE.AdditiveBlending, color: 0xffe9b0,
@@ -1026,10 +1035,10 @@ class Sparkles {
       const cyc = (ph % 2) / 2;
       const a = it.seed * 39.7;
       const r = 0.085 + (it.seed % 0.3) * 0.15;
-      it.sp.position.set(Math.cos(a + t * 0.3) * r, 1.06 + (it.seed % 0.5) * 0.36 + cyc * 0.03, Math.sin(a + t * 0.3) * r);
+      it.sp.position.set(Math.cos(a + t * 0.3) * r, 1.055 + (it.seed % 0.5) * 0.24 + cyc * 0.03, Math.sin(a + t * 0.3) * r);
       const tw = Math.max(0, Math.sin(cyc * Math.PI));
-      it.sp.material.opacity = this.active ? tw * 0.9 : 0;
-      it.sp.scale.setScalar(0.008 + tw * 0.022);
+      it.sp.material.opacity = this.active ? tw * 0.6 : 0;
+      it.sp.scale.setScalar(0.006 + tw * 0.013);
     }
   }
 }
@@ -1114,11 +1123,11 @@ spray.setColor(VELVET_COLORS[0].hex);
 mistCone.material.color.set(VELVET_COLORS[0].hex).multiplyScalar(1.15);
 
 function updateMeter(cov) {
-  const pct = clamp(cov / 0.88, 0, 1) * 100;
+  const pct = clamp(cov / 0.86, 0, 1) * 100;
   meterFill.style.width = pct + '%';
   const c = VELVET_COLORS[colorIdx];
   meterFill.style.background = `linear-gradient(180deg, ${lighten(c.css, 30)}, ${c.css})`;
-  const th = [0.3, 0.6, 0.87];
+  const th = [0.3, 0.6, 0.855];
   for (let i = 0; i < 3; i++) {
     if (cov >= th[i] && starsLit <= i) {
       starsLit = i + 1;
@@ -1148,10 +1157,10 @@ document.getElementById('nextBtn').addEventListener('pointerup', () => {
   ov.classList.remove('show'); ov.style.pointerEvents = 'none';
   sparkles.active = false;
   revealSpot.intensity = 0;
-  keyLight.intensity = 3.0;
+  keyLight.intensity = 3.4;
   hemi.intensity = 0.34;
   fillLight.intensity = 0.38;
-  scene.environmentIntensity = 0.72;
+  scene.environmentIntensity = 0.48;
   state = 'play';
   gun.visible = true;
   newCake();
@@ -1295,9 +1304,9 @@ function animate() {
     _side.crossVectors(_up, _dir).normalize();
     // hold the gun off the surface to the lower-right of the aim point; keep it clear of the cake
     gunTargetPos.copy(aimPoint)
-      .addScaledVector(_dir, 0.2)
-      .addScaledVector(_up, 0.03)
-      .addScaledVector(_side, 0.06);
+      .addScaledVector(_dir, 0.19)
+      .addScaledVector(_up, 0.035)
+      .addScaledVector(_side, 0.095);
     gunTargetPos.y = Math.max(gunTargetPos.y, COUNTER_Y + 0.16);
   } else {
     // rest pose: lower right, muzzle toward the cake, partly in frame so kids see it waiting
@@ -1347,11 +1356,9 @@ function animate() {
   // coverage check (throttled)
   if (state === 'play' && cake && t - lastCovCheck > 0.45) {
     lastCovCheck = t;
-    if (cake.paintTex.needsUpdate || spraying || cake.coverage > 0) {
-      const cov = cake.computeCoverage();
-      updateMeter(cov);
-      if (cov >= 0.875) startReveal();
-    }
+    const cov = cake.computeCoverage();
+    updateMeter(cov);
+    if (cov >= 0.86) startReveal();
   }
 
   spray.update(dt);
@@ -1373,10 +1380,10 @@ function animate() {
   if (state === 'reveal' || state === 'done') {
     revealT += dt;
     const k = clamp(revealT / 2.2, 0, 1);
-    keyLight.intensity = lerp(3.0, 0.4, k);
+    keyLight.intensity = lerp(3.4, 0.4, k);
     hemi.intensity = lerp(0.34, 0.12, k);
     fillLight.intensity = lerp(0.38, 0.08, k);
-    scene.environmentIntensity = lerp(0.72, 0.22, k);
+    scene.environmentIntensity = lerp(0.48, 0.18, k);
     revealSpot.intensity = lerp(0, 42, k);
     // low side-light sweeping around the cake — velvet nap catches the grazing light
     const az = -0.9 + Math.sin(revealT * 0.45) * 1.15;
@@ -1415,5 +1422,9 @@ camBase.copy(camera.position);
 
 newCake();
 window.__game_ok = true;
-window.__debug = { get cake() { return cake; }, startReveal, newCake, scene, camera };
+window.__debug = {
+  get cake() { return cake; }, startReveal, newCake, scene, camera,
+  keyLight, revealSpot,
+  get state() { return state; }, get revealT() { return revealT; },
+};
 animate();
