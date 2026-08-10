@@ -11,7 +11,7 @@ for (const fz of [-0.85, 0, 0.85]) {
     const { g } = await makeGame(JSON.parse(JSON.stringify(base)));
     const e = g.prizeEnds();
     const hw = base.box.w / 2;
-    g.setAim(e.c.x + fx * (hw - 0.02), e.c.z + fz * base.box.d / 2);
+    g.setAim(e.c.x + fx * (hw - 0.02), e.c.z + fz * 0.85 * base.box.d / 2);
     for (let i = 0; i < 60; i++) g.update(1 / 60);
     const b = snapshot(g);
     g.grab(); runUntilIdle(g);

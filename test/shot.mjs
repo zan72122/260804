@@ -14,11 +14,15 @@ for (const [name, w, h] of [['p', 390, 844], ['l', 844, 390]]) {
   await p.waitForTimeout(2200);
   await p.screenshot({ path: `${OUT}/${name}-idle.png` });
   // mid-grab shot
-  await p.evaluate(() => { window.__crane.game.setAim(-0.09, -0.06); });
-  await p.waitForTimeout(900);
+  await p.evaluate(() => {
+    const g = window.__crane; const e = g.game.prizeEnds();
+    g.input.target.x = e.left.x + 0.046; g.input.target.z = e.c.z - 0.6 * e.dz;
+  });
+  await p.waitForTimeout(1600);
   console.log('step: grab', name);
   await p.evaluate(() => window.__crane._doGrab());
-  await p.waitForTimeout(4000);
+  await p.waitForFunction(() => window.__crane.game.phase === 'close', null, { timeout: 30000 }).catch(() => {});
+  await p.waitForTimeout(1200);
   await p.screenshot({ path: `${OUT}/${name}-grab.png` });
   try { await p.waitForFunction(() => window.__crane.game.phase === 'idle' || window.__crane.game.phase === 'won', null, {timeout:25000}); } catch(e){ console.log('stuck in phase', await p.evaluate(()=>window.__crane.game.phase)); }
   await p.screenshot({ path: `${OUT}/${name}-after.png` });

@@ -379,14 +379,14 @@ export class View {
     this.head = new THREE.Group();
     g.add(this.head);
     const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.030, 0.024, 0.042, 20), claw);
-    hub.position.y = 0.026;
+    hub.position.y = 0.042;
     hub.castShadow = true;
     this.head.add(hub);
     const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.0335, 0.0335, 0.010, 20), clawTip);
-    collar.position.y = 0.048;
+    collar.position.y = 0.064;
     this.head.add(collar);
     const dome = new THREE.Mesh(new THREE.SphereGeometry(0.024, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2), claw);
-    dome.position.y = 0.047;
+    dome.position.y = 0.063;
     this.head.add(dome);
 
     this.prongMeshes = [];
@@ -395,7 +395,7 @@ export class View {
       const p = new THREE.Group();
       g.add(p);
 
-      const bolt = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.03, 12), clawTip);
+      const bolt = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.009, 0.032, 12), clawTip);
       bolt.rotation.x = Math.PI / 2;
       p.add(bolt);
 
@@ -417,13 +417,13 @@ export class View {
       hook.castShadow = true;
       p.add(hook);
 
-      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.0085, 0.022, 12), clawTip);
-      tip.position.set(parts.tip.x, parts.tip.y + 0.006, 0);
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.0095, 0.030, 12), clawTip);
+      tip.position.set(parts.tip.x, parts.tip.y + 0.009, 0);
       tip.rotation.z = parts.hook.ang + Math.PI;
       tip.castShadow = true;
       p.add(tip);
 
-      const knuckle = new THREE.Mesh(new THREE.SphereGeometry(0.011, 14, 10), claw);
+      const knuckle = new THREE.Mesh(new THREE.SphereGeometry(0.0125, 14, 10), claw);
       knuckle.position.set(parts.arm.pos.x * 2, parts.arm.pos.y * 2, 0);
       p.add(knuckle);
 
@@ -598,7 +598,7 @@ export class View {
 
     // shaft stretches from the trolley car down to the claw head
     const topY = FIELD.ceilY - 0.06;
-    const botY = head.y + 0.055;
+    const botY = head.y + 0.071;
     const len = Math.max(0.02, topY - botY);
     this.shaft.scale.y = len;
     this.shaft.position.set(tr.x, botY + len / 2, tr.z);

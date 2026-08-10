@@ -31,14 +31,14 @@ export const FIELD = {
   backZ: -0.375,
   frontZ: 0.40,
   floorY: 0.0,
-  ceilY: 1.02,
+  ceilY: 1.06,
   /** Below this height the prize has definitively left the bars. */
   fallenY: 0.30,
 };
 
 export const CRANE = {
   /** Rest height of the trolley (claw parked). */
-  restY: 0.88,
+  restY: 0.925,
   homeX: 0.0,
   homeZ: 0.255,
   /** Aim limits so the claw always stays inside the cabinet. */
@@ -47,18 +47,18 @@ export const CRANE = {
   minZ: -0.30,
   maxZ: 0.265,
   moveSpeed: 0.72,
-  descendSpeed: 0.46,
+  descendSpeed: 0.40,
   riseSpeed: 0.60,
   /** Prong pivot offset from the claw head origin. */
   pivotX: 0.018,
   pivotY: -0.004,
   prongLen: 0.086,
-  openAngle: 0.78,
+  openAngle: 0.62,
   closedAngle: 0.02,
   /** Vertical offset from the claw head origin down to the prong tips (open). */
-  tipDrop: 0.074,
+  tipDrop: 0.104,
   /** Same, but with the prongs closed (they reach further down). */
-  tipDropClosed: 0.093,
+  tipDropClosed: 0.122,
   /** Deepest the prong tips are allowed to travel. */
   tipFloorY: BAR.topY - 0.075,
   /** Trolley -> cage drop (the spring-loaded cable) and cage -> head drop (the swing). */
@@ -66,19 +66,32 @@ export const CRANE = {
   swingDrop: 0.075,
   swingStiffness: 4.5,
   swingDamping: 0.45,
-  swingMaxTorque: 0.34,
+  swingMaxTorque: 0.15,
   /** Prismatic (cable) spring between trolley and cage. */
-  cableStiffness: 300,
+  cableStiffness: 210,
   cableDamping: 14,
-  cableMaxForce: 13,
+  cableMaxForce: 7.5,
   cableMin: -0.085,
   cableMax: 0.115,
-  /** Compression of the cable spring that counts as "the claw hit something". */
-  contactCompression: 0.022,
+  /**
+   * How far the cable spring may compress before the descent is considered
+   * bottomed out. Generous on purpose: the spring force is capped low, so
+   * letting the claw settle firmly costs the prize nothing and makes the
+   * closing stroke start from the deepest position it can reach.
+   */
+  contactCompression: 0.048,
   prongMotorStiffness: 26,
   prongMotorDamping: 1.4,
-  prongMaxTorqueOpen: 0.30,
-  prongMaxTorqueClose: 0.42,
+  /**
+   * While descending the prongs are almost limp: one that lands on top of the
+   * prize is pushed aside instead of stopping the claw, so the other prong can
+   * reach down past an overhanging end. Closing is much stronger — that is the
+   * stroke that hooks under the box and lifts it.
+   */
+  prongMaxTorqueOpen: 0.115,
+  prongMaxTorqueClose: 0.30,
+  /** Extra travel past "fully open" so a prong can fold right up out of the way. */
+  prongSplay: 1.30,
 };
 
 export const COLLISION = {
@@ -95,22 +108,30 @@ export const GROUPS = {
 
 /**
  * Prize box proportions, expressed relative to the bar spacing so that every
- * generated round obeys the two rules that make 橋渡し work:
+ * generated round obeys the three rules that make 橋渡し work:
  *
  *   overhang  — the box must stick out past each bar far enough for the claw
- *               to get at an end:            w  >  spacing + 0.076
+ *               to get at an end:                      w > spacing
  *   tip-in    — once one end loses its bar the centre of mass must already be
  *               inside the gap, so the box falls *between* the bars rather
- *               than being shoved over the far one:   w  <  2*spacing - 2*r
+ *               than being shoved over the far one:    w < 2*spacing - 2*r
+ *   no-jam    — the box's height/depth *diagonal* must fit through the gap, so
+ *               that a box which starts dropping in can never lock across it at
+ *               some intermediate angle:        hypot(h, d) < spacing - 2*r
  *
- * `d` and `h` must both clear the gap, otherwise the box could never drop in.
+ * That last rule is the one that turns "wedged forever" into the ズルッ slip:
+ * whatever attitude the box tips in at, the gap is always wide enough for it.
+ * `hFrac`/`dFrac` are directions on that diagonal, so the rule holds by
+ * construction and only the aspect ratio varies between prizes.
  */
 const BOX_SHAPES = [
-  { over: 0.070, hRatio: 0.76, dRatio: 0.74, mass: 0.30 },
-  { over: 0.064, hRatio: 0.84, dRatio: 0.70, mass: 0.28 },
-  { over: 0.078, hRatio: 0.70, dRatio: 0.76, mass: 0.33 },
-  { over: 0.068, hRatio: 0.80, dRatio: 0.78, mass: 0.27 },
+  { over: 0.106, hFrac: 0.78, dFrac: 0.63, mass: 0.30 },
+  { over: 0.114, hFrac: 0.84, dFrac: 0.55, mass: 0.28 },
+  { over: 0.114, hFrac: 0.66, dFrac: 0.75, mass: 0.33 },
+  { over: 0.104, hFrac: 0.72, dFrac: 0.70, mass: 0.27 },
 ];
+/** Safety margin on the no-jam rule. */
+const JAM_MARGIN = 0.90;
 
 export const PACKAGES = ['bear', 'candy', 'robot', 'cat', 'juice'];
 
@@ -129,19 +150,22 @@ export function makeRound() {
   roundIndex++;
 
   const shape = easy ? BOX_SHAPES[0] : pick(BOX_SHAPES);
-  const spacing = easy ? 0.178 : rand(0.172, 0.190);
+  const spacing = easy ? 0.200 : rand(0.194, 0.212);
 
   const clear = spacing - 2 * BAR.radius;
   const w = Math.min(spacing + shape.over, 2 * spacing - 2 * BAR.radius - 0.060);
-  const h = Math.min(clear * shape.hRatio, clear - 0.010);
-  const d = Math.min(clear * shape.dRatio, clear - 0.010);
+  // Put h and d on a diagonal that is guaranteed to fit through the gap.
+  const diag = clear * JAM_MARGIN;
+  const norm = Math.hypot(shape.hFrac, shape.dFrac);
+  const h = (diag * shape.hFrac) / norm;
+  const d = (diag * shape.dFrac) / norm;
 
   return {
     pkg: pick(PACKAGES),
     box: {
       w, h, d,
       mass: shape.mass,
-      friction: easy ? 0.52 : rand(0.44, 0.60),
+      friction: easy ? 0.48 : rand(0.44, 0.56),
       restitution: 0.03,
     },
     barSpacing: spacing,

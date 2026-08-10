@@ -41,12 +41,15 @@ function quatAxis(ax, ay, az, a) {
  */
 export function prongParts(side) {
   const armAng = side * 0.24;
-  const armHalf = 0.028;
+  const armHalf = 0.040;
   const armC = V(side * Math.sin(0.24) * armHalf, -Math.cos(0.24) * armHalf, 0);
   const armEnd = V(armC.x * 2, armC.y * 2, 0);
 
-  const hookAng = -side * 0.55;
-  const hookHalf = 0.019;
+  // A deep curl, so the closed tips very nearly meet: the hook can then bite
+  // anywhere from the very corner of the box inwards, which is what lets the
+  // aim assist stay small enough to be imperceptible.
+  const hookAng = -side * 0.72;
+  const hookHalf = 0.026;
   const hookC = V(
     armEnd.x + Math.sin(hookAng) * hookHalf,
     armEnd.y - Math.cos(hookAng) * hookHalf,
@@ -59,8 +62,8 @@ export function prongParts(side) {
   );
 
   return {
-    arm: { half: V(0.0085, armHalf, 0.0105), pos: armC, ang: armAng },
-    hook: { half: V(0.0075, hookHalf, 0.0095), pos: hookC, ang: hookAng },
+    arm: { half: V(0.0090, armHalf, 0.0110), pos: armC, ang: armAng },
+    hook: { half: V(0.0080, hookHalf, 0.0100), pos: hookC, ang: hookAng },
     tip,
   };
 }
@@ -133,7 +136,7 @@ export class CranePhysics {
       );
       const desc = RAPIER.ColliderDesc.cylinder(halfLen, BAR.radius)
         .setRotation(quatAxis(1, 0, 0, Math.PI / 2))
-        .setFriction(0.75)
+        .setFriction(0.45)
         .setRestitution(0.02)
         .setCollisionGroups(GROUPS.world);
       const col = this.world.createCollider(desc, body);
@@ -168,8 +171,10 @@ export class CranePhysics {
         .setCanSleep(false),
     );
     this.world.createCollider(
+      // Sits high above the pivots so the claw can drop its arms past the side
+      // of the prize before the body of the head touches the top of it.
       RAPIER.ColliderDesc.cuboid(0.026, 0.020, 0.024)
-        .setTranslation(0, 0.030, 0)
+        .setTranslation(0, 0.046, 0)
         .setDensity(900)
         .setFriction(0.4)
         .setRestitution(0.0)
@@ -233,8 +238,13 @@ export class CranePhysics {
       const jd = RAPIER.JointData.revolute(V(side * pivotX, pivotY, 0), V(0, 0, 0), V(0, 0, 1));
       const joint = this.world.createImpulseJoint(jd, this.head, body, true);
       joint.setContactsEnabled(false);
-      const lo = Math.min(prongAngle(side, 0), prongAngle(side, 1)) - 0.10;
-      const hi = Math.max(prongAngle(side, 0), prongAngle(side, 1)) + 0.10;
+      // The "open" end of the travel has plenty of extra room so that a prong
+      // landing on top of the prize can splay right out of the way and let the
+      // claw keep descending, exactly like a real spring-loaded claw.
+      const open = prongAngle(side, 1);
+      const shut = prongAngle(side, 0);
+      const lo = Math.min(shut + (shut < open ? -0.10 : 0), open - (open < shut ? CRANE.prongSplay : 0)) - 0.02;
+      const hi = Math.max(shut + (shut > open ? 0.10 : 0), open + (open > shut ? CRANE.prongSplay : 0)) + 0.02;
       joint.setLimits(lo, hi);
       joint.configureMotorModel(RAPIER.MotorModel.ForceBased);
       joint.setMotorMaxForce(CRANE.prongMaxTorqueOpen);
@@ -318,15 +328,23 @@ export class CranePhysics {
     }
   }
 
-  setOpenness(o, closing = false) {
+  /**
+   * Commands the two prongs. `foldSide` (-1, 0 or +1) folds one prong right out
+   * of the way past fully-open: the machine does this to the prong that would
+   * otherwise land on top of the prize, so the other one can reach down beside
+   * the end the player aimed at. Everything the prongs then do is still ordinary
+   * simulated contact — this only chooses where the arms are pointed.
+   */
+  setOpenness(o, closing = false, foldSide = 0) {
     this.openness = Math.max(0, Math.min(1, o));
+    this.foldSide = foldSide;
     for (const p of this.prongs) {
-      p.joint.setMotorMaxForce(closing ? CRANE.prongMaxTorqueClose : CRANE.prongMaxTorqueOpen);
-      p.joint.configureMotorPosition(
-        prongAngle(p.side, this.openness),
-        CRANE.prongMotorStiffness,
-        CRANE.prongMotorDamping,
-      );
+      const folded = foldSide === p.side;
+      p.joint.setMotorMaxForce(closing && !folded ? CRANE.prongMaxTorqueClose : CRANE.prongMaxTorqueOpen);
+      const target = folded
+        ? prongAngle(p.side, 1) + p.side * CRANE.prongSplay * 0.98
+        : prongAngle(p.side, this.openness);
+      p.joint.configureMotorPosition(target, CRANE.prongMotorStiffness, CRANE.prongMotorDamping);
     }
   }
 
@@ -456,6 +474,22 @@ export class CranePhysics {
 
   applyPrizeTorque(tx, ty, tz) {
     this.prize?.applyTorqueImpulse(V(tx, ty, tz), true);
+  }
+
+  /**
+   * How many solver contacts the prize currently has with each support bar —
+   * the honest read-out of what is still holding the box up. Two healthy
+   * contact patches means bridged; one means it is hanging on a single bar.
+   */
+  barSupport() {
+    const out = [0, 0];
+    if (!this.prizeCollider) return out;
+    for (let i = 0; i < this.bars.length; i++) {
+      this.world.contactPair(this.prizeCollider, this.bars[i].col, (manifold) => {
+        out[i] += manifold.numSolverContacts();
+      });
+    }
+    return out;
   }
 
   /**

@@ -38,26 +38,39 @@ claw head                                          believable, limited force
 prong L / prong R (dynamic)    ← the parts that actually touch the box
 ```
 
-Because both the descent and the squeeze are *force* limited rather than
-position driven, the outcome comes from geometry:
+Three geometric facts make the *bridge* setting work, and every generated round
+is built to satisfy them:
 
-* aim at an **end** → the outer prong sweeps into that end's side face and the
-  box slides across the bars, away from the claw;
-* aim at a **corner** (front or back) → the same push is now off-centre, so the
-  box yaws 10–30° — front and back corners turn it opposite ways;
-* aim at the **middle** → both prongs land on top, the box is pressed and barely
-  moves.
+* **Overhang** — the box sticks out past each bar far enough for a prong to get
+  down beside an end.
+* **Tip-in** — the box is short enough that the moment one end loses its bar,
+  the centre of mass is already inside the gap, so it tips **in** rather than
+  being shoved off the far side.
+* **No-jam** — `hypot(height, depth) < gap`, so whatever angle the box starts
+  dropping in at, the gap is always wide enough for it to keep going. Without
+  this rule a box can lock diagonally across the bars and no amount of poking
+  will free it — that single constraint is the difference between "wedged
+  forever" and the ズルッ slip.
 
-Round geometry is generated so the two rules that make 橋渡し work always hold:
-the box overhangs each bar enough for the claw to reach an end, and it is narrow
-enough that once one end loses its bar the centre of mass is already inside the
-gap — so the prize tips **in**, not off the far side.
+**The claw reaches, it does not just press.** The prongs are longer than the box
+is tall, and on a grab aimed at an end the machine folds the prong that would
+land on the lid up out of the way, so the other one drops all the way down the
+side of the box before closing. That is what makes the result depend on where
+you aimed instead of on where the claw happened to bottom out:
 
-A small amount of invisible help sits on top of pure simulation: aim magnetism
-towards the ends and corners, a contact-gated nudge in exactly the direction the
-contact geometry already implies, a stronger nudge after grabs that achieved
-little, and an un-wedging nudge for a box that jams diagonally in the gap. None
-of it fires unless a prong is genuinely touching the box.
+| aim | what happens |
+| --- | --- |
+| an **end** | the closing prong sweeps into that end's side face; the box slides across the bars, away from the claw |
+| an end's **near or far corner** | the same push is now off-centre, so the box also yaws 10–20° — the near and far corners turn it opposite ways |
+| the **middle** | both prongs come down on the lid, the claw presses, and the box barely moves |
+
+Everything above is contact between simulated bodies. On top of it sits a small
+amount of invisible help, none of which can fire unless a prong is genuinely
+touching the box: aim magnetism onto the two ends (the middle is never magnetic,
+so "aim at the middle" keeps meaning it), a nudge in exactly the direction the
+contact geometry already implies, a little more of it after grabs that achieved
+little, a bias that prefers dropping the box **into** the gap over shoving it
+off an outside edge, and a nudge for a box that has half fallen in and stalled.
 
 ## Layout
 
@@ -81,7 +94,10 @@ node test/physics-sim.mjs      # head-less: resting stability, aim differences, 
 node test/play.mjs 10          # head-less: plays 10 rounds with a deliberate strategy
 node test/play.mjs 10 alt      # ...and with a child-like alternating one (worst case)
 node test/map.mjs              # head-less: aim → outcome map (which aim does what)
+node test/progress.mjs 6       # head-less: per-grab slide/turn/tilt and bar-contact state,
+node test/progress.mjs 6 alt   #   plus the share of grabs that visibly changed anything
 node test/tip.mjs              # head-less: where the box stops being stable on the bars
+node test/depth.mjs            # head-less: how deep the claw actually reaches beside the box
 
 node server.mjs 8080 &
 node test/e2e.mjs --shots      # real Chromium: portrait + landscape + iPad, drag, grab,
@@ -94,7 +110,10 @@ node test/fallshot.mjs         # screenshots of the teeter → slip → land seq
 up, correct — so it exercises the real touch → projection → crane loop rather
 than trusting any internal mapping.
 
-Measured on the head-less runs: every round is won, in about four to six grabs
-with a deliberate strategy and five to six when ends and corners are alternated
-at random, and the box drops between the two bars (rather than off an outside
-edge) in roughly nine rounds out of ten.
+Measured on the head-less runs: every round is won; a deliberate strategy takes
+about three to five grabs and a child-like one that alternates ends and corners
+every single time takes about eight. **Every grab in the deliberate runs
+produces a visible change** (>0.7 cm of travel, >4° of turn or >4° of tilt), and
+around nine in ten do even under the alternating worst case. Typical single
+grab: 1–2 cm of slide and 10–20° of turn. The box drops between the two bars,
+rather than off an outside edge, in roughly nine rounds out of ten.
