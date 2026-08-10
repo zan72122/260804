@@ -698,9 +698,13 @@ class Cake {
     const paintTex = this.paintTex;
     mat.onBeforeCompile = (shader) => {
       shader.uniforms.uPaint = { value: paintTex };
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nvarying vec3 vObjPos;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvObjPos = position;');
       shader.fragmentShader = shader.fragmentShader
         .replace('#include <common>', `#include <common>
           uniform sampler2D uPaint;
+          varying vec3 vObjPos;
           float velvetHash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
           float velvetNoise(vec2 p){
             vec2 i = floor(p); vec2 f = fract(p);
@@ -708,19 +712,19 @@ class Cake {
             return mix(mix(velvetHash(i), velvetHash(i + vec2(1.,0.)), u.x),
                        mix(velvetHash(i + vec2(0.,1.)), velvetHash(i + vec2(1.,1.)), u.x), u.y);
           }
-          // powder height field: smoothed spray accumulation modulated by mid-scale clumps
-          float velvetHeightAt(vec2 uv){
-            float a = texture2D(uPaint, uv, 1.5).a;    // mip-biased read = pre-blurred height
-            float clump = velvetNoise(uv * 130.0) * 0.65 + velvetNoise(uv * 320.0) * 0.35;
-            return a * (0.55 + 0.9 * clump);
+          // isotropic powder clumps sampled in object space (stable under rotation, no uv stretch)
+          float velvetClump(vec3 p){
+            float g1 = velvetNoise(p.xz * 430.0) * 0.6 + velvetNoise(p.xy * 430.0 + 31.7) * 0.4;
+            float g2 = velvetNoise(p.zy * 1150.0) * 0.5 + velvetNoise(p.xz * 1150.0 + 7.3) * 0.5;
+            return g1 * 0.62 + g2 * 0.38;
           }`)
         .replace('#include <color_fragment>', `#include <color_fragment>
           vec4 velvetSample = texture2D(uPaint, vUv);
           float velvetCov = smoothstep(0.04, 0.55, velvetSample.a);
           // even a light dusting of cocoa butter kills the gloss
           float velvetDust = smoothstep(0.02, 0.3, velvetSample.a);
-          // powder grain: droplets darken/lighten the coat unevenly
-          float velvetGrain = velvetNoise(vUv * 620.0) * 0.55 + velvetNoise(vUv * 173.0) * 0.45;
+          // powder grain: droplets darken/lighten the coat unevenly (object-space, isotropic)
+          float velvetGrain = velvetClump(vObjPos);
           vec3 velvetCol = velvetSample.rgb * (0.9 + velvetGrain * 0.2);
           diffuseColor.rgb = mix(diffuseColor.rgb, velvetCol, velvetCov);`)
         .replace('#include <lights_physical_fragment>', `#include <lights_physical_fragment>
@@ -734,13 +738,17 @@ class Cake {
           material.sheenColor = mix(material.sheenColor * 0.12, velvetSample.rgb * 0.85 + 0.025, velvetCov);
           material.sheenRoughness = mix(material.sheenRoughness, 0.75, velvetCov);`)
         .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
-          // real relief: bump-map the accumulated spray height so grazing light rakes across it
+          // real relief: bump-map the spray accumulation + object-space powder grain
           {
             vec2 dSTdx = clamp(dFdx(vUv), vec2(-0.01), vec2(0.01));   // tame the u-wrap seam
             vec2 dSTdy = clamp(dFdy(vUv), vec2(-0.01), vec2(0.01));
-            float Hll = velvetHeightAt(vUv);
-            float dBx = velvetHeightAt(vUv + dSTdx) - Hll;
-            float dBy = velvetHeightAt(vUv + dSTdy) - Hll;
+            float aC = texture2D(uPaint, vUv, 1.5).a;                 // mip-biased = pre-blurred
+            float dAx = texture2D(uPaint, vUv + dSTdx, 1.5).a - aC;   // coat-thickness ridges
+            float dAy = texture2D(uPaint, vUv + dSTdy, 1.5).a - aC;
+            float grain = velvetClump(vObjPos);                        // per-fragment powder grain
+            float dGx = dFdx(grain), dGy = dFdy(grain);
+            float dBx = dAx * 0.55 + dGx * aC * 0.5;
+            float dBy = dAy * 0.55 + dGy * aC * 0.5;
             vec3 vSigmaX = dFdx(-vViewPosition);
             vec3 vSigmaY = dFdy(-vViewPosition);
             vec3 R1 = cross(vSigmaY, normal);
@@ -1305,6 +1313,7 @@ function startReveal() {
   if (!firstSprayDone) { firstSprayDone = true; hintEl.style.opacity = 0; setTimeout(() => hintEl.remove(), 600); }
   sfx.fanfare();
   sparkles.active = true;
+  gun.visible = false;
   document.getElementById('hud').classList.add('finale');
   toast('よこから ひかりを あててみよう ✨');
 }
