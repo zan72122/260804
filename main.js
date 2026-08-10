@@ -379,25 +379,38 @@ function buildKitchen() {
     new THREE.MeshBasicMaterial({
       map: canvasTexture(128, 192, (gg, w, h) => {
         const gr = gg.createLinearGradient(0, 0, 0, h);
-        gr.addColorStop(0, '#cfe3f5'); gr.addColorStop(0.6, '#eef2ea'); gr.addColorStop(1, '#f7ecd8');
+        gr.addColorStop(0, '#8fbde8'); gr.addColorStop(0.55, '#d8e6dd'); gr.addColorStop(1, '#ffe8bd');
         gg.fillStyle = gr; gg.fillRect(0, 0, w, h);
+        // distant treeline silhouette for scale
+        gg.fillStyle = 'rgba(110,140,110,0.55)';
+        for (let x = 0; x < w; x += 4) {
+          const th2 = 24 + vnoise(x / 9, 3) * 22;
+          gg.fillRect(x, h * 0.62 - th2 * 0.3, 4, th2);
+        }
+        gg.fillStyle = 'rgba(240,250,255,0.85)';
+        gg.beginPath(); gg.ellipse(w * 0.3, h * 0.2, 26, 10, 0, 0, Math.PI * 2); gg.fill();
+        gg.beginPath(); gg.ellipse(w * 0.72, h * 0.3, 20, 8, 0, 0, Math.PI * 2); gg.fill();
       }), fog: false,
     })
   );
   sky.position.z = -0.028;
   winG.add(sky);
-  winG.position.set(-0.52, 1.78, -1.33);
+  // window sill
+  const sill = new THREE.Mesh(new THREE.BoxGeometry(fw + 0.12, 0.03, 0.09), frameMat);
+  sill.position.set(0, -fh / 2 - 0.03, 0.03);
+  winG.add(sill);
+  winG.position.set(-0.52, 1.52, -1.33);
   g.add(winG);
 
   // wooden shelf (right) with props
   const shelfMat = new THREE.MeshStandardMaterial({ map: woodTexture(), roughness: 0.6 });
   const shelf = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.035, 0.24), shelfMat);
-  shelf.position.set(0.62, 1.84, -1.22);
+  shelf.position.set(0.62, 1.38, -1.22);
   g.add(shelf);
-  const shelf2 = shelf.clone(); shelf2.position.y = 1.46; g.add(shelf2);
+  const shelf2 = shelf.clone(); shelf2.position.y = 1.64; g.add(shelf2);
   // shelf brackets (so it doesn't float)
   const brMat = new THREE.MeshStandardMaterial({ color: 0x3c3c40, metalness: 0.6, roughness: 0.5 });
-  for (const sy of [1.84, 1.46]) for (const sx of [0.25, 1.0]) {
+  for (const sy of [1.38, 1.64]) for (const sx of [0.25, 1.0]) {
     const br = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.16, 0.03), brMat);
     br.position.set(sx, sy - 0.095, -1.31);
     g.add(br);
@@ -420,29 +433,29 @@ function buildKitchen() {
     new THREE.MeshStandardMaterial({ map: woodTexture(), roughness: 0.7 }));
   jarLid.position.y = 0.09;
   jar.add(jarBody, flourFill, jarLid);
-  jar.position.set(0.35, 1.938, -1.22);
+  jar.position.set(0.34, 1.478, -1.22);
   g.add(jar);
 
   const copper = new THREE.MeshStandardMaterial({ color: 0xb46b42, metalness: 0.95, roughness: 0.32 });
   const potPts = [];
   for (let i = 0; i <= 12; i++) { const t = i / 12; potPts.push(new THREE.Vector2(0.07 * (0.75 + 0.25 * Math.sin(t * 2.4)), t * 0.11)); }
   const pot = new THREE.Mesh(new THREE.LatheGeometry(potPts, 28), copper);
-  pot.position.set(0.66, 1.858, -1.22);
+  pot.position.set(0.55, 1.6575, -1.22);
   g.add(pot);
   const potHandle = new THREE.Mesh(new THREE.TorusGeometry(0.028, 0.006, 10, 20, Math.PI), copper);
-  potHandle.position.set(0.66, 1.968, -1.22);
+  potHandle.position.set(0.55, 1.7675, -1.22);
   g.add(potHandle);
 
   const tin = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.13, 20),
     new THREE.MeshStandardMaterial({ color: 0x8c3b2e, metalness: 0.4, roughness: 0.4 }));
-  tin.position.set(0.95, 1.923, -1.22);
+  tin.position.set(0.95, 1.4625, -1.22);
   g.add(tin);
   for (let i = 0; i < 3; i++) {
     const bowl = new THREE.Mesh(
       new THREE.CylinderGeometry(0.075 - i * 0.012, 0.045 - i * 0.008, 0.05, 24, 1, true),
       new THREE.MeshStandardMaterial({ color: [0xd6907e, 0xe8d9b8, 0x94a98c][i], roughness: 0.4, side: THREE.DoubleSide })
     );
-    bowl.position.set(0.52 + i * 0.004, 1.503 + i * 0.045, -1.22);
+    bowl.position.set(0.75 + i * 0.004, 1.4225 + i * 0.045, -1.22);
     g.add(bowl);
   }
 
@@ -575,6 +588,15 @@ const plateGroup = new THREE.Group();  // rotating part: plate + board + cake
   board.position.y = 0.007;
   board.castShadow = true;
   plateGroup.add(board);
+  // soft contact shadow of the cake on its board
+  const cakeAO = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.21, 0.21),
+    new THREE.MeshBasicMaterial({ map: TEX.blob, transparent: true, opacity: 0.32, color: 0x241505, depthWrite: false })
+  );
+  cakeAO.rotation.x = -Math.PI / 2;
+  cakeAO.position.y = 0.0093;
+  cakeAO.renderOrder = 1;
+  plateGroup.add(cakeAO);
 
   plateGroup.position.set(0, COUNTER_Y + 0.126, 0);
   scene.add(plateGroup);
@@ -838,10 +860,10 @@ function buildGun() {
   gun.add(gripBase);
 
   // trigger (animates when spraying)
-  const trigger = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.05, 0.008), aluMat);
-  trigger.geometry.translate(0, -0.024, 0);
+  const trigger = new THREE.Mesh(new THREE.BoxGeometry(0.011, 0.034, 0.007), aluMat);
+  trigger.geometry.translate(0, -0.017, 0);
   trigger.position.set(0, -0.008, -0.03);
-  trigger.rotation.x = 0.25;
+  trigger.rotation.x = 0.15;
   gun.add(trigger);
 
   // air-hose stub at grip bottom
@@ -861,7 +883,7 @@ function buildGun() {
   const hand = new THREE.Group();
   const palm = new THREE.Mesh(new THREE.SphereGeometry(0.021, 18, 14), gloveMat);
   palm.scale.set(0.95, 1.5, 0.85);
-  palm.position.set(0.014, -0.036, 0.034);
+  palm.position.set(0.008, -0.036, 0.03);
   hand.add(palm);
   for (let i = 0; i < 4; i++) {   // fingers wrapping the grip toward the trigger
     const f = new THREE.Group();
@@ -1003,8 +1025,8 @@ class Sparkles {
       const ph = t * 1.3 + it.seed * 7;
       const cyc = (ph % 2) / 2;
       const a = it.seed * 39.7;
-      const r = 0.1 + (it.seed * 0.09);
-      it.sp.position.set(Math.cos(a + t * 0.3) * r, 1.05 + (it.seed % 0.5) * 0.22 + cyc * 0.03, Math.sin(a + t * 0.3) * r);
+      const r = 0.085 + (it.seed % 0.3) * 0.15;
+      it.sp.position.set(Math.cos(a + t * 0.3) * r, 1.06 + (it.seed % 0.5) * 0.36 + cyc * 0.03, Math.sin(a + t * 0.3) * r);
       const tw = Math.max(0, Math.sin(cyc * Math.PI));
       it.sp.material.opacity = this.active ? tw * 0.9 : 0;
       it.sp.scale.setScalar(0.008 + tw * 0.022);
@@ -1036,7 +1058,7 @@ let lastCovCheck = 0;
 let firstSprayDone = false;
 
 const { gun, trigger } = buildGun();
-gun.position.set(0.15, 1.115, 0.42);
+gun.position.set(0.09, 1.1, 0.46);
 gun.visible = false;
 scene.add(gun);
 let gunTargetPos = gun.position.clone();
@@ -1128,6 +1150,8 @@ document.getElementById('nextBtn').addEventListener('pointerup', () => {
   revealSpot.intensity = 0;
   keyLight.intensity = 3.0;
   hemi.intensity = 0.34;
+  fillLight.intensity = 0.38;
+  scene.environmentIntensity = 0.72;
   state = 'play';
   gun.visible = true;
   newCake();
@@ -1241,6 +1265,7 @@ function startReveal() {
 const clock = new THREE.Clock();
 const camBase = new THREE.Vector3();
 let camSway = 0;
+let frameNo = 0;
 
 const _dir = new THREE.Vector3();
 const _side = new THREE.Vector3();
@@ -1268,14 +1293,15 @@ function animate() {
     _dir.copy(aimNormal); _dir.y = Math.max(_dir.y * 0.35, -0.1);
     _dir.normalize();
     _side.crossVectors(_up, _dir).normalize();
-    // hold the gun off to the lower-right of the aim point so the cake stays visible
+    // hold the gun off the surface to the lower-right of the aim point; keep it clear of the cake
     gunTargetPos.copy(aimPoint)
-      .addScaledVector(_dir, 0.155)
-      .addScaledVector(_up, -0.012)
-      .addScaledVector(_side, 0.062);
+      .addScaledVector(_dir, 0.2)
+      .addScaledVector(_up, 0.03)
+      .addScaledVector(_side, 0.06);
+    gunTargetPos.y = Math.max(gunTargetPos.y, COUNTER_Y + 0.16);
   } else {
     // rest pose: lower right, muzzle toward the cake, partly in frame so kids see it waiting
-    gunTargetPos.set(0.15, 1.115, 0.42);
+    gunTargetPos.set(0.09, 1.1, 0.46);
   }
   gun.position.lerp(gunTargetPos, 1 - Math.pow(0.0018, dt));
   // orient: -z toward aim
@@ -1285,7 +1311,7 @@ function animate() {
   gunShown = lerp(gunShown, gun.visible ? 1 : 0, 0.1);
 
   // trigger animation + recoil buzz
-  trigger.rotation.x = lerp(trigger.rotation.x, spraying ? -0.12 : 0.25, 0.25);
+  trigger.rotation.x = lerp(trigger.rotation.x, spraying ? -0.1 : 0.15, 0.25);
   if (spraying) gun.position.y += Math.sin(t * 90) * 0.0004;
 
   // nozzle world pos
@@ -1296,7 +1322,7 @@ function animate() {
     spray.emit(_nozzleWorld, _sprayDir, 2.3, 18);
     // mist cone from nozzle to surface
     const dist = _nozzleWorld.distanceTo(aimPoint);
-    mistCone.material.opacity = lerp(mistCone.material.opacity, 0.16 + Math.sin(t * 47) * 0.03, 0.3);
+    mistCone.material.opacity = lerp(mistCone.material.opacity, 0.22 + Math.sin(t * 47) * 0.04, 0.3);
     mistCone.scale.set(1, dist, 1);
     mistCone.position.copy(_nozzleWorld).addScaledVector(_sprayDir, dist * 0.5);
     _dir.copy(_sprayDir).negate();          // cone apex (+y) at the nozzle, base at the cake
@@ -1312,7 +1338,11 @@ function animate() {
     mistCone.material.opacity = lerp(mistCone.material.opacity, 0, 0.2);
   }
 
-  if (cake && cake.paintDirty) { cake.paintTex.needsUpdate = true; cake.paintDirty = false; }
+  // throttle paint-texture uploads to every other frame while the finger is down
+  frameNo++;
+  if (cake && cake.paintDirty && (!spraying || (frameNo & 1) === 0)) {
+    cake.paintTex.needsUpdate = true; cake.paintDirty = false;
+  }
 
   // coverage check (throttled)
   if (state === 'play' && cake && t - lastCovCheck > 0.45) {
@@ -1343,9 +1373,11 @@ function animate() {
   if (state === 'reveal' || state === 'done') {
     revealT += dt;
     const k = clamp(revealT / 2.2, 0, 1);
-    keyLight.intensity = lerp(3.0, 0.45, k);
-    hemi.intensity = lerp(0.34, 0.15, k);
-    revealSpot.intensity = lerp(0, 38, k);
+    keyLight.intensity = lerp(3.0, 0.4, k);
+    hemi.intensity = lerp(0.34, 0.12, k);
+    fillLight.intensity = lerp(0.38, 0.08, k);
+    scene.environmentIntensity = lerp(0.72, 0.22, k);
+    revealSpot.intensity = lerp(0, 42, k);
     // low side-light sweeping around the cake — velvet nap catches the grazing light
     const az = -0.9 + Math.sin(revealT * 0.45) * 1.15;
     revealSpot.position.set(Math.sin(az) * 0.62, CAKE_C.y + 0.1, Math.cos(az) * 0.62);
@@ -1383,5 +1415,5 @@ camBase.copy(camera.position);
 
 newCake();
 window.__game_ok = true;
-window.__debug = { get cake() { return cake; }, startReveal, scene, camera };
+window.__debug = { get cake() { return cake; }, startReveal, newCake, scene, camera };
 animate();
