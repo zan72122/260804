@@ -397,7 +397,8 @@
     ctx.restore();
 
     var outerRx = 0, outerRy = 0, outerCy = 0, apexCy = 0;
-    var apexCol = mixHex('#fffdf5', theme.tip, 0.32);
+    // 未カット中央部が白飛びしないよう、頂点色はクリーム〜薄ピンクへ寄せる(眩しい純白を避ける)。
+    var apexCol = mixHex('#fff6e8', theme.tip, 0.58);
     var edgeCol = mixHex(theme.base, theme.deep, 0.38);
     for (var i = DOME_BANDS; i >= 0; i--) {
       var r = DOME_MAX_R * (i / DOME_BANDS);
@@ -424,10 +425,11 @@
       ctx.clip();
       var lightCx = view.cx - outerRx * 0.22;
       var lightCy = apexCy - outerRy * 0.10;
+      // 球面ライティングは全体を暗くくすませないよう控えめに(アルファ<=0.15)、暖色トーンで。
       var lg = ctx.createRadialGradient(lightCx, lightCy, outerRx * 0.02, lightCx, lightCy, outerRx * 1.15);
-      lg.addColorStop(0, 'rgba(255,255,255,0.30)');
-      lg.addColorStop(0.5, 'rgba(255,255,255,0.03)');
-      lg.addColorStop(1, 'rgba(55,35,28,0.16)');
+      lg.addColorStop(0, 'rgba(255,247,225,0.15)');
+      lg.addColorStop(0.5, 'rgba(255,247,225,0.02)');
+      lg.addColorStop(1, 'rgba(120,70,52,0.08)');
       ctx.fillStyle = lg;
       ctx.fillRect(view.cx - outerRx * 1.3, outerCy - outerRy * 2.4, outerRx * 2.6, outerRy * 4.2);
       ctx.restore();
@@ -444,19 +446,21 @@
     { len: 0.330, wid: 0.225 }, // 3: XL(外周)
   ];
 
-  // RGB各chを係数倍してクランプ(明るさバケット焼き込み用)。ctx.filterは
-  // ソフトウェアレンダリング環境で1描画あたり数十〜数千ms級に爆発することがあり
-  // 60fps要件と両立しないため、明るさは"描画時のfilter"ではなく"事前焼き込みの
-  // 複数バリアント"で持つ。
-  function scaleColor(hex, factor) {
-    var c = hexToRgb(hex);
-    var r = clamp(Math.round(c.r * factor), 0, 255);
-    var g = clamp(Math.round(c.g * factor), 0, 255);
-    var b = clamp(Math.round(c.b * factor), 0, 255);
-    return 'rgb(' + r + ',' + g + ',' + b + ')';
+  // 明るさバケットは単純なRGB乗算(灰色化)ではなく、暖色トーンへの"混色"で表現する。
+  // 単純乗算は淡いパステルを彩度の低いグレーへ落としてしまい、これが「下半分が
+  // 灰色にくすんで枯れて見える」原因だった。影は温かいローズグレー/生地色系へ、
+  // ハイライトはクリーム色へ混ぜることで、暗い側でも彩度と赤みを保つ。
+  // ctx.filterはソフトウェアレンダリング環境で1描画あたり数十〜数千ms級に爆発する
+  // ことがあり60fps要件と両立しないため、事前焼き込みの複数バリアントで持つ。
+  var SHADOW_REF = '#9c6a5e';  // 温かいローズグレー(影でも赤みが残る生地の陰色)
+  var HILITE_REF = '#fffaf0';  // クリームのハイライト
+  function warmShade(hex, t) {
+    // t: -1(暗い側)..0(基準)..1(明るい側)。範囲を控えめにし極端な暗部を作らない。
+    if (t >= 0) return mixHex(hex, HILITE_REF, t * 0.22);
+    return mixHex(hex, SHADOW_REF, -t * 0.40);
   }
 
-  function renderPetalSprite(theme, sizeSpec, ppu, brightness) {
+  function renderPetalSprite(theme, sizeSpec, ppu, shadeT) {
     var halfW = sizeSpec.wid / 2;
     var len = sizeSpec.len;
     var padSide = 0.24, padBottom = 0.30;
@@ -470,15 +474,16 @@
 
     function toPx(wx, wy) { return [originX + wx * ppu, originY - wy * ppu]; }
 
-    // 根元の落ち影(AO)
-    var aoRx = halfW * 1.35 * ppu, aoRy = halfW * 0.62 * ppu;
+    // 根元の落ち影(AO)。ソフトなアルファはここだけに限定し、広がりすぎて
+    // 隣接する花びらの上まで濁らせないよう半径・強さは控えめにする。
+    var aoRx = halfW * 1.15 * ppu, aoRy = halfW * 0.55 * ppu;
     var aoP = toPx(0, 0);
     o.save();
     o.beginPath();
     o.ellipse(aoP[0], aoP[1] + aoRy * 0.35, aoRx, aoRy, 0, 0, Math.PI * 2);
     var aoG = o.createRadialGradient(aoP[0], aoP[1] + aoRy * 0.35, 1, aoP[0], aoP[1] + aoRy * 0.35, aoRx);
-    aoG.addColorStop(0, 'rgba(70,45,35,0.34)');
-    aoG.addColorStop(1, 'rgba(70,45,35,0)');
+    aoG.addColorStop(0, 'rgba(96,55,44,0.26)');
+    aoG.addColorStop(1, 'rgba(96,55,44,0)');
     o.fillStyle = aoG;
     o.fill();
     o.restore();
@@ -495,12 +500,13 @@
     path.bezierCurveTo(l2[0], l2[1], l1[0], l1[1], p0[0], p0[1]);
     path.closePath();
 
-    // ベースグラデ: 根元(白〜クリーム) -> 先端(テーマdeep)。brightnessで明るさバケットを焼き込む。
-    var bf = brightness || 1;
+    // ベースグラデ: 根元(白〜クリーム) -> 先端(テーマdeep)。shadeTで明るさバケットを焼き込む
+    // (暖色トーンへの混色。単純な乗算ではないので暗い側でも彩度・赤みが残る)。
+    var t = shadeT || 0;
     var g = o.createLinearGradient(p0[0], p0[1], tip[0], tip[1]);
-    g.addColorStop(0, scaleColor('#f7f2e8', bf));
-    g.addColorStop(0.42, scaleColor(theme.base, bf));
-    g.addColorStop(1, scaleColor(theme.deep, bf));
+    g.addColorStop(0, warmShade('#f7f2e8', t));
+    g.addColorStop(0.42, warmShade(theme.base, t));
+    g.addColorStop(1, warmShade(theme.deep, t));
     o.fillStyle = g;
     o.fill(path);
 
@@ -511,32 +517,34 @@
     o.save();
     o.clip(path);
     var faceGrad = o.createLinearGradient(originX - halfW * ppu, 0, originX + halfW * ppu, 0);
-    faceGrad.addColorStop(0, 'rgba(255,255,255,0.15)');
+    faceGrad.addColorStop(0, 'rgba(255,250,240,0.12)');
     faceGrad.addColorStop(0.48, 'rgba(255,255,255,0)');
-    faceGrad.addColorStop(0.52, 'rgba(50,30,26,0)');
-    faceGrad.addColorStop(1, 'rgba(50,30,26,0.16)');
+    faceGrad.addColorStop(0.52, 'rgba(120,60,45,0)');
+    faceGrad.addColorStop(1, 'rgba(120,60,45,0.13)');
     o.fillStyle = faceGrad;
     o.fillRect(originX - halfW * 1.3 * ppu, originY - len * 1.15 * ppu, halfW * 2.6 * ppu, len * 1.3 * ppu);
-    // 稜線の細いハイライト
-    o.strokeStyle = 'rgba(255,255,255,0.35)';
-    o.lineWidth = Math.max(0.5, ppu * 0.01);
+    // 稜線ハイライト: 全長だと機械的に見えるため、先端寄りの短い区間だけ・細く・低コントラストに。
+    var ridgeStart = toPx(0, len * 0.58);
+    o.strokeStyle = 'rgba(255,252,244,0.16)';
+    o.lineWidth = Math.max(0.5, ppu * 0.007);
     o.beginPath();
-    o.moveTo(p0[0], p0[1]);
+    o.moveTo(ridgeStart[0], ridgeStart[1]);
     o.lineTo(tip[0], tip[1]);
     o.stroke();
-    // 先端のきらめき
-    var tipG = o.createRadialGradient(tip[0], tip[1], 0, tip[0], tip[1], halfW * 0.9 * ppu);
-    tipG.addColorStop(0, 'rgba(255,255,255,0.35)');
-    tipG.addColorStop(1, 'rgba(255,255,255,0)');
+    // 先端のきらめき(控えめ)
+    var tipG = o.createRadialGradient(tip[0], tip[1], 0, tip[0], tip[1], halfW * 0.85 * ppu);
+    tipG.addColorStop(0, 'rgba(255,250,238,0.24)');
+    tipG.addColorStop(1, 'rgba(255,250,238,0)');
     o.fillStyle = tipG;
     o.beginPath();
-    o.arc(tip[0], tip[1], halfW * 0.9 * ppu, 0, Math.PI * 2);
+    o.arc(tip[0], tip[1], halfW * 0.85 * ppu, 0, Math.PI * 2);
     o.fill();
     o.restore();
 
-    // 輪郭は極細のトーン差のみ(暗色の縁取り線は使わない)
-    o.strokeStyle = 'rgba(120,85,60,0.16)';
-    o.lineWidth = Math.max(0.5, ppu * 0.008);
+    // 輪郭: 重なった不透明な花びら同士の"層"がはっきり見えるよう、暖色のトーン差を
+    // 前バージョンよりやや強めに(黒い縁取り線ではなく色調差で層を分離する)。
+    o.strokeStyle = 'rgba(150,90,66,0.30)';
+    o.lineWidth = Math.max(0.6, ppu * 0.011);
     o.stroke(path);
 
     return { canvas: off, originX: originX, originY: originY };
@@ -545,9 +553,9 @@
   // 光源方向に対する明るさは連続演算(ctx.filter)ではなく、離散バケット数ぶんの
   // スプライトを事前焼き込みして選択するだけにする(描画時は純粋なdrawImage)。
   var LIGHT_BUCKETS = 7;
-  function lightBucketBrightness(bucketIdx) {
-    var cosVal = (bucketIdx / (LIGHT_BUCKETS - 1)) * 2 - 1; // -1..1
-    return 0.90 + 0.19 * cosVal;
+  function lightBucketShade(bucketIdx) {
+    var raw = (bucketIdx / (LIGHT_BUCKETS - 1)) * 2 - 1; // -1..1
+    return raw * 0.82; // 極端に暗い/明るいバケットを避け、レンジを控えめにする
   }
 
   function buildSprites() {
@@ -560,7 +568,7 @@
       for (var s = 0; s < SIZE_CLASSES.length; s++) {
         var perBucket = [];
         for (var b = 0; b < LIGHT_BUCKETS; b++) {
-          perBucket.push(renderPetalSprite(th, SIZE_CLASSES[s], ppu, lightBucketBrightness(b)));
+          perBucket.push(renderPetalSprite(th, SIZE_CLASSES[s], ppu, lightBucketShade(b)));
         }
         perSize.push(perBucket);
       }
@@ -639,6 +647,11 @@
           if (localT <= 0) continue;
           if (localT > 1) localT = 1;
           var worldAngle = slotAngle + e.angleOffset + view.rotation;
+          // sortYはドームの盛り上がり(z)まで織り込んだ疑似スクリーンy(project()のy式と同型)。
+          // r依存のzを無視した近似だと、内側(高いz)の花びらが手前側でも奥に誤ソートされ、
+          // 層の重なりが不自然に混ざって見える一因になっていた。
+          var zz = domeHeight(e.radius);
+          var sortY = Math.sin(worldAngle) * e.radius * COS_T - zz * SIN_T;
           list.push({
             worldAngle: worldAngle,
             radius: e.radius,
@@ -646,7 +659,7 @@
             sizeMul: e.sizeMul,
             rot: e.rot,
             liftT: localT,
-            sortY: e.radius * Math.sin(worldAngle),
+            sortY: sortY,
           });
         }
       }
@@ -744,6 +757,8 @@
   // ============ しべ(黄粒)+金箔風の小片 ============
   // 金箔は丸い黄しべ粒と明確に区別できるよう、しべの環より外側に・平たい不規則四角形・
   // 白いグリント線(微光沢)を持たせて配置する。
+  // 金箔片: しべの粒より控えめな存在感にするため、小さく・不規則な四角形にする
+  // (以前の対称な菱形は"蝶ネクタイ"に見えて雑な印象だった)。
   function drawGoldFlake(spec, breathMul) {
     var worldAngle = spec.a + view.rotation;
     var centerP = project(worldAngle, spec.r, breathMul);
@@ -751,29 +766,29 @@
     ctx.save();
     ctx.translate(centerP.sx, centerP.sy);
     ctx.rotate(spec.rot);
-    var pts = [[-s * 0.55, -s * 0.30], [s * 0.60, -s * 0.46], [s * 0.46, s * 0.52], [-s * 0.50, s * 0.40]];
+    var pts = spec.pts;
     ctx.beginPath();
-    ctx.moveTo(pts[0][0], pts[0][1]);
-    for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.moveTo(pts[0][0] * s, pts[0][1] * s);
+    for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0] * s, pts[i][1] * s);
     ctx.closePath();
     var g = ctx.createLinearGradient(-s * 0.5, -s * 0.5, s * 0.5, s * 0.5);
-    g.addColorStop(0, '#fff8dd');
-    g.addColorStop(0.45, '#f0c860');
-    g.addColorStop(1, '#b9852a');
+    g.addColorStop(0, '#fff3cc');
+    g.addColorStop(0.45, '#e8bb5a');
+    g.addColorStop(1, '#b0812a');
     ctx.fillStyle = g;
     ctx.fill();
-    // 微光沢のグリント線
+    // 微光沢のグリント線(控えめ)
     ctx.save();
     ctx.clip();
-    ctx.strokeStyle = 'rgba(255,255,255,0.75)';
-    ctx.lineWidth = Math.max(0.4, s * 0.07);
+    ctx.strokeStyle = 'rgba(255,255,255,0.42)';
+    ctx.lineWidth = Math.max(0.35, s * 0.06);
     ctx.beginPath();
-    ctx.moveTo(-s * 0.32, -s * 0.30);
-    ctx.lineTo(s * 0.10, s * 0.36);
+    ctx.moveTo(-s * 0.20, -s * 0.16);
+    ctx.lineTo(s * 0.06, s * 0.20);
     ctx.stroke();
     ctx.restore();
-    ctx.strokeStyle = 'rgba(150,105,45,0.5)';
-    ctx.lineWidth = Math.max(0.4, s * 0.045);
+    ctx.strokeStyle = 'rgba(140,95,42,0.4)';
+    ctx.lineWidth = Math.max(0.3, s * 0.035);
     ctx.stroke();
     ctx.restore();
   }
@@ -800,9 +815,9 @@
     ctx.fill();
 
     var flakes = [
-      { a: 0.9, r: 0.095, rot: 0.4, size: 0.070 },
-      { a: 3.35, r: 0.11, rot: -0.6, size: 0.062 },
-      { a: 5.15, r: 0.088, rot: 1.15, size: 0.052 },
+      { a: 0.9, r: 0.095, rot: 0.4, size: 0.026, pts: [[-0.50, -0.22], [0.42, -0.38], [0.30, 0.40], [-0.36, 0.30]] },
+      { a: 3.35, r: 0.11, rot: -0.6, size: 0.021, pts: [[-0.34, -0.40], [0.46, -0.16], [0.38, 0.34], [-0.20, 0.44]] },
+      { a: 5.15, r: 0.088, rot: 1.15, size: 0.018, pts: [[-0.44, -0.10], [0.10, -0.46], [0.42, 0.18], [-0.14, 0.42]] },
     ];
     for (var f = 0; f < flakes.length; f++) drawGoldFlake(flakes[f], breathMul);
   }
