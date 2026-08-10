@@ -1165,7 +1165,8 @@ export class Game {
     if (this.binFocus > 0.001) {
       _bin.set(CAB.hole.x + 0.06, CAB.binY + 0.35, 0.45);
       _bt.lerp(_bin, this.binFocus * 0.62);
-      _bp.lerp(_bin.clone().add(_binOff), this.binFocus * 0.36);
+      _binP.copy(_bin).add(_binOff);
+      _bp.lerp(_binP, this.binFocus * 0.36);
     }
 
     const lam = this.state === 'aim' ? 5.0 : 3.2;
@@ -1217,6 +1218,7 @@ const _ht = new THREE.Vector3();
 const _gp = new THREE.Vector3();
 const _bin = new THREE.Vector3();
 const _binOff = new THREE.Vector3(0.9, 1.15, 2.5);
+const _binP = new THREE.Vector3();
 const _proj = new THREE.Vector3();
 const _localDir = new THREE.Vector3();
 const _localRot = new THREE.Vector3();

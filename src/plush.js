@@ -12,6 +12,8 @@ import * as THREE from '../vendor/three/three.module.min.js';
 import { plushMaterial, fuzzMaterial, threadMaterial, eyeMaterial } from './materials.js';
 import { tagTexture } from './textures.js';
 import { Spring, clamp, makeRng } from './util.js';
+import { mergeStatic } from './merge.js';
+import { TIER } from './contracts.js';
 
 /* ------------------------------------------------------------------ */
 /* shared geometry                                                     */
@@ -48,12 +50,12 @@ const V = (x, y, z) => new THREE.Vector3(x, y, z);
 export const SPECIES = ['rabbit', 'bear', 'cat', 'dog', 'chick', 'unicorn'];
 
 export const SPECIES_INFO = {
-  rabbit:  { name: 'うさぎ',    size: 0.300 },
-  bear:    { name: 'くま',      size: 0.320 },
-  cat:     { name: 'ねこ',      size: 0.285 },
-  dog:     { name: 'いぬ',      size: 0.300 },
-  chick:   { name: 'ひよこ',    size: 0.255 },
-  unicorn: { name: 'ユニコーン', size: 0.305 },
+  rabbit:  { name: 'うさぎ',    size: 0.340 },
+  bear:    { name: 'くま',      size: 0.360 },
+  cat:     { name: 'ねこ',      size: 0.320 },
+  dog:     { name: 'いぬ',      size: 0.340 },
+  chick:   { name: 'ひよこ',    size: 0.290 },
+  unicorn: { name: 'ユニコーン', size: 0.345 },
 };
 
 // Toy-shop colours: pastel but properly saturated, so six prizes on one shelf
@@ -95,13 +97,18 @@ const PALETTES = {
 /* build helpers                                                       */
 /* ------------------------------------------------------------------ */
 
-function mesh(parent, geo, mat, p, s, r, shadow = false) {
+// `mergeable` defaults on: almost everything built here is static relative to
+// its parent, so mergeStatic() collapses it later. The handful of parts that
+// must keep animating (spring pivots and their children) are fenced off by
+// tagging the *pivot*, not by opting individual meshes out — see `pivot()`.
+function mesh(parent, geo, mat, p, s, r, shadow = false, mergeable = true) {
   const m = new THREE.Mesh(geo, mat);
   if (p) m.position.set(p[0], p[1], p[2]);
   if (s) m.scale.set(s[0], s[1], s[2]);
   if (r) m.rotation.set(r[0], r[1], r[2]);
   m.castShadow = shadow;
   m.matrixAutoUpdate = true;
+  m.userData.mergeable = mergeable;
   parent.add(m);
   return m;
 }
@@ -130,7 +137,7 @@ export class Plush {
   /**
    * @param {string} species
    * @param {number} variant
-   * @param {{quality?:number, fuzz?:boolean, seed?:number, detail?:'hero'|'game'}} [opt]
+   * @param {{quality?:number, fuzz?:boolean, seed?:number, detail?:'hero'|'game'|'far'}} [opt]
    */
   constructor(species, variant = 0, opt = {}) {
     const q = opt.quality ?? 1;
@@ -148,9 +155,13 @@ export class Plush {
 
     /** @type {{pivot:THREE.Object3D, rest:THREE.Euler, sx:Spring, sz:Spring, gain:number, droop:number}[]} */
     this.springs = [];
+    /** @type {import('./contracts.js').GrabPoint[]} filled by _finalizeGrabPoints */
+    this.grabPoints = [];
+    this._grabMarkers = [];
 
     this.materials = [];
     this.fuzzMeshes = [];
+    this._fuzzMats = new Map();   // one ShaderMaterial per fuzz colour, for merging
 
     const fur = plushMaterial(this.pal.fur, { fuzz: 0.11, scatter: 0.03 });
     const inner = plushMaterial(this.pal.inner, { fuzz: 0.13, scatter: 0.04, repeat: 9 });
@@ -162,10 +173,14 @@ export class Plush {
     this.materials.push(fur, inner, thread, accent, eyeM, gloss, seamMat);
     this.mats = { fur, inner, thread, accent, eyeM, gloss, seam: seamMat };
 
-    // 'hero' = the reveal and the collection room, where the toy fills the
-    // screen. 'game' = in the case, where trim smaller than a stitch is wasted.
-    this.detail = opt.detail || 'hero';
-    this.hero = this.detail === 'hero';
+    // three detail tiers (TIER from contracts.js):
+    //  'hero' = reveal / collection room, toy fills the screen: every stitch.
+    //  'game' = in the case: drops trim smaller than a stitch.
+    //  'far'  = buried in the pile: silhouette + face only.
+    // `trim` gates hero-only decoration; `full` gates hero+game (cut in 'far').
+    this.detail = opt.detail || TIER.HERO;
+    this.trim = this.detail === TIER.HERO;
+    this.full = this.detail !== TIER.FAR;
     this.useFuzz = opt.fuzz !== false && q > 0.55;
     this._build(species, rng, q);
 
@@ -187,23 +202,66 @@ export class Plush {
 
   _fuzz(sourceMesh, color, offset = 0.05, key = false) {
     if (!this.useFuzz) return null;
-    if (!this.hero && !key) return null;
-    const m = new THREE.Mesh(sourceMesh.geometry, fuzzMaterial(color, { offset, strength: 0.62, power: 4.2 }));
+    if (this.detail === TIER.FAR) return null;   // silhouette only: no fuzz halo
+    if (!this.trim && !key) return null;
+    // one ShaderMaterial per colour per plush: lets same-colour fuzz shells
+    // (torso + head are the only ones that survive to 'game' tier) collapse
+    // into a single merged mesh instead of staying separate draw calls.
+    const hex = _tmpColor.set(color).getHexString();
+    let mat = this._fuzzMats.get(hex);
+    if (!mat) {
+      mat = fuzzMaterial(color, { offset, strength: 0.62, power: 4.2 });
+      this._fuzzMats.set(hex, mat);
+      this.materials.push(mat);
+    }
+    const m = new THREE.Mesh(sourceMesh.geometry, mat);
     m.position.copy(sourceMesh.position);
     m.scale.copy(sourceMesh.scale);
     m.rotation.copy(sourceMesh.rotation);
     m.renderOrder = 4;
+    m.userData.mergeable = true;
     sourceMesh.parent.add(m);
     this.fuzzMeshes.push(m);
-    this.materials.push(m.material);
     return m;
   }
 
-  _limb(parent, p, scale, mat, { gain = 0.55, droop = 0.6, rest = [0, 0, 0], shadow = false, geo = null } = {}) {
+  /**
+   * Register a candidate grab point at `local` coordinates within `parent`'s
+   * space. Resolved to unit body-space once the whole rig exists (see
+   * `_finalizeGrabPoints`), so it is correct however deep `parent` sits in the
+   * hierarchy (head -> neck -> ear pivot -> ear tip, etc).
+   */
+  _mark(parent, local, type) {
+    const o = new THREE.Object3D();
+    o.position.set(local[0], local[1], local[2]);
+    parent.add(o);
+    this._grabMarkers.push({ marker: o, type });
+  }
+
+  /** Resolve every _mark() call into this.grabPoints, in body-unit space. */
+  _finalizeGrabPoints() {
+    const world = new THREE.Vector3();
+    this.grabPoints = this._grabMarkers.map(({ marker, type }) => {
+      marker.getWorldPosition(world);
+      const pos = this.body.worldToLocal(world.clone());
+      marker.parent.remove(marker);
+      return { pos, type };
+    });
+    this._grabMarkers = null;
+  }
+
+  /** grabPoints[i].pos (unit space) scaled into body-local metres. */
+  grabLocal(i, out = new THREE.Vector3()) {
+    return out.copy(this.grabPoints[i].pos).multiplyScalar(this.size);
+  }
+
+  _limb(parent, p, scale, mat, { gain = 0.55, droop = 0.6, rest = [0, 0, 0], shadow = false, geo = null, grabType = null } = {}) {
     shadow = false;   // only the two big masses cast: shadow-pass draws are costly
     const pv = pivot(parent, p);
+    pv.userData.spring = true;   // fences this whole subtree off from mergeStatic
     pv.rotation.set(rest[0], rest[1], rest[2]);
-    const m = mesh(pv, geo || geoSphere(), mat, [0, -scale[1] * 0.82, 0], scale, null, shadow);
+    const localPos = [0, -scale[1] * 0.82, 0];
+    const m = mesh(pv, geo || geoSphere(), mat, localPos, scale, null, shadow);
     this.springs.push({
       pivot: pv,
       rest: new THREE.Euler(rest[0], rest[1], rest[2]),
@@ -211,6 +269,8 @@ export class Plush {
       sz: new Spring(150, 11, 0),
       gain, droop,
     });
+    // grab point at the limb's mass, in the pivot's local (rest) space
+    if (grabType) this._mark(pv, localPos, grabType);
     return { pivot: pv, mesh: m };
   }
 
@@ -226,6 +286,7 @@ export class Plush {
     if (spin) m.rotateZ(spin);
     m.scale.set(scale[0], scale[1], scale[2]);
     m.renderOrder = order;
+    m.userData.mergeable = true;
     parent.add(m);
     return m;
   }
@@ -247,7 +308,10 @@ export class Plush {
       mouth = true, blush = false,
     } = o;
 
-    if (muzzle) {
+    // muzzle bump is cut at 'far' — not in the silhouette list — but its shape
+    // still drives where the nose/mouth sit (onFace below), so keep computing
+    // positions from it regardless of whether the mesh itself gets built.
+    if (muzzle && this.full) {
       const mz = mesh(head, geoSphere(), inner, [0, muzzle.y, muzzle.z], muzzle.s, null, false);
       mz.renderOrder = 1;
     }
@@ -274,20 +338,25 @@ export class Plush {
       const eye = new THREE.Mesh(geoSphereS(), eyeM);
       eye.scale.set(eyeR, eyeR * 1.1, eyeR * 0.6);
       eye.renderOrder = 2;
+      eye.userData.mergeable = true;
       socket.add(eye);
 
-      if (this.hero) {
+      if (this.trim) {
       const ring = new THREE.Mesh(geoTorusS(), thread);
       ring.scale.set(eyeR * 1.14, eyeR * 1.24, eyeR * 0.16);
       ring.position.z = -eyeR * 0.14;
       ring.renderOrder = 1;
+      ring.userData.mergeable = true;
       socket.add(ring);
       }
 
+      // highlight survives to 'far': it is half of what makes a bead read as
+      // an eye at a distance
       const hl = new THREE.Mesh(geoSphereS(), gloss);
       hl.position.set(-sx * eyeR * 0.3, eyeR * 0.42, eyeR * 0.36);
       hl.scale.setScalar(eyeR * 0.25);
       hl.renderOrder = 3;
+      hl.userData.mergeable = true;
       socket.add(hl);
     }
 
@@ -298,8 +367,9 @@ export class Plush {
     this._attach(head, geoSphereS(), nmat, nose.p, nose.n,
       [noseR * 1.3, noseR * 1.0, noseR * 0.8], { order: 2 });
 
-    if (mouth) {
-      // two little arcs -> the classic stitched "w" smile
+    if (mouth && this.full) {
+      // two little arcs -> the classic stitched "w" smile — not in the 'far'
+      // silhouette list, a buried toy's mouth does not read at that distance
       for (const sx of [-1, 1]) {
         const m = muzzle
           ? onFace(sx * 0.42, -0.34, 0.86, 1.0)
@@ -308,7 +378,7 @@ export class Plush {
           [noseR * 0.9, noseR * 0.9, noseR * 0.2], { spin: Math.PI, order: 2 });
       }
       // philtrum stitch
-      if (this.hero) {
+      if (this.trim) {
       const st = muzzle
         ? onFace(0, -0.06, 0.95, 1.0)
         : this._onHead(_n2.set(0, noseY - noseR * 1.0, 0.95), 0.99);
@@ -317,7 +387,7 @@ export class Plush {
       }
     }
 
-    if (blush && this.hero) {
+    if (blush && this.trim) {
       const bm = threadMaterial(0xff9bb8, { roughness: 0.9 });
       bm.transparent = true; bm.opacity = 0.5;
       this.materials.push(bm);
@@ -330,7 +400,7 @@ export class Plush {
 
   /** Small woven hangtag at a side seam — the "this is a product" detail. */
   _tag(parent, p, kind, r = 0) {
-    if (!this.hero) return null;
+    if (!this.trim) return null;
     const tex = tagTexture(kind, '#fffdf7', kind === 'heart' ? '#ff7aa8' : '#ffb43d');
     const m = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.75, metalness: 0, side: THREE.DoubleSide });
     this.materials.push(m);
@@ -356,9 +426,11 @@ export class Plush {
     const torso = mesh(B, geoSphereHi(), fur, [0, shape.y, 0], shape.s, null, true);
     torso.receiveShadow = true;
     this._fuzz(torso, pal.fur, 0.04, true);
+    this._mark(B, [0, shape.y, 0], 'body');
 
-    // belly panel: a lighter shade of the same fabric, sewn on the front
-    if (species !== 'unicorn') {
+    // belly panel: a lighter shade of the same fabric, sewn on the front —
+    // a colour detail, not silhouette, so it is cut at 'far'
+    if (species !== 'unicorn' && this.full) {
       const bellyMat = plushMaterial(new THREE.Color(pal.fur).lerp(new THREE.Color(pal.inner), 0.5).getHex(),
         { fuzz: 0.13, repeat: 9 });
       this.materials.push(bellyMat);
@@ -379,6 +451,7 @@ export class Plush {
     }[species];
 
     const neck = pivot(B, [0, shape.y + shape.s[1] * 0.45, 0]);
+    neck.userData.spring = true;
     this.headPivot = neck;
     this.springs.push({
       pivot: neck, rest: new THREE.Euler(0, 0, 0),
@@ -395,9 +468,12 @@ export class Plush {
     head.scale.setScalar(1);
     const HR = headCfg.r;
     this._headR = [HR, HR * (species === 'chick' ? 0.95 : 0.92), HR * 0.94];
+    // head grab point = crown of the skull, except the unicorn where the horn
+    // stands in for it (marked where the horn is built, below)
+    if (species !== 'unicorn') this._mark(head, [0, this._headR[1], 0], 'head');
 
     // crown seam — the give-away of a sewn toy, kept off the face
-    if (this.hero) {
+    if (this.trim) {
       const hs = mesh(head, geoSeamArc(), seamMat, [0, 0, 0], [1, 1, 1], [0, Math.PI / 2, 0]);
       hs.scale.set(HR * 0.995, HR * 0.925, HR * 0.42);
     }
@@ -408,25 +484,38 @@ export class Plush {
     if (species === 'rabbit') {
       for (const sx of [-1, 1]) {
         const base = pivot(head, [sx * HR * 0.34, HR * 0.72, -HR * 0.05]);
+        base.userData.spring = true;
         base.rotation.z = sx * 0.16;
         base.rotation.x = -0.12;
+        // long two-segment ear: the base segment alone still reads as an ear
+        // silhouette, so it is the only part kept at 'far'
         const seg1 = mesh(base, geoSphere(), fur, [0, 0.32, 0], [0.135, 0.38, 0.085], null, true);
         this._fuzz(seg1, pal.fur, 0.045, true);
-        mesh(base, geoSphereS(), inner, [0, 0.30, 0.045], [0.068, 0.26, 0.05]);
+        if (this.full) mesh(base, geoSphereS(), inner, [0, 0.30, 0.045], [0.068, 0.26, 0.05]);
         const tipPv = pivot(base, [0, 0.64, 0]);
-        const seg2 = mesh(tipPv, geoSphere(), fur, [0, 0.28, 0], [0.115, 0.34, 0.075], null, false);
-        this._fuzz(seg2, pal.fur, 0.04, true);
-        mesh(tipPv, geoSphereS(), inner, [0, 0.26, 0.04], [0.058, 0.22, 0.045]);
+        tipPv.userData.spring = true;
+        if (this.full) {
+          const seg2 = mesh(tipPv, geoSphere(), fur, [0, 0.28, 0], [0.115, 0.34, 0.075], null, false);
+          this._fuzz(seg2, pal.fur, 0.04, true);
+          mesh(tipPv, geoSphereS(), inner, [0, 0.26, 0.04], [0.058, 0.22, 0.045]);
+        }
         this.springs.push({ pivot: base, rest: new THREE.Euler(-0.12, 0, sx * 0.16), sx: new Spring(120, 8.5, 0), sz: new Spring(120, 8.5, 0), gain: 1.15, droop: 0.9 });
         this.springs.push({ pivot: tipPv, rest: new THREE.Euler(0, 0, 0), sx: new Spring(78, 6.4, 0), sz: new Spring(78, 6.4, 0), gain: 1.5, droop: 1.25 });
-        seam(this.hero ? head : null, HR * 0.16, [sx * HR * 0.34, HR * 0.70, 0], [Math.PI / 2, 0, 0], seamMat);
+        seam(this.trim ? head : null, HR * 0.16, [sx * HR * 0.34, HR * 0.70, 0], [Math.PI / 2, 0, 0], seamMat);
+        // ear tip -- registered on the tip pivot regardless of tier, since the
+        // segment-2 mesh it would otherwise ride on is cut at 'game'/'far'
+        this._mark(tipPv, [0, 0.60, 0], 'ear');
       }
       this._face(head, { ...faceOpt, eyeX: 0.34, eyeY: 0.10, eyeZ: 0.78, noseY: -0.16, noseR: 0.075, noseColor: pal.acc, blush: true });
-      // fluffy tail
-      const tail = this._limb(B, [0, shape.y + 0.28, -shape.s[2] * 0.92], [0.19, 0.19, 0.17], inner, { gain: 0.3, droop: 0.2, rest: [2.0, 0, 0] });
-      this._fuzz(tail.mesh, pal.inner, 0.05);
+      // fluffy tail — not silhouette-critical when buried, cut at 'far'
+      const tailPos = [0, shape.y + 0.28, -shape.s[2] * 0.92];
+      if (this.full) {
+        const tail = this._limb(B, tailPos, [0.19, 0.19, 0.17], inner, { gain: 0.3, droop: 0.2, rest: [2.0, 0, 0] });
+        this._fuzz(tail.mesh, pal.inner, 0.05);
+      }
+      this._mark(B, tailPos, 'tail');
       // neck ribbon + bow
-      this._ribbon(B, shape.y + shape.s[1] * 0.62, this._girth(shape, shape.y + shape.s[1] * 0.62), accent);
+      if (this.full) this._ribbon(B, shape.y + shape.s[1] * 0.62, this._girth(shape, shape.y + shape.s[1] * 0.62), accent);
       // arms / legs
       this._arms(B, shape, [0.17, 0.32, 0.17], fur, 0.5);
       this._legs(B, shape, [0.21, 0.21, 0.27], fur, 0.6);
@@ -436,8 +525,10 @@ export class Plush {
       for (const sx of [-1, 1]) {
         const ear = mesh(head, geoSphere(), fur, [sx * HR * 0.62, HR * 0.66, -HR * 0.02], [0.19, 0.19, 0.12], null, true);
         this._fuzz(ear, pal.fur, 0.04);
-        mesh(head, geoSphereS(), inner, [sx * HR * 0.62, HR * 0.66, 0.06], [0.115, 0.115, 0.08]);
-        seam(this.hero ? head : null, 0.19, [sx * HR * 0.62, HR * 0.66, 0], [0, 0, 0], seamMat, 0.045);
+        if (this.full) mesh(head, geoSphereS(), inner, [sx * HR * 0.62, HR * 0.66, 0.06], [0.115, 0.115, 0.08]);
+        seam(this.trim ? head : null, 0.19, [sx * HR * 0.62, HR * 0.66, 0], [0, 0, 0], seamMat, 0.045);
+        // ear tip: local +Y pole of the (round) ear mesh itself
+        this._mark(ear, [0, 1, 0], 'ear');
       }
       this._face(head, {
         ...faceOpt, eyeX: 0.30, eyeY: 0.12, eyeZ: 0.80,
@@ -446,8 +537,8 @@ export class Plush {
       });
       this._arms(B, shape, [0.20, 0.32, 0.20], fur, 0.42);
       this._legs(B, shape, [0.245, 0.225, 0.29], fur, 0.55);
-      // paw pads
-      this._scarf(B, shape, accent);
+      // scarf — cut at 'far', it is trim not silhouette
+      if (this.full) this._scarf(B, shape, accent);
       this._tag(B, [shape.s[0] * 0.86, shape.y - 0.16, 0.06], 'heart', Math.PI / 2);
     }
 
@@ -455,7 +546,9 @@ export class Plush {
       for (const sx of [-1, 1]) {
         const e = mesh(head, geoCone(), fur, [sx * HR * 0.56, HR * 0.80, 0], [0.185, 0.30, 0.115], [0, 0, sx * 0.22], true);
         this._fuzz(e, pal.fur, 0.035);
-        mesh(head, geoCone(), inner, [sx * HR * 0.56, HR * 0.78, 0.045], [0.11, 0.21, 0.07], [0, 0, sx * 0.22]);
+        if (this.full) mesh(head, geoCone(), inner, [sx * HR * 0.56, HR * 0.78, 0.045], [0.11, 0.21, 0.07], [0, 0, sx * 0.22]);
+        // ear tip: apex of the (unscaled) cone is +0.5 along local Y
+        this._mark(e, [0, 0.5, 0], 'ear');
       }
       this._face(head, {
         ...faceOpt, eyeX: 0.31, eyeY: 0.08, eyeZ: 0.80,
@@ -463,29 +556,36 @@ export class Plush {
         noseR: 0.075, noseColor: pal.inner,
       });
       // whiskers
-      if (this.hero) for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) {
+      if (this.trim) for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) {
         const w = mesh(head, geoCyl(), thread, [sx * 0.30, -0.18 + i * 0.055, 0.62], [0.006, 0.20, 0.006], [0, 0, sx * (Math.PI / 2 - 0.25 + i * 0.22)]);
         w.position.x = sx * 0.34;
       }
-      // long curled tail: 3 spring segments
+      // long curled tail: 3 spring segments. The pivot chain always exists (it
+      // is what the grab point hangs off); only the mesh + fuzz are cut at
+      // 'far', where a curled tail does not read anyway.
       const py = shape.y + 0.02, pz = -shape.s[2] * 0.9;
       const segs = [[0.075, 0.20, 0.075], [0.065, 0.18, 0.065], [0.058, 0.16, 0.058]];
       let pv = pivot(B, [0, py, pz]);
+      pv.userData.spring = true;
       pv.rotation.x = 2.5;
       for (let i = 0; i < segs.length; i++) {
         const s = segs[i];
-        const m = mesh(pv, geoSphere(), i === 2 ? inner : fur, [0, s[1] * 0.85, 0], s, null, false);
-        this._fuzz(m, i === 2 ? pal.inner : pal.fur, 0.035);
+        if (this.full) {
+          const m = mesh(pv, geoSphere(), i === 2 ? inner : fur, [0, s[1] * 0.85, 0], s, null, false);
+          this._fuzz(m, i === 2 ? pal.inner : pal.fur, 0.035);
+        }
         this.springs.push({ pivot: pv, rest: new THREE.Euler(pv.rotation.x, 0, 0), sx: new Spring(105 - i * 22, 8 - i, 0), sz: new Spring(105 - i * 22, 8 - i, 0), gain: 0.9 + i * 0.45, droop: 0.55 + i * 0.3 });
+        if (i === segs.length - 1) this._mark(pv, [0, s[1] * 0.85, 0], 'tail');
         const next = pivot(pv, [0, s[1] * 1.7, 0]);
+        next.userData.spring = true;
         next.rotation.x = -0.45;
         pv = next;
       }
-      this._collar(B, shape, accent, true);
+      if (this.full) this._collar(B, shape, accent, true);
       this._arms(B, shape, [0.16, 0.30, 0.16], fur, 0.5);
       this._legs(B, shape, [0.195, 0.195, 0.25], fur, 0.6);
-      // stripes
-      for (let i = 0; i < 3; i++) {
+      // stripes — colour detail, cut at 'far'
+      if (this.full) for (let i = 0; i < 3; i++) {
         const st = mesh(B, geoSphereS(), threadMaterial(new THREE.Color(pal.fur).multiplyScalar(0.82).getHex(), { roughness: 0.85 }),
           [0, shape.y + 0.16 - i * 0.16, -shape.s[2] * 0.62], [0.075, 0.03, 0.16]);
         st.renderOrder = 1;
@@ -497,84 +597,103 @@ export class Plush {
       for (const sx of [-1, 1]) {
         const anchor = this._onHead(_n2.set(sx * 1.0, 0.34, -0.06), 0.94);
         const base = pivot(head, [anchor.p.x, anchor.p.y, anchor.p.z]);
+        base.userData.spring = true;
         base.rotation.z = sx * 0.42;
+        // floppy ear, base segment only survives to 'far' (silhouette)
         const s1 = mesh(base, geoSphere(), inner, [0, -0.24, 0], [0.145, 0.28, 0.07], null, true);
         this._fuzz(s1, pal.inner, 0.04, true);
         const tip = pivot(base, [0, -0.48, 0]);
-        const s2 = mesh(tip, geoSphere(), inner, [0, -0.20, 0], [0.125, 0.24, 0.062]);
-        this._fuzz(s2, pal.inner, 0.035, true);
+        tip.userData.spring = true;
+        if (this.full) {
+          const s2 = mesh(tip, geoSphere(), inner, [0, -0.20, 0], [0.125, 0.24, 0.062]);
+          this._fuzz(s2, pal.inner, 0.035, true);
+        }
         this.springs.push({ pivot: base, rest: new THREE.Euler(0, 0, sx * 0.42), sx: new Spring(96, 7.5, 0), sz: new Spring(96, 7.5, 0), gain: 1.25, droop: 1.0 });
         this.springs.push({ pivot: tip, rest: new THREE.Euler(0, 0, 0), sx: new Spring(66, 6, 0), sz: new Spring(66, 6, 0), gain: 1.6, droop: 1.3 });
+        // ear tip hangs below the tip pivot regardless of whether s2 is built
+        this._mark(tip, [0, -0.44, 0], 'ear');
       }
       this._face(head, {
         ...faceOpt, eyeX: 0.29, eyeY: 0.12, eyeZ: 0.80,
         muzzle: { y: -0.18, z: HR * 0.80, s: [0.28, 0.21, 0.20] },
         noseR: 0.105, noseColor: 0x2f2530,
       });
-      // eye patch, sewn flat over the left eye
-      const patchMat = plushMaterial(new THREE.Color(pal.fur).multiplyScalar(0.62).getHex(), { repeat: 10 });
-      this.materials.push(patchMat);
-      const pp = this._onHead(_n2.set(-0.52, 0.16, 0.84), 0.95);
-      this._attach(head, geoSphere(), patchMat, pp.p, pp.n, [0.19, 0.17, 0.05], { order: 1 });
-      this._collar(B, shape, accent, false, true);
+      // eye patch, sewn flat over the left eye — colour detail, cut at 'far'
+      if (this.full) {
+        const patchMat = plushMaterial(new THREE.Color(pal.fur).multiplyScalar(0.62).getHex(), { repeat: 10 });
+        this.materials.push(patchMat);
+        const pp = this._onHead(_n2.set(-0.52, 0.16, 0.84), 0.95);
+        this._attach(head, geoSphere(), patchMat, pp.p, pp.n, [0.19, 0.17, 0.05], { order: 1 });
+      }
+      if (this.full) this._collar(B, shape, accent, false, true);
       this._arms(B, shape, [0.175, 0.30, 0.175], fur, 0.48);
       this._legs(B, shape, [0.22, 0.21, 0.28], fur, 0.6);
-      // upright wagging tail
-      const t = this._limb(B, [0, shape.y + 0.20, -shape.s[2] * 0.90], [0.075, 0.22, 0.075], fur, { gain: 1.1, droop: 0.35, rest: [2.5, 0, 0] });
-      this._fuzz(t.mesh, pal.fur, 0.04);
+      // upright wagging tail — cut at 'far'
+      const tailPos = [0, shape.y + 0.20, -shape.s[2] * 0.90];
+      if (this.full) {
+        const t = this._limb(B, tailPos, [0.075, 0.22, 0.075], fur, { gain: 1.1, droop: 0.35, rest: [2.5, 0, 0] });
+        this._fuzz(t.mesh, pal.fur, 0.04);
+      }
+      this._mark(B, tailPos, 'tail');
       this._tag(B, [shape.s[0] * 0.84, shape.y - 0.18, 0.05], 'star', Math.PI / 2);
     }
 
     else if (species === 'chick') {
-      // tuft
+      // tuft — small but silhouette-defining, kept at every tier
       for (let i = -1; i <= 1; i++) {
         const tf = mesh(head, geoSphereS(), fur, [i * 0.11, HR * 0.86 + (i === 0 ? 0.05 : 0), 0], [0.062, 0.115, 0.062], [0, 0, i * 0.35], false);
         this._fuzz(tf, pal.fur, 0.035);
       }
       this._face(head, { ...faceOpt, eyeX: 0.27, eyeY: 0.06, eyeZ: 0.82, eyeR: 0.105, noseY: -0.14, noseR: 0.10, noseColor: pal.inner, mouth: false, blush: true });
-      // beak (bigger cone, replaces the nose look)
+      // beak (bigger cone, replaces the nose look) — this *is* the chick's face
       const beak = mesh(head, geoCone(), threadMaterial(pal.inner, { roughness: 0.3 }),
         [0, -0.14, HR * 0.92], [0.115, 0.16, 0.10], [Math.PI / 2, 0, 0]);
       beak.rotation.set(Math.PI / 2, 0, 0);
       this.materials.push(beak.material);
-      // stubby wings
+      // stubby wings double as this species' "arms"
       for (const sx of [-1, 1]) {
         const w = this._limb(B, [sx * shape.s[0] * 0.86, shape.y + 0.08, 0], [0.085, 0.20, 0.13], fur,
-          { gain: 0.85, droop: 0.4, rest: [0, 0, sx * 1.05], shadow: true });
+          { gain: 0.85, droop: 0.4, rest: [0, 0, sx * 1.05], shadow: true, grabType: 'arm' });
         this._fuzz(w.mesh, pal.fur, 0.04);
-        seam(this.hero ? B : null, 0.11, [sx * shape.s[0] * 0.80, shape.y + 0.10, 0], [0, 0, Math.PI / 2], seamMat, 0.04);
+        seam(this.trim ? B : null, 0.11, [sx * shape.s[0] * 0.80, shape.y + 0.10, 0], [0, 0, Math.PI / 2], seamMat, 0.04);
       }
-      // little feet
+      // little feet double as this species' "legs" — no separate leg limbs
       for (const sx of [-1, 1]) {
-        mesh(B, geoSphereS(), threadMaterial(pal.inner, { roughness: 0.4 }),
-          [sx * 0.20, shape.y - shape.s[1] * 0.86, 0.16], [0.13, 0.055, 0.17]);
+        const footPos = [sx * 0.20, shape.y - shape.s[1] * 0.86, 0.16];
+        mesh(B, geoSphereS(), threadMaterial(pal.inner, { roughness: 0.4 }), footPos, [0.13, 0.055, 0.17]);
+        this._mark(B, footPos, 'leg');
       }
       this._tag(B, [shape.s[0] * 0.88, shape.y - 0.10, 0.05], 'star', Math.PI / 2);
     }
 
     else if (species === 'unicorn') {
-      // horn: stacked tori give the twist without a custom mesh
+      // horn: the tapered cone alone carries the silhouette; the twist rings
+      // are trim, cut at 'far'. The horn stands in for this species' "head"
+      // grab point (see _mark below).
       const gold = new THREE.MeshStandardMaterial({ color: 0xffd98a, metalness: 0.9, roughness: 0.25, envMapIntensity: 1.3 });
       this.materials.push(gold);
       const hornPv = pivot(head, [0, HR * 0.92, 0.10]);
       hornPv.rotation.x = -0.22;
-      mesh(hornPv, geoCone(), gold, [0, 0.18, 0], [0.085, 0.38, 0.085]);
-      for (let i = 0; i < 5; i++) {
+      const hornCone = mesh(hornPv, geoCone(), gold, [0, 0.18, 0], [0.085, 0.38, 0.085]);
+      if (this.full) for (let i = 0; i < 5; i++) {
         const t = i / 5;
         const r = 0.082 * (1 - t * 0.82);
         const ring = mesh(hornPv, geoTorus(), gold, [0, 0.02 + t * 0.32, 0], [r, r, 0.42], [Math.PI / 2, 0, 0]);
         ring.rotation.set(Math.PI / 2 + 0.28, 0, 0);
         ring.scale.set(r, r, 0.36);
       }
+      // apex of the (unscaled) cone is +0.5 along local Y
+      this._mark(hornCone, [0, 0.5, 0], 'head');
       // ears
       for (const sx of [-1, 1]) {
-        mesh(head, geoCone(), fur, [sx * HR * 0.55, HR * 0.68, -0.02], [0.115, 0.20, 0.075], [0, 0, sx * 0.30], false);
+        const e = mesh(head, geoCone(), fur, [sx * HR * 0.55, HR * 0.68, -0.02], [0.115, 0.20, 0.075], [0, 0, sx * 0.30], false);
+        this._mark(e, [0, 0.5, 0], 'ear');
       }
-      // mane: a row of pastel puffs down the back of the head/neck
+      // mane: a row of pastel puffs down the back of the head/neck — cut at 'far'
       const maneCols = pal.mane || [0xffb3d1, 0xbfe4ff, 0xfff0a8];
       const maneMats = maneCols.map((c) => plushMaterial(c, { fuzz: 0.22, repeat: 10 }));
       this.materials.push(...maneMats);
-      for (let i = 0; i < 6; i++) {
+      if (this.full) for (let i = 0; i < 6; i++) {
         const t = i / 5;
         const m = mesh(head, geoSphereS(), maneMats[i % maneMats.length],
           [0, HR * 0.88 - t * 0.66, -HR * (0.28 + t * 0.52)], [0.2 - t * 0.03, 0.17, 0.16]);
@@ -583,52 +702,71 @@ export class Plush {
       this._face(head, { ...faceOpt, eyeX: 0.30, eyeY: 0.06, eyeZ: 0.80, noseY: -0.20, noseR: 0.07, noseColor: pal.inner, blush: true });
       this._arms(B, shape, [0.16, 0.32, 0.16], fur, 0.5);
       this._legs(B, shape, [0.185, 0.26, 0.22], fur, 0.62);
-      // mane tail
+      // mane tail — pivot always exists (the grab point hangs off it); the
+      // puff meshes are cut at 'far' along with the rest of the mane
       const tailPv = pivot(B, [0, shape.y + 0.10, -shape.s[2] * 0.92]);
+      tailPv.userData.spring = true;
       tailPv.rotation.x = 2.2;
-      for (let i = 0; i < 3; i++) {
+      if (this.full) for (let i = 0; i < 3; i++) {
         const m = mesh(tailPv, geoSphereS(), maneMats[i % maneMats.length], [0, 0.10 + i * 0.16, 0.02 * i], [0.115, 0.14, 0.10]);
         this._fuzz(m, maneCols[i % maneCols.length], 0.04);
       }
       this.springs.push({ pivot: tailPv, rest: new THREE.Euler(2.2, 0, 0), sx: new Spring(95, 7.5, 0), sz: new Spring(95, 7.5, 0), gain: 1.1, droop: 0.8 });
-      // star patch
-      const star = mesh(B, geoSphereS(), threadMaterial(0xffe07a, { roughness: 0.3 }),
-        [shape.s[0] * 0.66, shape.y - 0.02, shape.s[2] * 0.52], [0.10, 0.10, 0.06]);
-      star.renderOrder = 1;
-      this.materials.push(star.material);
+      this._mark(tailPv, [0, 0.10 + 2 * 0.16, 0.04], 'tail');
+      // star patch — colour detail, cut at 'far'
+      if (this.full) {
+        const star = mesh(B, geoSphereS(), threadMaterial(0xffe07a, { roughness: 0.3 }),
+          [shape.s[0] * 0.66, shape.y - 0.02, shape.s[2] * 0.52], [0.10, 0.10, 0.06]);
+        star.renderOrder = 1;
+        this.materials.push(star.material);
+      }
     }
 
     // side seam: sits a little below the equator like a real two-panel body,
-    // and hugs the surface so it reads as thread rather than a joint line
-    const seamY = shape.y - shape.s[1] * 0.26;
-    const k = Math.sqrt(Math.max(0.05, 1 - Math.pow((seamY - shape.y) / shape.s[1], 2))) * 0.99;
-    const bs = mesh(B, geoSeamRing(), seamMat, [0, seamY, 0], [1, 1, 1], [Math.PI / 2, 0, 0]);
-    bs.scale.set(shape.s[0] * k, shape.s[2] * k, 0.35);
+    // and hugs the surface so it reads as thread rather than a joint line —
+    // cut at 'far'
+    if (this.full) {
+      const seamY = shape.y - shape.s[1] * 0.26;
+      const k = Math.sqrt(Math.max(0.05, 1 - Math.pow((seamY - shape.y) / shape.s[1], 2))) * 0.99;
+      const bs = mesh(B, geoSeamRing(), seamMat, [0, seamY, 0], [1, 1, 1], [Math.PI / 2, 0, 0]);
+      bs.scale.set(shape.s[0] * k, shape.s[2] * k, 0.35);
+    }
 
     // gentle random personality: slight head tilt
     neck.rotation.z += (rng() - 0.5) * 0.12;
     this.springs[this.springs.findIndex((s) => s.pivot === neck)].rest.z = neck.rotation.z;
+
+    // resolve every _mark() call into this.grabPoints *before* merging: the
+    // markers walk up through their actual ancestor chain, and mergeStatic
+    // detaches/rebuilds meshes it swallows.
+    this._finalizeGrabPoints();
+
+    // collapse static geometry into as few draw calls as possible. Two passes:
+    // the body (everything under it except the neck's spring subtree) and the
+    // head (its own root, since it rides the neck spring independently).
+    mergeStatic(this.body, { skip: (o) => o.userData.spring === true });
+    mergeStatic(this.head, { skip: (o) => o.userData.spring === true });
   }
 
   _arms(B, shape, s, mat, spread = 0.5) {
     for (const sx of [-1, 1]) {
       const a = this._limb(B, [sx * shape.s[0] * 0.86, shape.y + shape.s[1] * 0.34, 0.03], s, mat, {
-        gain: 0.85, droop: 0.75, rest: [-0.22, 0, sx * (spread + 0.38)], shadow: true,
+        gain: 0.85, droop: 0.75, rest: [-0.22, 0, sx * (spread + 0.38)], shadow: true, grabType: 'arm',
       });
       this._fuzz(a.mesh, this.pal.fur, 0.042);
-      seam(this.hero ? B : null, s[0] * 0.72, [sx * shape.s[0] * 0.78, shape.y + shape.s[1] * 0.30, 0.02], [0, 0, Math.PI / 2], this.mats.seam, 0.04);
+      seam(this.trim ? B : null, s[0] * 0.72, [sx * shape.s[0] * 0.78, shape.y + shape.s[1] * 0.30, 0.02], [0, 0, Math.PI / 2], this.mats.seam, 0.04);
     }
   }
 
   _legs(B, shape, s, mat, spread = 0.6) {
     for (const sx of [-1, 1]) {
       const l = this._limb(B, [sx * shape.s[0] * 0.48, shape.y - shape.s[1] * 0.58, 0.10], s, mat, {
-        gain: 0.6, droop: 0.55, rest: [-0.95, 0, sx * spread * 0.5], shadow: true,
+        gain: 0.6, droop: 0.55, rest: [-0.95, 0, sx * spread * 0.5], shadow: true, grabType: 'leg',
       });
       this._fuzz(l.mesh, this.pal.fur, 0.042);
-      // paw pad
-      mesh(l.pivot, geoSphereS(), this.mats.inner, [0, -s[1] * 1.42, s[2] * 0.30], [s[0] * 0.62, s[1] * 0.38, s[2] * 0.5]);
-      seam(this.hero ? B : null, s[0] * 0.7, [sx * shape.s[0] * 0.46, shape.y - shape.s[1] * 0.62, 0.06], [0, 0, 0], this.mats.seam, 0.04);
+      // paw pad — a stitch-scale colour swap, not part of the 'far' silhouette
+      if (this.full) mesh(l.pivot, geoSphereS(), this.mats.inner, [0, -s[1] * 1.42, s[2] * 0.30], [s[0] * 0.62, s[1] * 0.38, s[2] * 0.5]);
+      seam(this.trim ? B : null, s[0] * 0.7, [sx * shape.s[0] * 0.46, shape.y - shape.s[1] * 0.62, 0.06], [0, 0, 0], this.mats.seam, 0.04);
     }
   }
 
@@ -791,6 +929,7 @@ const _n2 = new THREE.Vector3();
 const _n3 = new THREE.Vector3();
 const _AXIS_Y = new THREE.Vector3(0, 1, 0);
 const _AXIS_Z = new THREE.Vector3(0, 0, 1);
+const _tmpColor = new THREE.Color();
 
 /** Convenience: build a plush from a saved record. */
 export function makePlush(record, opt) {
