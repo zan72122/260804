@@ -128,7 +128,7 @@ window.Game = (function () {
   // ---------- tower setup ----------
   function computeRows() {
     if (forceRows) return clamp(forceRows, 4, 20);
-    const availH = H - H * 0.15 - Math.max(H * 0.09, 42);
+    const availH = H - H * 0.15 - Math.max(H * 0.09, 42) - paletteH;
     const availW = W * 0.96;
     let best = MIN_ROWS;
     for (let r = MIN_ROWS; r <= MAX_ROWS; r++) {
@@ -150,22 +150,24 @@ window.Game = (function () {
           bias: 0, biasT: 0, biasV: 0, tiltHeld: false,
           seed: hash(r * 31 + i * 7) * 100,
           bubbles: [],
+          tint: Tint.WHITE, tintLock: false, inTint: Tint.WHITE, inVol: 0,
         });
       }
     }
-    pool = 0; fullCount = 0; topOverflowed = false; overflowAt = 0;
+    pool = 0; poolTint = Tint.WHITE; fullCount = 0; topOverflowed = false; overflowAt = 0;
     holdT = 0; totalPoured = 0; pourVis = 0;
     state = 'play'; celebT = 0; celebNotified = false;
     hintT = 0; idleT = 0;
     streamHintShown = false; streamHintT = -1;
     autoPour = false; simPour = false; pouring = false;
+    cloudTint = Tint.WHITE; brush = null;
     parts.length = 0;
     grabs.clear(); forcedGrabs.clear(); deflectors.clear(); pointers.clear();
     streamSegs = [];
   }
 
   function layout() {
-    const availH = H - H * 0.15 - Math.max(H * 0.09, 42);
+    const availH = H - H * 0.15 - Math.max(H * 0.09, 42) - paletteH;
     const availW = W * 0.96;
     glassW = Math.max(16, Math.min(availW / ((rows - 1) * SPAN_F + 1),
                                    availH / (rows * STEP_F * RATIO)));
@@ -311,74 +313,12 @@ window.Game = (function () {
     tableGrad.addColorStop(1, 'rgba(26,12,56,0.95)');
   }
 
-  function liquidGradient(c, y0, y1) {
+  // small linear gradient built from a Tint's cssStops — used for the table pool
+  function tintGradient(c, tint, y0, y1) {
     const grad = c.createLinearGradient(0, y0, 0, y1);
-    if (theme.rainbow) {
-      const base = time * 18;
-      for (let k = 0; k <= 5; k++) {
-        grad.addColorStop(k / 5, 'hsl(' + ((base + k * 42) % 360) + ' 88% 62%)');
-      }
-    } else {
-      const st = theme.stops;
-      for (let k = 0; k < st.length; k++) grad.addColorStop(k / (st.length - 1), st[k]);
-    }
+    const stops = Tint.cssStops(tint);
+    for (let k = 0; k < stops.length; k++) grad.addColorStop(k / (stops.length - 1), stops[k]);
     return grad;
-  }
-
-  // the bowl's liquid, drawn once per frame; each glass blits the part below
-  // its own surface line (a horizontal cut of a convex shape is still correct)
-  function buildLiquidSprite() {
-    liquidSprScl = dpr;
-    const bh = glassH * BOWL_H;
-    const cw = Math.ceil((glassW + LQ_PAD * 2) * liquidSprScl);
-    const ch = Math.ceil((bh + LQ_PAD * 2) * liquidSprScl);
-    if (!liquidSpr) liquidSpr = document.createElement('canvas');
-    if (liquidSpr.width !== cw || liquidSpr.height !== ch) {
-      liquidSpr.width = Math.max(2, cw); liquidSpr.height = Math.max(2, ch);
-    }
-    const c = liquidSpr.getContext('2d');
-    c.clearRect(0, 0, liquidSpr.width, liquidSpr.height);
-    c.save();
-    c.scale(liquidSprScl, liquidSprScl);
-    c.translate(glassW / 2 + LQ_PAD, LQ_PAD);
-    c.fillStyle = liquidGradient(c, 0, bh);
-    bowlPath(c, glassW, glassH, 1.1);
-    c.fill();
-    c.restore();
-  }
-
-  // one ribbon sprite per frame: drink gradient + baked white core
-  function buildStreamSprite() {
-    if (!streamSpr) {
-      streamSpr = document.createElement('canvas');
-      streamSpr.width = 24; streamSpr.height = 64;
-    }
-    const c = streamSpr.getContext('2d');
-    c.clearRect(0, 0, 24, 64);
-    const grad = c.createLinearGradient(0, 0, 0, 64);
-    if (theme.rainbow) {
-      const base = time * 30;
-      for (let k = 0; k <= 4; k++) grad.addColorStop(k / 4, 'hsl(' + ((base + k * 50) % 360) + ' 90% 66%)');
-    } else {
-      const st = theme.stops;
-      grad.addColorStop(0, st[0]); grad.addColorStop(1, st[st.length - 1]);
-    }
-    // soft outer bloom so the ribbon reads against the dark sky
-    c.globalAlpha = 0.35;
-    c.fillStyle = grad;
-    c.fillRect(1, 2, 22, 60);
-    c.globalAlpha = 1;
-    c.beginPath();
-    c.moveTo(4, 6); c.quadraticCurveTo(4, 0, 12, 0); c.quadraticCurveTo(20, 0, 20, 6);
-    c.lineTo(20, 58); c.quadraticCurveTo(20, 64, 12, 64); c.quadraticCurveTo(4, 64, 4, 58);
-    c.closePath();
-    c.fill();
-    if (TIER[tier].core) {
-      c.fillStyle = 'rgba(255,255,255,0.38)';
-      c.fillRect(9, 3, 6, 58);
-      c.fillStyle = 'rgba(255,255,255,0.75)';
-      c.fillRect(10.8, 3, 2.4, 58);
-    }
   }
 
   // ---------- pacing ----------
@@ -838,12 +778,16 @@ window.Game = (function () {
       const surfY = Math.max(0, surfLocal(g) + wob);
       const shw = halfWidthLocal(g, surfY) - 1.1;
 
-      const srcY = clamp((surfY + LQ_PAD) * liquidSprScl, 0, liquidSpr.height);
-      const srcH = liquidSpr.height - srcY;
+      // bowl liquid sprite is cached per-tint by LiquidArt (cheap even when
+      // called for every glass — most glasses share the same white/painted tint)
+      const bs = LiquidArt.bowlSprite(g.tint, glassW, glassH, dpr,
+                                       { bowlH: BOWL_H, bowlRy: BOWL_RY, bowlTip: BOWL_TIP });
+      const srcY = clamp((surfY + bs.pad) * bs.scale, 0, bs.canvas.height);
+      const srcH = bs.canvas.height - srcY;
       if (srcH > 0.5) {
         c.globalAlpha = 0.93;
-        c.drawImage(liquidSpr, 0, srcY, liquidSpr.width, srcH,
-                    -w / 2 - LQ_PAD, surfY, w + LQ_PAD * 2, srcH / liquidSprScl);
+        c.drawImage(bs.canvas, 0, srcY, bs.canvas.width, srcH,
+                    -w / 2 - bs.pad, surfY, w + bs.pad * 2, srcH / bs.scale);
         c.globalAlpha = 1;
       }
 
