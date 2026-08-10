@@ -35,13 +35,30 @@ const SEP_ITERS = 3;
 
 // Extra horizontal damping applied to a body found resting on another one, so
 // a toy in the saddle between two neighbours settles into that seat instead
-// of sliding around on top of them.
-const CONTACT_DAMP = 0.5;
+// of sliding around on top of them. Below the speed floor it is zeroed
+// outright so a seated toy stops dead instead of creeping forever.
+const CONTACT_DAMP = 0.35;
+const CONTACT_STOP_SPEED = 0.03;
 
 // Shared "is B sitting on A?" thresholds — used both by the per-step contact
 // mark (for sleep/damping) and by refreshCoverage() (for the drama director).
 const SUPPORT_DY = 0.35;   // vertical offset, as a fraction of the radius sum
 const SUPPORT_DXZ = 0.8;   // horizontal offset, as a fraction of the radius sum
+
+// A contact pair only wakes each other when it actually carries relative
+// motion. Two bodies resting quietly against each other still touch (that is
+// what "resting" means for a soft-sphere pile) — waking on mere geometric
+// overlap, regardless of speed, meant *any* contact reset both bodies'
+// sleep timers every single step, so a crowded pile could never sleep at
+// all (only fully isolated bodies ever accumulated enough quiet time).
+const WAKE_REL_SPEED = SLEEP_SPEED * 2;
+
+// The old `radius * 0.8` clamp let 20% of every toy hang out through the
+// glass. No squash allowance at all (0, not a couple of centimetres) because
+// a toy's *sphere* is its full collision extent — any positive allowance
+// here means the sphere itself pokes through the wall, not just a texture
+// dent; the plush mesh's own give already reads as squash against the glass.
+const WALL_SQUASH = 0;
 
 export class Body {
   /** @param {Plush} plush */
@@ -87,6 +104,25 @@ function layerCounts(count) {
   let n2 = Math.max(0, count - n0 - n1);
   n0 += count - (n0 + n1 + n2);   // absorb any rounding slack into the base layer
   return [Math.max(1, n0), n1, n2];
+}
+
+/**
+ * Height a sphere of `radius` rests at when perched symmetrically in the
+ * saddle between two support spheres — resting against both at once, not
+ * just guessed from its own size. Used both for the rough pre-physics spawn
+ * guess (so prominence sorting has a real height) and to reseat a tier once
+ * the tier below it has actually finished settling (see the staged settle
+ * in layout()), so a stacked toy spawns at its seat instead of far above it.
+ */
+function perchY(radius, ax, ay, az, arad, bx, by, bz, brad) {
+  const rSup = (arad + brad) / 2;
+  const halfGap = Math.hypot(bx - ax, bz - az) / 2;
+  const rTouch = rSup + radius;
+  const riseSq = rTouch * rTouch - halfGap * halfGap;
+  // if the two supports are too far apart to physically touch a sphere
+  // resting between both, fall back to a reasonable perch height
+  const rise = riseSq > 0 ? Math.sqrt(riseSq) : rTouch * 0.55;
+  return (ay + by) / 2 + rise * 0.94;   // slightly under so gravity seats it, not hover-drop
 }
 
 export class Pile {
@@ -146,6 +182,7 @@ export class Pile {
         x: (p.x + q.x) / 2 + (rng() - 0.5) * 0.06,
         z: lerp((p.z + q.z) / 2, backZ1, 0.6) + (rng() - 0.5) * 0.08,
         layer: 1,
+        supA: p, supB: q,   // the pair it nests between, for a real spawn height below
       });
     }
 
@@ -159,6 +196,7 @@ export class Pile {
         x: (p.x + q.x) / 2 + (rng() - 0.5) * 0.06,
         z: lerp((p.z + q.z) / 2, backZ2, 0.6) + (rng() - 0.5) * 0.06,
         layer: 2,
+        supA: p, supB: q,
       });
     }
 
@@ -185,9 +223,19 @@ export class Pile {
       s.x = x; s.z = z;
 
       const floorY = s.radius * 0.93;   // Body.floorY, computed early for sorting
-      s.y = s.layer === 0 ? floorY + 0.02
-          : s.layer === 1 ? floorY + s.radius * 1.5
-          : floorY + s.radius * 3.0;
+      if (s.layer === 0) {
+        s.y = floorY + 0.02;
+      } else {
+        // Spawn a stacked toy right at the height it should actually settle
+        // to — resting against both of the spot's two support neighbours —
+        // rather than a fixed multiple of its own radius that ignores how
+        // far apart (or how big) those neighbours actually are. supA/supB
+        // are already fully resolved here: spots is layer0 then layer1 then
+        // layer2, so a toy's supports were processed earlier in this loop.
+        const supA = s.supA, supB = s.supB;
+        s.y = Math.max(floorY, perchY(s.radius, supA.x, supA.y, supA.z, supA.radius,
+                                                 supB.x, supB.y, supB.z, supB.radius));
+      }
     }
 
     // Prominence decides which toys are worth the expensive build: higher and
@@ -206,6 +254,11 @@ export class Pile {
       const b = new Body(plush);
       b.layer = s.layer;
       b.pos.set(s.x, s.y, s.z);
+      s.body = b;   // spot -> body link so the staged settle below can read
+                     // a support's REAL settled position, not its spawn guess
+      // A stacked toy starts physics-inert ("held") until the tier under it
+      // has actually finished settling — see the staged settle below.
+      b.held = s.layer > 0;
 
       // pose: the variety that makes each round feel hand-arranged
       const pose = rng();
@@ -232,8 +285,34 @@ export class Pile {
       this.bodies.push(b);
     }
 
-    // settle so nothing starts interpenetrating (and stacked toys actually land)
-    for (let i = 0; i < 90; i++) this.step(1 / 60, true);
+    // ---- staged settle: let each tier find its seat on the tier below
+    // before the next tier drops onto it. Settling all three at once (the
+    // old approach) let layer 0 spread apart from its overlapping start
+    // *while* layers 1/2 were still falling toward positions computed for
+    // the pre-spread layout — by the time they arrived the gap had already
+    // widened out from under them, so they fell straight through to the
+    // mat instead of landing in the saddle. Settling layer 0 alone first,
+    // then reseating layer 1 on layer 0's *actual* rest positions (and
+    // likewise layer 2 on layer 1), removes that race entirely.
+    const SETTLE_STEPS = 70;
+    for (let i = 0; i < SETTLE_STEPS; i++) this.step(1 / 60, true);   // layer 0 alone
+
+    for (let tier = 1; tier <= 2; tier++) {
+      for (const s of spots) {
+        if (s.layer !== tier) continue;
+        // reseat only the height: x/z keep the jittered variety already
+        // chosen above, which still reads fine against a support that has
+        // only shifted a little during its own settle
+        const b = s.body, supA = s.supA.body, supB = s.supB.body;
+        b.pos.y = Math.max(b.floorY, perchY(
+          b.radius, supA.pos.x, supA.pos.y, supA.pos.z, supA.radius,
+          supB.pos.x, supB.pos.y, supB.pos.z, supB.radius));
+        b.held = false;
+        b.syncMesh();
+      }
+      for (let i = 0; i < SETTLE_STEPS; i++) this.step(1 / 60, true);
+    }
+
     for (const b of this.bodies) { b.vel.set(0, 0, 0); b.angVel.multiplyScalar(0.2); }
     return this.bodies;
   }
@@ -276,9 +355,10 @@ export class Pile {
         b.grounded = false;
       }
 
-      // ---- showcase walls ----
-      const lx = CAB.inX - b.radius * 0.8;
-      const lz = CAB.inZ - b.radius * 0.8;
+      // ---- showcase walls ---- clamp so no more than WALL_SQUASH of the
+      // toy can dent past the interior glass, not 20% of its radius.
+      const lx = CAB.inX - b.radius + WALL_SQUASH;
+      const lz = CAB.inZ - b.radius + WALL_SQUASH;
       if (b.pos.x < -lx) { b.pos.x = -lx; b.vel.x = Math.abs(b.vel.x) * REST; }
       if (b.pos.x > lx) { b.pos.x = lx; b.vel.x = -Math.abs(b.vel.x) * REST; }
       if (b.pos.z < -lz) { b.pos.z = -lz; b.vel.z = Math.abs(b.vel.z) * REST; }
@@ -323,34 +403,96 @@ export class Pile {
           if (b.held || b.inChute) continue;
           if (a.sleeping && b.sleeping) continue;
           const dx = b.pos.x - a.pos.x, dy = b.pos.y - a.pos.y, dz = b.pos.z - a.pos.z;
-          const rr = (a.radius + b.radius) * 0.9;   // 10% overlap allowed = plush squish
           const d2 = dx * dx + dy * dy + dz * dz;
-          if (d2 >= rr * rr || d2 < 1e-8) continue;
+          if (d2 < 1e-8) continue;
+          const sumR = a.radius + b.radius;
+          const support = sumR * SUPPORT_DY;
+
+          // Support (for sleep bookkeeping and the seat-damping pass below)
+          // is marked over a slightly wider "touching" range than the one
+          // used to trigger positional correction below: right at the exact
+          // overlap boundary, `d2 < rr*rr` can flicker true/false frame to
+          // frame from floating-point noise alone even while a body is
+          // genuinely, stably seated — and every flicker to false reset its
+          // sleep timer, so a resting body could jitter forever without ever
+          // accumulating enough quiet time to sleep.
+          const contactR = sumR * 1.02;
+          if (d2 < contactR * contactR) {
+            if (dy > support) b.restingOnBody = true;
+            else if (-dy > support) a.restingOnBody = true;
+          }
+
+          const rr = sumR * 0.9;   // 10% overlap allowed = plush squish
+          if (d2 >= rr * rr) continue;   // touching, but nothing to resolve this pass
           const d = Math.sqrt(d2);
           const inv = 1 / d;
-          const nx = dx * inv, ny = dy * inv, nz = dz * inv;
-          const pen = (rr - d) * 0.5;
-          a.pos.x -= nx * pen; a.pos.y -= ny * pen; a.pos.z -= nz * pen;
-          b.pos.x += nx * pen; b.pos.y += ny * pen; b.pos.z += nz * pen;
+          const nx = dx * inv, ny = dy * inv, nz = dz * inv;   // true contact normal, used for the bounce below
+          const pen = rr - d;
+          const stacked = Math.abs(dy) > support * 0.5;
 
-          // waking is contagious: contact with a moving body wakes a sleeping
-          // one, and repeating this over several passes lets the wake ripple
-          // down through a stack within a single step
-          if (!a.sleeping || !b.sleeping) { a.wake(); b.wake(); }
+          // Positional correction is biased away from the raw centre-to-centre
+          // line for a meaningfully-stacked pair: a body nudged into a saddle
+          // between two neighbours mostly overlaps them sideways (its centre
+          // is barely higher than theirs), so resolving purely along that line
+          // shoves it back out sideways instead of letting it climb. Leaning
+          // the push toward vertical instead lets it settle upward into the
+          // seat. Purely side-by-side pairs (dy small) are untouched.
+          let cx = nx, cy = ny, cz = nz;
+          if (stacked) {
+            const horiz = Math.hypot(nx, nz);
+            if (horiz > 1e-4) {
+              const lean = 0.65;   // fraction of the horizontal push redirected upward
+              const upSign = dy >= 0 ? 1 : -1;
+              cx = nx * (1 - lean);
+              cz = nz * (1 - lean);
+              cy = ny + upSign * lean * horiz;
+              const cl = Math.hypot(cx, cy, cz) || 1;
+              cx /= cl; cy /= cl; cz /= cl;
+            }
+          }
 
-          // mark vertical support (for sleep bookkeeping and the seat-damping
-          // pass below) on every iteration, not just the velocity one
-          const support = (a.radius + b.radius) * SUPPORT_DY;
-          if (dy > support) b.restingOnBody = true;
-          else if (-dy > support) a.restingOnBody = true;
+          // A stacked pair also splits the correction unevenly: the lower body
+          // (closer to the floor) moves less, like it has more inertia, so the
+          // heap's base does not sink every time something settles onto it.
+          let shareA = 0.5, shareB = 0.5;
+          if (stacked) {
+            if (dy >= 0) { shareA = 0.3; shareB = 0.7; }   // b sits above a
+            else { shareA = 0.7; shareB = 0.3; }           // a sits above b
+          }
+          // A sleeping body must not move at all until something actually
+          // wakes it (below) — otherwise it silently drifts under an awake
+          // neighbour's correction while its own velocity stays frozen at
+          // zero, never reacting, and a support can erode out from under a
+          // stack one imperceptible nudge at a time over hundreds of steps.
+          // Treat it like a `held` body: immovable, and the awake side of
+          // the pair absorbs the whole correction instead of its usual share.
+          if (a.sleeping) { shareB += shareA; shareA = 0; }
+          else if (b.sleeping) { shareA += shareB; shareB = 0; }
+          a.pos.x -= cx * pen * shareA; a.pos.y -= cy * pen * shareA; a.pos.z -= cz * pen * shareA;
+          b.pos.x += cx * pen * shareB; b.pos.y += cy * pen * shareB; b.pos.z += cz * pen * shareB;
+
+          // Waking is contagious, but only when the contact actually carries
+          // relative motion — two bodies resting quietly against each other
+          // still touch (that is what "resting" means here), so waking on
+          // mere overlap regardless of speed reset both bodies' sleep timers
+          // on every single step, and a crowded pile could never sleep.
+          // (at least one of the pair is awake here — the loop above already
+          // skipped fully-sleeping pairs)
+          const rvx = b.vel.x - a.vel.x, rvy = b.vel.y - a.vel.y, rvz = b.vel.z - a.vel.z;
+          if (rvx * rvx + rvy * rvy + rvz * rvz > WAKE_REL_SPEED * WAKE_REL_SPEED) {
+            a.wake(); b.wake();
+          }
 
           if (resolveVelocity) {
-            const rvx = b.vel.x - a.vel.x, rvy = b.vel.y - a.vel.y, rvz = b.vel.z - a.vel.z;
             const vn = rvx * nx + rvy * ny + rvz * nz;
             if (vn < 0) {
               const jimp = -vn * 0.5 * (1 + REST);
-              a.vel.x -= nx * jimp; a.vel.y -= ny * jimp; a.vel.z -= nz * jimp;
-              b.vel.x += nx * jimp; b.vel.y += ny * jimp; b.vel.z += nz * jimp;
+              // A body that is still sleeping at this point (the wake check
+              // above did not consider this contact worth waking it for)
+              // must not receive an impulse either, or it drifts with a
+              // nonzero velocity while flagged asleep — skip its half.
+              if (!a.sleeping) { a.vel.x -= nx * jimp; a.vel.y -= ny * jimp; a.vel.z -= nz * jimp; }
+              if (!b.sleeping) { b.vel.x += nx * jimp; b.vel.y += ny * jimp; b.vel.z += nz * jimp; }
               if (!settling && -vn > 0.8) {
                 a.plush.impact(clamp(-vn * 0.09, 0.1, 0.6));
                 b.plush.impact(clamp(-vn * 0.09, 0.1, 0.6));
@@ -362,19 +504,37 @@ export class Pile {
       }
     }
 
-    // ---- a body resting on another one bleeds its horizontal speed faster
-    // than one only touching the floor, so it finds a stable seat between its
-    // neighbours instead of jittering there indefinitely ----
+    // ---- a body touching the floor or resting on another one bleeds its
+    // horizontal speed hard, so it finds a stable seat instead of jittering
+    // there indefinitely — a crowded floor row squeezed from both sides by
+    // its neighbours is just as prone to a standing, never-quite-zero
+    // vibration as a stacked one is, so this uses the same grounded-or-
+    // resting condition the sleep test below reads ----
     for (const b of bodies) {
-      if (b.held || b.inChute || b.sleeping || !b.restingOnBody) continue;
+      if (b.held || b.inChute || b.sleeping || !(b.grounded || b.restingOnBody)) continue;
       const f = Math.pow(CONTACT_DAMP, dt * 60);
-      b.vel.x *= f; b.vel.z *= f;
+      if (Math.hypot(b.vel.x, b.vel.z) < CONTACT_STOP_SPEED) { b.vel.x = 0; b.vel.z = 0; }
+      else { b.vel.x *= f; b.vel.z *= f; }
+      // Positional correction above pushes an overlapping body back out of
+      // its support, but a purely position-based fix leaves its *velocity*
+      // untouched — if that pair no longer overlaps by the last relaxation
+      // pass (the only one that resolves velocity), the impulse never
+      // fires. Left alone this shows up two ways: a small negative vel.y
+      // that quietly re-falls into its support every frame (a slow sink
+      // that never actually stops), or a small positive one that stands
+      // and micro-bounces forever without settling. Both are noise, not
+      // real motion — squash hard in both directions (matching CONTACT_DAMP's
+      // own aggressive 0.35 factor is not enough on its own to stop a sink
+      // that gets re-seeded every step, so this cuts harder than the
+      // horizontal case above and then snaps what's left near zero).
+      b.vel.y *= 0.1;
+      if (Math.abs(b.vel.y) < 0.3) b.vel.y = 0;
     }
 
-    // clamp everything back inside after separation
+    // clamp everything back inside after separation (same WALL_SQUASH rule)
     for (const b of bodies) {
       if (b.held || b.inChute) continue;
-      const lx = CAB.inX - b.radius * 0.8, lz = CAB.inZ - b.radius * 0.8;
+      const lx = CAB.inX - b.radius + WALL_SQUASH, lz = CAB.inZ - b.radius + WALL_SQUASH;
       b.pos.x = clamp(b.pos.x, -lx, lx);
       b.pos.z = clamp(b.pos.z, -lz, lz);
       if (b.pos.y < b.floorY) b.pos.y = b.floorY;

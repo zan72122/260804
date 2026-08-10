@@ -624,7 +624,7 @@ export class Game {
           if (this.pending.kind !== 'air' && b) {
             this.audio.softTouch(1);
             b.plush.impact(0.55);
-            b.applyImpulse(_tmpV.set(0, -0.3, 0));
+            b.applyImpulse(this._tmpV.set(0, -0.3, 0));
             b.wake();
             this._puffAt(b.pos.x, b.pos.y + b.radius * 0.6, b.pos.z, b.radius * 3.4);
           } else {
@@ -762,6 +762,11 @@ export class Game {
           }
           this.audio.servo(true);
           this.audio.wobble();
+          // re-score right before logging: `lastEval` may predate a regrip's
+          // forceDrag escalation, whose whole point is a shove that shows up
+          // only once it has actually moved the body -- logging the stale
+          // pre-escalation score would silently break the MIN_DRAMA guarantee
+          this.lastEval = this.drama.evaluate(b);
           this._logGrab('slip', this.lastEval, null);
         }
         if (t >= 1) {
@@ -772,7 +777,10 @@ export class Game {
             this.carryDur = Math.max(BEAT.carryMin, this.carryDist / 1.05);
             this._setState('carry');
           } else {
-            if (this.pending.kind !== 'catch') this._logGrab(this.pending.kind, this.lastEval, null);
+            if (this.pending.kind !== 'catch') {
+              this.lastEval = this.drama.evaluate(null);
+              this._logGrab(this.pending.kind, this.lastEval, null);
+            }
             this._setState('recover');
           }
         }
@@ -901,6 +909,11 @@ export class Game {
           this.audio.success();
           const fromPos = b.pos.clone();
           const fromQuat = b.quat.clone();
+          // final re-score against the whole grab->carry->drop arc (see the
+          // matching comment in the lift/slip branch): a stale lastEval from
+          // settle/regrip would understate a win that only became dramatic
+          // during carry (the swing) or the drop itself
+          this.lastEval = this.drama.evaluate(b);
           this._logGrab('win', this.lastEval, this.chuteResult);
           this.pile.remove(b);
           this.scene.remove(b.plush.root);
@@ -1077,7 +1090,12 @@ export class Game {
 
     const narrow = portrait && aspect < 0.62;
     const fov = portrait ? (aspect < 0.55 ? 46 : 43) : 38;
-    const az = (portrait ? 13 : 17) * Math.PI / 180;
+    // A yawed camera projects the case's *depth* into screen width; the case
+    // is deep (CAB.inZ 1.16), so a large azimuth is expensive in portrait,
+    // where width is already the binding constraint. 7 degrees still reads
+    // as a three-quarter view -- the elevation is what sells looking down
+    // into the case -- and leaves much more width budget for overscan.
+    const az = (portrait ? 7 : 17) * Math.PI / 180;
     const el = (portrait ? 21 : 23) * Math.PI / 180;
     this.camera.fov = fov;
 
@@ -1086,9 +1104,11 @@ export class Game {
     const bzz = CAB.inZ + 0.14;
     const byTop = CAB.ceilY + 0.1;
     const byBot = -0.15;
-    // >1 crops (overscan, bigger apparent size); <=1 leaves room to spare
-    const mx = narrow ? 1.09 : (portrait ? 1.0 : 0.96);
-    const my = narrow ? 1.0 : (portrait ? 0.9 : 0.98);
+    // >1 crops (overscan, bigger apparent size); <=1 leaves room to spare.
+    // Only the decorative frame posts are lost to the crop -- the play area
+    // (bx/bzz/byTop/byBot above) is what's being fit, never trimmed itself.
+    const mx = narrow ? 1.16 : (portrait ? 1.0 : 0.96);
+    const my = narrow ? 1.14 : (portrait ? 0.9 : 0.98);
     const anchorX = portrait ? 0 : -0.2;
     const anchorY = narrow ? 0.1 : (portrait ? 0.06 : 0.02);
 
