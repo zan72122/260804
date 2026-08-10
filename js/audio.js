@@ -89,6 +89,13 @@ window.Sound = (function () {
     tone(700 + Math.random() * 500, 0, 0.12, 0.05, 'sine');
   }
 
+  // jelly wobble when a tilted glass springs back upright
+  function boing() {
+    tone(340, 0, 0.14, 0.06, 'sine');
+    tone(300, 0.08, 0.16, 0.045, 'sine');
+    tone(330, 0.17, 0.18, 0.03, 'sine');
+  }
+
   function toggleMute() {
     muted = !muted;
     try { localStorage.setItem('rgt_muted', muted ? '1' : '0'); } catch (e) {}
@@ -96,6 +103,6 @@ window.Sound = (function () {
     return muted;
   }
 
-  return { init, resume, setPour, chime, sparkle, fanfare, pop, toggleMute,
+  return { init, resume, setPour, chime, sparkle, fanfare, pop, boing, toggleMute,
            isMuted: () => muted };
 })();

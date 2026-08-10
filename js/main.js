@@ -1,4 +1,4 @@
-/* Rainbow Glass Tower — bootstrap, input, buttons. */
+/* Rainbow Glass Tower — bootstrap, input forwarding, buttons. */
 'use strict';
 
 (function () {
@@ -16,32 +16,29 @@
   Game.init(canvas, {
     turbo: TURBO,
     round: parseInt(params.get('round') || '0', 10) || 0,
+    forceRows: parseInt(params.get('rows') || '0', 10) || 0,
     onComplete: () => btnReplay.classList.remove('hidden'),
   });
 
-  // ---- pouring: press and hold anywhere on the canvas ----
-  const activePointers = new Set();
-
+  // ---- pointer forwarding: the game decides what each finger does
+  //      (touch a stream = push it, a glass = tilt it, anywhere else = pour)
   canvas.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     Sound.init();
     Sound.resume();
-    activePointers.add(e.pointerId);
-    Game.tapAt(e.clientX, e.clientY);
-    Game.setPouring(true, e.clientX);
+    Game.pointerDown(e.pointerId, e.clientX, e.clientY);
   });
   canvas.addEventListener('pointermove', (e) => {
-    if (activePointers.has(e.pointerId)) Game.pointerMove(e.clientX);
+    Game.pointerMove(e.pointerId, e.clientX, e.clientY);
   });
   function release(e) {
-    activePointers.delete(e.pointerId);
-    if (activePointers.size === 0) Game.setPouring(false);
+    Game.pointerUp(e.pointerId);
   }
   canvas.addEventListener('pointerup', release);
   canvas.addEventListener('pointercancel', release);
   window.addEventListener('blur', () => {
-    activePointers.clear();
-    Game.setPouring(false);
+    Game.releaseAll();       // drop all touches if the page loses focus
+    Sound.setPour(false);
   });
 
   // stop iOS gestures (double-tap zoom, long-press magnifier)
@@ -62,23 +59,40 @@
   });
   btnReplay.addEventListener('click', () => {
     btnReplay.classList.add('hidden');
-    Game.reset(true);            // next drink theme + next tower layout
+    Game.reset(true);            // next drink theme
   });
 
   // ---- responsive / orientation ----
   window.addEventListener('resize', () => Game.resize());
   window.addEventListener('orientationchange', () => setTimeout(() => Game.resize(), 250));
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) Game.setPouring(false);
+    if (document.hidden) Sound.setPour(false);
     else Sound.resume();
   });
 
-  // ---- headless test / demo mode ----
+  // ---- headless test / demo hooks ----
+  // ?script=tilt:0:0:1;grab:1:0:R:2:0;cloudgrab:1:1 — scripted inputs before ?sim
+  if (params.has('script')) {
+    setTimeout(() => {
+      for (const cmd of params.get('script').split(';')) {
+        const f = cmd.split(':');
+        if (f[0] === 'tilt') Game.test.tilt(+f[1], +f[2], +f[3]);
+        else if (f[0] === 'grab') Game.test.grab(+f[1], +f[2], f[3], +f[4], +f[5]);
+        else if (f[0] === 'cloudgrab') Game.test.grabCloud(+f[1], +f[2]);
+      }
+    }, 300);
+  }
   if (params.has('sim')) {
     const sec = parseFloat(params.get('sim')) || 10;
     setTimeout(() => {
       Game.simulate(sec);
       document.title = 'sim:' + JSON.stringify(Game.debug());
+    }, 400);
+  }
+  if (params.has('bench')) {
+    setTimeout(() => {
+      const res = Game.bench(parseInt(params.get('bench') || '240', 10) || 240);
+      document.title = 'bench:' + JSON.stringify(res);
     }, 400);
   }
   if (AUTO) {
