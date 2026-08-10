@@ -100,6 +100,7 @@ export class Game {
     this.lastEval = null;
     this.chuteResult = null;
     this.teeterBody = null;
+    this.slippedBody = null;
     this.carrySwingPeak = 0;
     this.lastGrab = null;
     this.dramaLog = [];        // last ~50 entries, oldest first
@@ -363,22 +364,38 @@ export class Game {
   }
 
   /** Guarantees that a stalled grab (nothing dramatic happened even after a
-   *  regrip) still drags the toy over its neighbours during the lift. */
+   *  regrip, or a miss that landed nowhere near anything) still produces a
+   *  visible "neighbour" event. Note this cannot push a *held* body itself:
+   *  while held its position is driven entirely by _updateHeld (grip +
+   *  pendulum, never consulting vel/angVel), and _detach() later overwrites
+   *  vel/angVel wholesale -- so any impulse applied to the caught toy while
+   *  it is still in the claw is provably inert. The only body whose own
+   *  physics genuinely respond to an impulse right now is a *free* neighbour
+   *  still sitting in the pile, found around (x,z) rather than around a held
+   *  body's own position so a bare-floor miss can escalate too. */
+  _forceDudAt(x, z, radius) {
+    const near = this.pile.nearestTo(x, z, radius);
+    const target = near ? near.body : null;
+    if (target) {
+      try {
+        if (typeof forceDrag === 'function') {
+          const dx = target.pos.x - x, dz = target.pos.z - z;
+          const d = Math.hypot(dx, dz) || 1;
+          forceDrag(target, dx / d, dz / d, 1);
+          return;
+        }
+      } catch (e) { /* fall through */ }
+    }
+    // last-resort fallback if drama.js landed without forceDrag (or nothing
+    // was within radius): still shake the pile so the beat is never empty
+    if (typeof this.pile.wakeAround === 'function') {
+      this.pile.wakeAround(x, 0.3, z, radius * 1.5);
+    }
+  }
+
   _forceDud(body) {
     if (!body) return;
-    try {
-      if (typeof forceDrag === 'function') {
-        const dx = 0 - body.pos.x, dz = 0.18 - body.pos.z;
-        const d = Math.hypot(dx, dz) || 1;
-        forceDrag(body, dx / d, dz / d, 1);
-        return;
-      }
-    } catch (e) { /* fall through */ }
-    // last-resort fallback if drama.js landed without forceDrag: still shove
-    // the pile so the beat is never empty
-    if (typeof this.pile.wakeAround === 'function') {
-      this.pile.wakeAround(body.pos.x, body.pos.y, body.pos.z, body.radius * 3);
-    }
+    this._forceDudAt(body.pos.x, body.pos.z, body.radius * 3.5);
   }
 
   /** Orientation that hangs the toy from `choice.local`: that point ends up
@@ -542,6 +559,7 @@ export class Game {
     this.liftTo = CAB.clawHomeY;
     this.liftDur = Math.max(BEAT.liftMin, (this.liftTo - this.liftFrom) / 1.05);
     this.slipped = false;
+    this.slippedBody = null;
     this.carrySwingPeak = 0;
     this._setState('lift');
   }
@@ -762,12 +780,13 @@ export class Game {
           }
           this.audio.servo(true);
           this.audio.wobble();
-          // re-score right before logging: `lastEval` may predate a regrip's
-          // forceDrag escalation, whose whole point is a shove that shows up
-          // only once it has actually moved the body -- logging the stale
-          // pre-escalation score would silently break the MIN_DRAMA guarantee
-          this.lastEval = this.drama.evaluate(b);
-          this._logGrab('slip', this.lastEval, null);
+          // score at the *end* of the beat, not this instant: the dropped
+          // body still has the rest of the lift beat to actually fall/tumble
+          // under normal pile physics (it is unheld now, so pile.step() has
+          // resumed driving it), and a regrip's forceDud escalation shoves a
+          // neighbour whose motion likewise needs a moment to play out.
+          // Scoring right at the detach frame would catch neither.
+          this.slippedBody = b;
         }
         if (t >= 1) {
           this.audio.setMotor(0, 1, 0);
@@ -776,6 +795,11 @@ export class Game {
             this.carryDist = Math.hypot(claw.pos.x - CAB.hole.x, claw.pos.z - CAB.hole.z);
             this.carryDur = Math.max(BEAT.carryMin, this.carryDist / 1.05);
             this._setState('carry');
+          } else if (this.slippedBody) {
+            this.lastEval = this.drama.evaluate(this.slippedBody);
+            this._logGrab('slip', this.lastEval, null);
+            this.slippedBody = null;
+            this._setState('recover');
           } else {
             if (this.pending.kind !== 'catch') {
               this.lastEval = this.drama.evaluate(null);

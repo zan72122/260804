@@ -22,11 +22,23 @@ const GRAVITY = -9.2;
 const REST = 0.24;
 const FLOOR_FRICTION = 0.78;
 
+// step()'s own internal sub-step size — see the comment on step() itself for
+// why a large caller-supplied dt has to be broken up before it touches any
+// contact detection here.
+const MAX_SUBSTEP = 1 / 60;
+
 // A stacked toy is never "grounded" on the floor plane, so these have to be
 // generous enough that a body resting only on other bodies still falls
 // asleep — that is the main CPU saving now that the heap is three deep.
 const SLEEP_SPEED = 0.05;
 const SLEEP_TIME = 0.30;
+
+// Extra sleep-aware settle steps layout() runs after its staged physical
+// settle, so an already-stable heap starts the round already asleep rather
+// than depending on real playtime frames to accumulate SLEEP_TIME (see the
+// comment where this is used). Comfortably more than SLEEP_TIME/dt so a
+// wake propagating bottom-up through three tiers has room to finish.
+const SLEEP_SETTLE_STEPS = 300;
 
 // One separation pass cannot hold a three-layer heap together (each pass only
 // resolves the *worst* overlap a body is in); a handful of cheap relaxation
@@ -59,6 +71,29 @@ const WAKE_REL_SPEED = SLEEP_SPEED * 2;
 // here means the sphere itself pokes through the wall, not just a texture
 // dent; the plush mesh's own give already reads as squash against the glass.
 const WALL_SQUASH = 0;
+
+// Resting contact and penetration are different questions and must not
+// share a threshold: the relaxation solver settles a stacked pair right at
+// the rest distance, where it no longer *overlaps* (d >= rr) even though it
+// is still genuinely touching, so a same-frame "is this body supported?"
+// check gated on overlap alone flickers false on the very steps where a toy
+// is most calmly seated — resetting its sleep progress forever. Support
+// detection gets a few extra centimetres of slack that positional
+// correction (rr, unchanged) does not.
+const SUPPORT_SLACK = 0.02;
+
+// A body's support flag bridges a short gap after the last step that
+// actually detected contact, so one missed-overlap frame amid an otherwise
+// settled stack cannot single-handedly force it to keep re-passing through
+// "unsupported" and repeatedly stall its sleep timer.
+const SUPPORT_GRACE = 0.25;
+
+// Backstop, independent of any detected support at all: if a body is this
+// close to motionless for a full second, let it sleep regardless — nothing
+// should be able to stay awake forever purely because the contact flags
+// never line up, however small the actual residual jitter is.
+const BACKSTOP_SPEED = 0.006;
+const BACKSTOP_TIME = 1.0;
 
 export class Body {
   /** @param {Plush} plush */
@@ -313,12 +348,58 @@ export class Pile {
       for (let i = 0; i < SETTLE_STEPS; i++) this.step(1 / 60, true);
     }
 
-    for (const b of this.bodies) { b.vel.set(0, 0, 0); b.angVel.multiplyScalar(0.2); }
+    // ---- let already-stable bodies actually fall asleep before the round
+    // is shown, instead of leaving that entirely to whatever real frames
+    // trickle in afterward. `settling=true` above deliberately skips the
+    // sleep test throughout the staged settle (so a body reaching quiet
+    // *mid*-settle doesn't freeze there before the tier above it has even
+    // been reseated) — but that also means a body that is already fully at
+    // rest by the time this method returns has never once been *checked*
+    // for sleep, so it starts the round awake and burning a full solve
+    // every frame for no reason until real playtime happens to accumulate
+    // SLEEP_TIME of quiet on top. A slow renderer can take a long time to
+    // deliver that much simulated time (frame dt is real wall-clock time,
+    // capped, not free); running the sleep-aware step here costs nothing
+    // but this synchronous call. onSoftHit is suppressed for it — nothing
+    // actually happened yet from the player's point of view, so it should
+    // not cue a sound.
+    const savedOnSoftHit = this.onSoftHit;
+    this.onSoftHit = null;
+    for (let i = 0; i < SLEEP_SETTLE_STEPS; i++) this.step(1 / 60, false);
+    this.onSoftHit = savedOnSoftHit;
+
+    for (const b of this.bodies) {
+      if (!b.sleeping) { b.vel.set(0, 0, 0); b.angVel.multiplyScalar(0.2); }
+    }
     return this.bodies;
   }
 
-  /** Physics step. `settling` skips the sleep logic and the soft-hit callback. */
+  /**
+   * Physics step. `settling` skips the sleep logic and the soft-hit callback.
+   *
+   * Splits a large `dt` into several small, fixed-size sub-steps before
+   * touching any physics. Contact detection here is discrete (no continuous
+   * sweep) and depends on nobody moving further in one step than the
+   * "still touching" window — fine at the 1/60s this file's own settle
+   * loop always uses, but main.js's render loop hands this real frame
+   * time, capped only at 0.1s for tab-switch hiccups. Under the slow
+   * software renderer this game actually ships to test with, ordinary
+   * frames often run that slow, and a stacked toy can fall clean through a
+   * neighbour's contact window inside one such frame: `restingOnBody`
+   * never gets marked for it, so it can never sleep and the "layer 1/2
+   * toys never settle" symptom looks identical to a logic bug in the sleep
+   * test even though the sleep test itself is fine. Substepping here means
+   * every caller — layout()'s settle loop, this file's own steady 1/60s
+   * calls, and a real slow frame — all see the same small, safe dt.
+   */
   step(dt, settling = false) {
+    if (dt <= 0) return;
+    const substeps = Math.max(1, Math.ceil(dt / MAX_SUBSTEP));
+    const subDt = dt / substeps;
+    for (let i = 0; i < substeps; i++) this._stepOnce(subDt, settling);
+  }
+
+  _stepOnce(dt, settling = false) {
     const bodies = this.bodies;
     const n = bodies.length;
     const h = CAB.hole;
@@ -326,6 +407,7 @@ export class Pile {
     for (let i = 0; i < n; i++) {
       const b = bodies[i];
       if (b.held || b.inChute) continue;
+      const wasResting = b.restingOnBody;   // last step's value; this step's is only known after separation runs, below
       b.restingOnBody = false;   // recomputed below if separation finds a support
       if (b.sleeping) continue;
 
@@ -385,7 +467,14 @@ export class Pile {
         this._q.setFromAxisAngle(this._tmp.copy(w).divideScalar(wl), wl * dt);
         b.quat.premultiply(this._q).normalize();
       }
-      const angDamp = Math.pow(b.grounded ? 0.86 : 0.985, dt * 60);
+      // A body resting on another one (not the floor plane) used to keep
+      // the slow 0.985 airborne/tumbling decay regardless — its own contact
+      // is only known once separation runs, later this step, so this reads
+      // last step's value, one step stale, which is fine since it does not
+      // change abruptly for a settling body. Without this, angVel's small
+      // contribution to the sleep test's speed measure could linger well
+      // past when a stacked toy was otherwise ready to sleep.
+      const angDamp = Math.pow(b.grounded || wasResting ? 0.86 : 0.985, dt * 60);
       w.multiplyScalar(angDamp);
     }
 
@@ -555,7 +644,14 @@ export class Pile {
             b.angVel.set(0, 0, 0);
           }
         } else {
-          b.sleepTimer = 0;
+          // Decay rather than hard-reset: a single stray frame (a contact
+          // flag that briefly missed, a one-step speed blip) would otherwise
+          // erase a body's entire accumulated quiet time and restart the
+          // whole SLEEP_TIME wait from zero. A body under genuine sustained
+          // disturbance still never accumulates net progress this way —
+          // decay and accrual are the same rate, so it takes as long to
+          // recover from a blip as the blip itself lasted.
+          b.sleepTimer = Math.max(0, b.sleepTimer - dt);
         }
       }
     }
