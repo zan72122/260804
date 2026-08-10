@@ -2,15 +2,29 @@
 // A 4-year-old must never fail: releasing anywhere, or nearing the dessert, always completes the lift.
 
 // --- module-private tuning ---
-const HALO_RADIUS_FACTOR = 0.18;  // * min(w,h) around layout.nestHome
+const HALO_RADIUS_FACTOR = 0.24;  // * min(w,h) around the thread-mass center (bigger: now hugs a dome, not a point)
+const MASS_DEPTH_FRAC = 0.65;     // where the dome core sits between span.y and nestHome.y (matches threads.js bias)
 const HALO_PULSE_SPEED = 1.6;
 const ARC_DOT_COUNT = 12;
 const CARRY_EASE = 8;             // per-second follow ease while carrying (loose, delicate)
 const LIFT_RISE_RATE = 1.1;       // nest.lift 0->1 rate while carrying (per second)
 const GLIDE_DURATION = 0.6;       // seconds, auto-glide onto the dessert
 const NEAR_DESSERT_FACTOR = 1.6;  // * dessert.r triggers auto-glide
+const DESSERT_REST_Y_FACTOR = 0.55; // nest lands this * dessert.r above dessert center — sits on the dome top
 const CELEBRATE_DURATION = 3.5;   // seconds of sparkle before game:reset
 const PARTICLE_MAX = 40;
+
+// Approximate center of the accumulated thread mass: the dome core droops well below the anchor
+// chord toward nestHome (threads.js biases strand depth the same way), so the halo/grab target
+// should hug that point, not the empty chord line.
+function massCenter(layout) {
+  const span = layout.span, nh = layout.nestHome;
+  return { x: nh.x, y: span.y + (nh.y - span.y) * MASS_DEPTH_FRAC };
+}
+
+function restPoint(dessert) {
+  return { x: dessert.x, y: dessert.y - dessert.r * DESSERT_REST_Y_FACTOR };
+}
 
 let busRef = null, stateRef = null;
 
@@ -79,12 +93,13 @@ function onPointerDown({ x, y }) {
   if (!ready || state.phase !== 'play' || sub !== 'idle') return;
   const layout = state.layout;
   if (!layout || !layout.nestHome) return;
+  const mc = massCenter(layout);
   const r = HALO_RADIUS_FACTOR * Math.min(state.w, state.h);
-  const dx = x - layout.nestHome.x, dy = y - layout.nestHome.y;
+  const dx = x - mc.x, dy = y - mc.y;
   if (dx * dx + dy * dy <= r * r) {
     sub = 'carry';
-    state.nest.x = layout.nestHome.x;
-    state.nest.y = layout.nestHome.y;
+    state.nest.x = mc.x;
+    state.nest.y = mc.y;
     state.nest.lift = Math.max(state.nest.lift, 0.001);
     busRef.emit('lift:start', {});
   }
@@ -111,6 +126,7 @@ export default {
 
     if (state.phase === 'lift' && layout && layout.dessert) {
       const dessert = layout.dessert;
+      const rest = restPoint(dessert); // slightly above dessert center, sitting on the dome top
       if (sub === 'carry') {
         const p = state.pointer;
         const ease = 1 - Math.exp(-CARRY_EASE * dt);
@@ -124,12 +140,12 @@ export default {
       } else if (sub === 'glide') {
         glideT = Math.min(1, glideT + dt / GLIDE_DURATION);
         const e = easeOutCubic(glideT);
-        state.nest.x = glideFromX + (dessert.x - glideFromX) * e;
-        state.nest.y = glideFromY + (dessert.y - glideFromY) * e;
+        state.nest.x = glideFromX + (rest.x - glideFromX) * e;
+        state.nest.y = glideFromY + (rest.y - glideFromY) * e;
         state.nest.lift = glideFromLift + (1 - glideFromLift) * e;
         if (glideT >= 1) {
-          state.nest.x = dessert.x;
-          state.nest.y = dessert.y;
+          state.nest.x = rest.x;
+          state.nest.y = rest.y;
           state.nest.lift = 1;
           if (!placedEmitted) { placedEmitted = true; busRef.emit('nest:placed', {}); }
         }
@@ -140,9 +156,11 @@ export default {
       if (!celebrateActive) { celebrateActive = true; celebrateT = 0; resetEmitted = false; }
       celebrateT += dt;
       const dessert = layout && layout.dessert;
+      // Center the sparkle field between the dessert plate and the nest resting on top of it, and
+      // widen the spread a touch, so particles surround the whole dessert+nest composition.
       const cx = dessert ? dessert.x : state.nest.x;
-      const cy = dessert ? dessert.y : state.nest.y;
-      const r = dessert ? dessert.r : 40;
+      const cy = dessert ? dessert.y - dessert.r * (DESSERT_REST_Y_FACTOR * 0.55) : state.nest.y;
+      const r = dessert ? dessert.r * 1.25 : 40;
 
       if (celebrateT < CELEBRATE_DURATION - 0.4 && Math.random() < dt * 20) {
         spawnParticle(cx, cy, r);
@@ -176,7 +194,7 @@ export default {
 };
 
 function renderHalo(ctx, state, layout) {
-  const { x, y } = layout.nestHome;
+  const { x, y } = massCenter(layout);
   const r = HALO_RADIUS_FACTOR * Math.min(state.w, state.h);
   const pulse = 0.5 + 0.5 * Math.sin(haloPulse * HALO_PULSE_SPEED);
   const rr = r * (0.92 + pulse * 0.12);
@@ -225,8 +243,8 @@ function drawHintArc(ctx, x0, y0, x1, y1, pulse) {
 function renderCelebration(ctx, state, layout) {
   const dessert = layout && layout.dessert;
   const cx = dessert ? dessert.x : state.nest.x;
-  const cy = dessert ? dessert.y : state.nest.y;
-  const r = dessert ? dessert.r : 40;
+  const cy = dessert ? dessert.y - dessert.r * (DESSERT_REST_Y_FACTOR * 0.55) : state.nest.y;
+  const r = dessert ? dessert.r * 1.25 : 40;
 
   const bloomIn = Math.min(1, celebrateT / 0.6);
   const bloomOut = Math.max(0, 1 - Math.max(0, celebrateT - (CELEBRATE_DURATION - 0.6)) / 0.6);

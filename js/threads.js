@@ -17,8 +17,14 @@ let bus = null, config = null, S = null;
 const CAP = 140, BAKE_CHUNK = 50, MAX_LAYERS = 3;   // live cap / bake chunk / offscreen layers
 const NEWBORN_T = 0.15;       // seconds a strand spends in progressive-reveal mode
 const EMIT_INTERVAL = 0.22;   // throttle for threads:added
-const STRANDS_PER_PASS = 3.5; // avg strands per full span traversal (2-5 range in practice)
-const BASE_SAG_MIN = 14, BASE_SAG_RANGE = 18;
+const STRANDS_PER_PASS_FALLBACK = 3.5; // avg strands per full span traversal; config.STRANDS_PER_PASS wins when present
+const FIRST_STRAND_BUDGET = 0.9; // seed spawnBudget this high on gesture start so strand #1 appears almost instantly
+// dome sag shaping — sag is expressed as a fraction of "dome depth" (chord -> nestHome vertical drop)
+const SAG_BASE_FRAC = 0.35;   // minimum sag fraction (near-chord strands, the thin minority)
+const SAG_RANGE_FRAC = 0.95;  // extra sag range stacked on top of the base (deep strands can pass nestHome)
+const SAG_JITTER_FRAC = 0.18; // +/- random jitter on top, as a fraction of dome depth
+const CORE_DRIFT_FRAC = 0.09; // lateral wobble of each strand's low point, fraction of screen width
+const SKEW_POW_START = 0.62, SKEW_POW_FULL = 0.32; // depth-distribution skew power (lower = deeper/rounder bias)
 const WIDTH_MID = 1.0, ALPHA_MID = 0.375; // bucket split points (mid of 0.6-1.4 / 0.25-0.5)
 const WISP_FADEIN = 0.3, SWEEP_DURATION = 1.3;
 
@@ -42,12 +48,16 @@ const bColorSum = [0, 0, 0, 0];
 const newbornList = [];
 
 let layers = [];                              // baked offscreen layers: [{canvas, ctx, w, h}]
-let nestCanvas = null, nestMeta = null;        // lift/celebrate nest sprite
+let nestCanvas = null, nestMeta = null;        // lift/celebrate nest sprite ({cx,cy,halfW,halfH})
 let sweepStart = -Infinity;                    // celebrate light-sweep start time
 let wisps = [];                                // tool-tip trail effects
 
 let prevSpawnX = null, spawnBudget = 0, totalPassFrac = 0, totalSpawned = 0;
 let deltaSinceEmit = 0, lastEmitTime = 0;
+
+// running bounding box of every strand ever spawned (world coords) — used to size/frame the
+// lift nest sprite to the actual thread mass instead of a fixed guessed radius.
+let massMinX = Infinity, massMaxX = -Infinity, massMinY = Infinity, massMaxY = -Infinity;
 
 let midRGB = [232, 169, 78], coreRGB = [255, 217, 138], coreColorStr = 'rgb(255,217,138)';
 
@@ -128,28 +138,52 @@ function spawnStrand(state, dirSign, speedFactor) {
   const startA = dirSign >= 0 ? a0 : a1;
   const endA = dirSign >= 0 ? a1 : a0;
   const w = state.w;
-  const j = w * 0.03;
   const fullnessRaw = totalPassFrac / config.PASSES_TO_FULL;
   const fb = Math.min(fullnessRaw, 2);
-  const sx0 = startA.x + (rand() - 0.5) * 2 * j, sy0 = startA.y + (rand() - 0.5) * j;
-  const ex0 = endA.x + (rand() - 0.5) * 2 * j * (1 + fb * 0.3), ey0 = endA.y + (rand() - 0.5) * j;
+  const fbT = clamp01(fb);
+  const speedEase = clamp(speedFactor, 0, 1);
+
+  // endpoint jitter: horizontal stays modest; vertical grows with fullness so the mass gains
+  // visible thickness bundled around the anchor posts instead of pinning every strand to one point.
+  const jX = w * 0.03;
+  const jY = jX * (0.6 + fbT * 1.3);
+  const sx0 = startA.x + (rand() - 0.5) * 2 * jX, sy0 = startA.y + (rand() - 0.5) * 2 * jY;
+  const ex0 = endA.x + (rand() - 0.5) * 2 * jX * (1 + fb * 0.3), ey0 = endA.y + (rand() - 0.5) * 2 * jY;
   const midx = (sx0 + ex0) / 2, midy = (sy0 + ey0) / 2;
-  const nh = layout.nestHome || { x: midx, y: midy };
-  const domeT = clamp(fb * 0.3, 0, 0.5);
-  // nest shaping: sag/pull grow with fullness so the strand accumulation reads as a dome/veil
-  let sag = (BASE_SAG_MIN + rand() * BASE_SAG_RANGE) * (1 - clamp(speedFactor, 0, 0.7)) * (1 + fb * 0.35);
-  const c1x = lerp(midx, nh.x, domeT * 0.3) + (rand() - 0.5) * w * 0.02;
-  const c1y = midy + sag + (nh.y - midy) * domeT * 0.25;
-  const waveAmt = (rand() - 0.5) * w * 0.025 * (1 - speedFactor * 0.5); // 1 extra bend = waviness
-  const c2x = lerp(midx, ex0, 0.7) + waveAmt;
-  const c2y = midy + sag * 0.6 + (rand() - 0.5) * 6;
-  const width = clamp(lerp(1.4, 0.6, clamp(speedFactor, 0, 1)) + (rand() - 0.5) * 0.2, 0.6, 1.4);
-  const alpha = clamp(0.25 + rand() * 0.25, 0.25, 0.5);
+  const nh = layout.nestHome || { x: midx, y: midy + 90 };
+  const domeDepth = Math.max(40, nh.y - midy); // vertical budget from the chord down to the dome core
+
+  // depth distribution: skewed toward "deep" so most strands droop down near nestHome and only a
+  // thin minority stay near-chord — the skew sharpens (rounder, denser dome) as fullness grows.
+  const skewPow = lerp(SKEW_POW_START, SKEW_POW_FULL, fbT);
+  const depthT = Math.pow(rand(), skewPow) * (1 - speedEase * 0.55); // fast swipes stay shallower/straighter
+  const sag = domeDepth * (SAG_BASE_FRAC + depthT * SAG_RANGE_FRAC) +
+              (rand() - 0.5) * domeDepth * SAG_JITTER_FRAC;
+
+  // the dome's "low point" drifts sideways per strand so the accumulated mass reads as a rounded
+  // volume rather than every strand bottoming out on one line.
+  const coreXJit = (rand() - 0.5) * w * CORE_DRIFT_FRAC * (0.4 + depthT);
+  const c1x = lerp(midx, nh.x + coreXJit, 0.55) + (rand() - 0.5) * w * 0.02;
+  const c1y = midy + sag + (rand() - 0.5) * domeDepth * 0.08;
+  const waveAmt = (rand() - 0.5) * w * 0.03 * (1 - speedEase * 0.5); // extra bend = waviness
+  const c2x = lerp(midx, ex0, 0.68) + waveAmt;
+  const c2y = midy + sag * 0.82 + (rand() - 0.5) * domeDepth * 0.06;
+  const width = clamp(lerp(1.5, 0.55, speedEase) + (rand() - 0.5) * 0.2, 0.55, 1.5);
+  const alpha = clamp(0.24 + rand() * 0.26, 0.24, 0.5);
   const colorT = clamp01(rand() * 0.6 + clamp01(fullnessRaw) * 0.3);
 
   const i = liveCount++;
   sxA[i] = sx0; syA[i] = sy0; c1xA[i] = c1x; c1yA[i] = c1y; c2xA[i] = c2x; c2yA[i] = c2y;
   exA[i] = ex0; eyA[i] = ey0; widthA[i] = width; alphaA[i] = alpha; colorTA[i] = colorT; birthA[i] = state.time;
+
+  if (sx0 < massMinX) massMinX = sx0; if (ex0 < massMinX) massMinX = ex0;
+  if (sx0 > massMaxX) massMaxX = sx0; if (ex0 > massMaxX) massMaxX = ex0;
+  if (c1x < massMinX) massMinX = c1x; if (c2x < massMinX) massMinX = c2x;
+  if (c1x > massMaxX) massMaxX = c1x; if (c2x > massMaxX) massMaxX = c2x;
+  if (sy0 < massMinY) massMinY = sy0; if (ey0 < massMinY) massMinY = ey0;
+  if (sy0 > massMaxY) massMaxY = sy0; if (ey0 > massMaxY) massMaxY = ey0;
+  if (c1y < massMinY) massMinY = c1y; if (c2y < massMinY) massMinY = c2y;
+  if (c1y > massMaxY) massMaxY = c1y; if (c2y > massMaxY) massMaxY = c2y;
 }
 
 function spawnWisps(state, n, speedFactor) {
@@ -188,14 +222,24 @@ function bakeNestSprite(state) {
   const layout = state.layout;
   if (!layout || !layout.nestHome) return;
   const nh = layout.nestHome;
-  const r = Math.max(80, Math.min(state.w, state.h) * 0.42);
+  // Frame the bake canvas to the actual accumulated strand-mass bounding box (with padding),
+  // not a fixed guessed radius — this is what keeps the lift sprite reading as a dome instead
+  // of a wide flat streak.
+  const hasBounds = massMaxX > massMinX && massMaxY > massMinY;
+  const padX = Math.max(24, state.w * 0.045), padY = Math.max(24, state.h * 0.05);
+  const bx0 = hasBounds ? massMinX - padX : nh.x - state.w * 0.28;
+  const bx1 = hasBounds ? massMaxX + padX : nh.x + state.w * 0.28;
+  const by0 = hasBounds ? massMinY - padY : nh.y - state.h * 0.12;
+  const by1 = hasBounds ? massMaxY + padY : nh.y + state.h * 0.12;
+  const cx = (bx0 + bx1) / 2, cy = (by0 + by1) / 2;
+  const halfW = Math.max(50, (bx1 - bx0) / 2), halfH = Math.max(40, (by1 - by0) / 2);
   const dpr = state.dpr || 1;
   const cnv = document.createElement('canvas');
-  cnv.width = Math.max(1, Math.round(r * 2 * dpr));
-  cnv.height = Math.max(1, Math.round(r * 2 * dpr));
+  cnv.width = Math.max(1, Math.round(halfW * 2 * dpr));
+  cnv.height = Math.max(1, Math.round(halfH * 2 * dpr));
   const bc = cnv.getContext('2d');
   bc.setTransform(dpr, 0, 0, dpr, 0, 0);
-  bc.translate(r - nh.x, r - nh.y);
+  bc.translate(halfW - cx, halfH - cy);
   for (const layer of layers) bc.drawImage(layer.canvas, 0, 0, layer.w, layer.h);
   for (let i = 0; i < liveCount; i++) {
     bc.strokeStyle = lerpColor(midRGB, coreRGB, colorTA[i]);
@@ -208,7 +252,7 @@ function bakeNestSprite(state) {
   }
   bc.globalAlpha = 1;
   nestCanvas = cnv;
-  nestMeta = { cx: nh.x, cy: nh.y, r };
+  nestMeta = { cx, cy, halfW, halfH };
 }
 
 function onLiftStart() { if (S) bakeNestSprite(S); }
@@ -220,6 +264,7 @@ function onReset() {
   nestCanvas = null; nestMeta = null;
   totalPassFrac = 0; totalSpawned = 0; deltaSinceEmit = 0; spawnBudget = 0;
   prevSpawnX = null; wisps = []; sweepStart = -Infinity;
+  massMinX = Infinity; massMaxX = -Infinity; massMinY = Infinity; massMaxY = -Infinity;
   if (S) { S.nest.fullness = 0; S.nest.ready = false; }
 }
 
@@ -243,6 +288,7 @@ function resize() {
   // fullness/totalPassFrac persist so progress isn't lost; strands simply respawn on the next swipe.
   layers = [];
   liveCount = 0;
+  massMinX = Infinity; massMaxX = -Infinity; massMinY = Infinity; massMaxY = -Infinity;
 }
 
 function update(dt, state) {
@@ -257,7 +303,14 @@ function update(dt, state) {
                  p.y >= span.y - marginY && p.y <= span.y + marginY;
 
   if (p.down && p.speed > config.THREAD_MIN_SPEED && tool.caramel > 0 && inZone) {
-    if (prevSpawnX === null) prevSpawnX = p.x;
+    // First qualifying frame of this gesture (pointer down + fast enough + in zone + caramel>0):
+    // seed the spawn budget so a strand appears essentially immediately, instead of waiting for
+    // enough accumulated travel distance — review flagged >600ms first-strand latency at slow
+    // toddler swipe speeds. Subsequent strands stay purely distance-budget-gated.
+    if (prevSpawnX === null) {
+      prevSpawnX = p.x;
+      spawnBudget = Math.max(spawnBudget, FIRST_STRAND_BUDGET);
+    }
     const dx = p.x - prevSpawnX;
     prevSpawnX = p.x;
     const travelFrac = Math.abs(dx) / spanW;
@@ -266,7 +319,8 @@ function update(dt, state) {
       const fullnessRaw = totalPassFrac / config.PASSES_TO_FULL;
       const diminish = fullnessRaw > 1 ? 1 / (1 + (fullnessRaw - 1) * 1.5) : 1;
       const speedFactor = clamp(p.speed / 1200, 0, 1);
-      const ratePerPass = STRANDS_PER_PASS * (0.85 + 0.3 * speedFactor) * diminish;
+      const strandsPerPass = config.STRANDS_PER_PASS ?? STRANDS_PER_PASS_FALLBACK;
+      const ratePerPass = strandsPerPass * (0.85 + 0.3 * speedFactor) * diminish;
       spawnBudget += travelFrac * ratePerPass;
       const dirSign = dx >= 0 ? 1 : -1;
       while (spawnBudget >= 1) {
@@ -373,22 +427,33 @@ function drawLightSweep(ctx, cx, cy, r) {
   ctx.restore();
 }
 
+function clampOnscreen(v, half, total, margin) {
+  const lo = half + margin, hi = total - half - margin;
+  if (lo > hi) return total / 2; // sprite wider than screen: just center it
+  return clamp(v, lo, hi);
+}
+
 function renderNestSprite(ctx, state) {
   const t = clamp(state.nest.lift, 0, 1);
   const ease = t * t * (3 - 2 * t);
   const homeX = nestMeta.cx, homeY = nestMeta.cy;
   const tx = state.nest.x || homeX, ty = state.nest.y || homeY;
-  const px = lerp(homeX, tx, ease), py = lerp(homeY, ty, ease);
-  const scale = lerp(1, 0.55, ease);
-  const squash = lerp(1, 0.8, ease);
+  let px = lerp(homeX, tx, ease), py = lerp(homeY, ty, ease);
+  // Condense toward a plump oval nest as it lifts — kept close to uniform scale (not a hard
+  // horizontal squash) so it reads as a dome/nest, never a flattened line.
+  const scale = lerp(1, 0.5, ease);
+  const squashY = lerp(1, 0.92, ease);
   const wobble = Math.sin(state.time * 2.5) * 0.05 * ease;
+  const halfW = nestMeta.halfW * scale, halfH = nestMeta.halfH * scale * squashY;
+  px = clampOnscreen(px, halfW, state.w, 8);
+  py = clampOnscreen(py, halfH, state.h, 8);
   ctx.save();
   ctx.translate(px, py);
   ctx.rotate(wobble);
-  ctx.scale(scale, scale * squash);
-  ctx.drawImage(nestCanvas, -nestMeta.r, -nestMeta.r, nestMeta.r * 2, nestMeta.r * 2);
+  ctx.scale(scale, scale * squashY);
+  ctx.drawImage(nestCanvas, -nestMeta.halfW, -nestMeta.halfH, nestMeta.halfW * 2, nestMeta.halfH * 2);
   ctx.restore();
-  if (state.phase === 'celebrate') drawLightSweep(ctx, px, py, nestMeta.r * scale);
+  if (state.phase === 'celebrate') drawLightSweep(ctx, px, py, (halfW + halfH) * 0.5);
 }
 
 function render(ctx, state) {
