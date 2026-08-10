@@ -112,6 +112,8 @@ export class Body {
     this.layer = 0;            // which PILE.layers row this toy was placed in
     this.covered = 0;          // how many toys refreshCoverage() found on top of it
     this.restingOnBody = false; // this-step signal: touching a body below it
+    this.supportTimer = 0;     // grace period bridging a single missed-contact frame (see SUPPORT_GRACE)
+    this.calmTimer = 0;        // backstop: seconds spent under BACKSTOP_SPEED regardless of detected support
   }
   get floorY() { return this.radius * 0.93; }
   wake() { this.sleeping = false; this.sleepTimer = 0; }
@@ -344,8 +346,15 @@ export class Pile {
           supB.pos.x, supB.pos.y, supB.pos.z, supB.radius));
         b.held = false;
         b.syncMesh();
+        if (globalThis.__PILE_DEBUG) console.log('reseat', tier, this.bodies.indexOf(b), 'y=', b.pos.y.toFixed(3));
       }
-      for (let i = 0; i < SETTLE_STEPS; i++) this.step(1 / 60, true);
+      const dbgSteps = (globalThis.__PILE_DEBUG && tier === 2) ? 600 : SETTLE_STEPS;
+      for (let i = 0; i < dbgSteps; i++) {
+        this.step(1 / 60, true);
+        if (globalThis.__PILE_DEBUG && tier === 2 && (i % 20 === 0)) {
+          console.log('  step', i, this.bodies.map((bb) => bb.pos.y.toFixed(3)).join(','));
+        }
+      }
     }
 
     // ---- let already-stable bodies actually fall asleep before the round
@@ -498,55 +507,50 @@ export class Pile {
           const support = sumR * SUPPORT_DY;
 
           // Support (for sleep bookkeeping and the seat-damping pass below)
-          // is marked over a slightly wider "touching" range than the one
-          // used to trigger positional correction below: right at the exact
-          // overlap boundary, `d2 < rr*rr` can flicker true/false frame to
-          // frame from floating-point noise alone even while a body is
-          // genuinely, stably seated — and every flicker to false reset its
-          // sleep timer, so a resting body could jitter forever without ever
-          // accumulating enough quiet time to sleep.
-          const contactR = sumR * 1.02;
+          // is marked over a wider "touching" range than the one used to
+          // trigger positional correction below — resting contact and
+          // penetration are different questions. Right at the relaxed
+          // pair's rest distance (d == rr, no penetration left to resolve)
+          // it is still genuinely seated, but `d2 < rr*rr` alone would call
+          // that "not touching" and reset its sleep progress. SUPPORT_GRACE
+          // then keeps the flag alive for a short window after the last
+          // frame that actually detected it, bridging any single frame
+          // where even the widened check missed.
+          const contactR = sumR + SUPPORT_SLACK;
           if (d2 < contactR * contactR) {
-            if (dy > support) b.restingOnBody = true;
-            else if (-dy > support) a.restingOnBody = true;
+            if (dy > support) { b.restingOnBody = true; b.supportTimer = SUPPORT_GRACE; }
+            else if (-dy > support) { a.restingOnBody = true; a.supportTimer = SUPPORT_GRACE; }
           }
 
           const rr = sumR * 0.9;   // 10% overlap allowed = plush squish
           if (d2 >= rr * rr) continue;   // touching, but nothing to resolve this pass
           const d = Math.sqrt(d2);
           const inv = 1 / d;
-          const nx = dx * inv, ny = dy * inv, nz = dz * inv;   // true contact normal, used for the bounce below
+          const nx = dx * inv, ny = dy * inv, nz = dz * inv;   // true contact normal
           const pen = rr - d;
           const stacked = Math.abs(dy) > support * 0.5;
 
-          // Positional correction is biased away from the raw centre-to-centre
-          // line for a meaningfully-stacked pair: a body nudged into a saddle
-          // between two neighbours mostly overlaps them sideways (its centre
-          // is barely higher than theirs), so resolving purely along that line
-          // shoves it back out sideways instead of letting it climb. Leaning
-          // the push toward vertical instead lets it settle upward into the
-          // seat. Purely side-by-side pairs (dy small) are untouched.
-          let cx = nx, cy = ny, cz = nz;
-          if (stacked) {
-            const horiz = Math.hypot(nx, nz);
-            if (horiz > 1e-4) {
-              const lean = 0.65;   // fraction of the horizontal push redirected upward
-              const upSign = dy >= 0 ? 1 : -1;
-              cx = nx * (1 - lean);
-              cz = nz * (1 - lean);
-              cy = ny + upSign * lean * horiz;
-              const cl = Math.hypot(cx, cy, cz) || 1;
-              cx /= cl; cy /= cl; cz /= cl;
-            }
-          }
-
-          // A stacked pair also splits the correction unevenly: the lower body
-          // (closer to the floor) moves less, like it has more inertia, so the
-          // heap's base does not sink every time something settles onto it.
+          // Position moves exactly along the true centre-to-centre normal —
+          // NOT redirected toward vertical for a stacked pair. An earlier
+          // version leaned the push direction upward here to help a toy
+          // climb into a saddle, but that moves a body further than the
+          // actual overlap requires: the correction no longer converges to
+          // zero once the pair is genuinely separated along its real axis,
+          // so repeated passes (three a step, hundreds of steps across a
+          // settle) can ratchet a body upward indefinitely — once clear of
+          // every neighbour it is never grounded or resting again and hangs
+          // there forever, awake, in a limit cycle. The true-normal
+          // correction is self-limiting: it always converges to exactly
+          // resolving the real overlap and nothing more.
+          //
+          // The lower body of a stacked pair still moves less than the
+          // upper one (some inertia, so the heap's base does not sink every
+          // time something settles onto it) — but gently, not by giving the
+          // upper body most of the correction, which is its own ratchet risk.
           let shareA = 0.5, shareB = 0.5;
           if (stacked) {
-            if (dy >= 0) { shareA = 0.3; shareB = 0.7; }   // b sits above a
-            else { shareA = 0.7; shareB = 0.3; }           // a sits above b
+            if (dy >= 0) { shareA = 0.4; shareB = 0.6; }   // b sits above a
+            else { shareA = 0.6; shareB = 0.4; }           // a sits above b
           }
           // A sleeping body must not move at all until something actually
           // wakes it (below) — otherwise it silently drifts under an awake
@@ -557,8 +561,8 @@ export class Pile {
           // the pair absorbs the whole correction instead of its usual share.
           if (a.sleeping) { shareB += shareA; shareA = 0; }
           else if (b.sleeping) { shareA += shareB; shareB = 0; }
-          a.pos.x -= cx * pen * shareA; a.pos.y -= cy * pen * shareA; a.pos.z -= cz * pen * shareA;
-          b.pos.x += cx * pen * shareB; b.pos.y += cy * pen * shareB; b.pos.z += cz * pen * shareB;
+          a.pos.x -= nx * pen * shareA; a.pos.y -= ny * pen * shareA; a.pos.z -= nz * pen * shareA;
+          b.pos.x += nx * pen * shareB; b.pos.y += ny * pen * shareB; b.pos.z += nz * pen * shareB;
 
           // Waking is contagious, but only when the contact actually carries
           // relative motion — two bodies resting quietly against each other
@@ -572,8 +576,26 @@ export class Pile {
             a.wake(); b.wake();
           }
 
+          // A positional correction must never be "free": leaving the
+          // velocity that drove a body into this overlap untouched means it
+          // simply re-penetrates next step, and the same correction fires
+          // again — the exact pump that let a body ratchet away from
+          // equilibrium. This removes the closing component of the pair's
+          // relative velocity (no bounce, split by the same shares as the
+          // position fix above) on *every* pass, not only the last, so no
+          // iteration's correction can ever be free. The bouncier,
+          // restitution-based impulse below (with its impact sound) still
+          // only fires once, on the final pass, as the "real" collision
+          // response layered on top.
+          const vnAll = rvx * nx + rvy * ny + rvz * nz;
+          if (vnAll < 0) {
+            if (!a.sleeping) { a.vel.x -= nx * vnAll * shareA; a.vel.y -= ny * vnAll * shareA; a.vel.z -= nz * vnAll * shareA; }
+            if (!b.sleeping) { b.vel.x += nx * vnAll * shareB; b.vel.y += ny * vnAll * shareB; b.vel.z += nz * vnAll * shareB; }
+          }
+
           if (resolveVelocity) {
-            const vn = rvx * nx + rvy * ny + rvz * nz;
+            const rvx2 = b.vel.x - a.vel.x, rvy2 = b.vel.y - a.vel.y, rvz2 = b.vel.z - a.vel.z;
+            const vn = rvx2 * nx + rvy2 * ny + rvz2 * nz;
             if (vn < 0) {
               const jimp = -vn * 0.5 * (1 + REST);
               // A body that is still sleeping at this point (the wake check
@@ -600,7 +622,7 @@ export class Pile {
     // vibration as a stacked one is, so this uses the same grounded-or-
     // resting condition the sleep test below reads ----
     for (const b of bodies) {
-      if (b.held || b.inChute || b.sleeping || !(b.grounded || b.restingOnBody)) continue;
+      if (b.held || b.inChute || b.sleeping || !(b.grounded || b.restingOnBody || b.supportTimer > 0)) continue;
       const f = Math.pow(CONTACT_DAMP, dt * 60);
       if (Math.hypot(b.vel.x, b.vel.z) < CONTACT_STOP_SPEED) { b.vel.x = 0; b.vel.z = 0; }
       else { b.vel.x *= f; b.vel.z *= f; }
@@ -635,14 +657,14 @@ export class Pile {
     if (!settling) {
       for (const b of bodies) {
         if (b.held || b.inChute || b.sleeping) continue;
+        b.supportTimer = Math.max(0, b.supportTimer - dt);
         const speed = b.vel.length() + b.angVel.length() * 0.25;
-        if (speed < SLEEP_SPEED && (b.grounded || b.restingOnBody)) {
+        // supportTimer bridges a short gap after the last frame that
+        // actually detected contact, so one missed-overlap frame amid an
+        // otherwise settled stack cannot single-handedly stall it here.
+        const supported = b.grounded || b.restingOnBody || b.supportTimer > 0;
+        if (speed < SLEEP_SPEED && supported) {
           b.sleepTimer += dt;
-          if (b.sleepTimer > SLEEP_TIME) {
-            b.sleeping = true;
-            b.vel.set(0, 0, 0);
-            b.angVel.set(0, 0, 0);
-          }
         } else {
           // Decay rather than hard-reset: a single stray frame (a contact
           // flag that briefly missed, a one-step speed blip) would otherwise
@@ -652,6 +674,16 @@ export class Pile {
           // decay and accrual are the same rate, so it takes as long to
           // recover from a blip as the blip itself lasted.
           b.sleepTimer = Math.max(0, b.sleepTimer - dt);
+        }
+        // Backstop, independent of any detected support at all: nothing
+        // should be able to stay awake forever purely because the contact
+        // flags never line up, however small its actual residual jitter is.
+        if (speed < BACKSTOP_SPEED) b.calmTimer += dt; else b.calmTimer = 0;
+
+        if (b.sleepTimer > SLEEP_TIME || b.calmTimer > BACKSTOP_TIME) {
+          b.sleeping = true;
+          b.vel.set(0, 0, 0);
+          b.angVel.set(0, 0, 0);
         }
       }
     }

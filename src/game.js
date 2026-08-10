@@ -101,6 +101,7 @@ export class Game {
     this.chuteResult = null;
     this.teeterBody = null;
     this.slippedBody = null;
+    this.pendingMissLog = null;
     this.carrySwingPeak = 0;
     this.lastGrab = null;
     this.dramaLog = [];        // last ~50 entries, oldest first
@@ -803,7 +804,17 @@ export class Game {
           } else {
             if (this.pending.kind !== 'catch') {
               this.lastEval = this.drama.evaluate(null);
-              this._logGrab(this.pending.kind, this.lastEval, null);
+              if (this.lastEval.score < MIN_DRAMA) {
+                // a miss with nothing else nearby (the 'air' case especially,
+                // an empty-floor whiff has no held body to earn rotate/move
+                // points from at all) -- shove whatever's nearest the touch
+                // point and finish scoring at the end of recover, once that
+                // shove has had time to actually move something
+                this._forceDudAt(this._touchStart.x, this._touchStart.z, 1.1);
+                this.pendingMissLog = this.pending.kind;
+              } else {
+                this._logGrab(this.pending.kind, this.lastEval, null);
+              }
             }
             this._setState('recover');
           }
@@ -956,6 +967,13 @@ export class Game {
         claw.targetY = CAB.clawHomeY;
         this.hero = damp(this.hero, 0, 3.0, dt);
         if (this.stateT > BEAT.recover) {
+          if (this.pendingMissLog) {
+            // the escalation shove applied when this beat began has had the
+            // whole recover beat to actually move something -- score it now
+            this.lastEval = this.drama.evaluate(null);
+            this._logGrab(this.pendingMissLog, this.lastEval, null);
+            this.pendingMissLog = null;
+          }
           this.setAim(claw.pos.x, claw.pos.z);
           this._setState('aim');
         }

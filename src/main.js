@@ -302,31 +302,57 @@ function tuneQuality(dt) {
 let last = performance.now();
 let booted = false;
 
-renderer.setAnimationLoop(() => {
-  const now = performance.now();
-  let dt = (now - last) / 1000;
-  last = now;
-  if (dt > 0.1) dt = 0.1;      // tab switch / hiccup guard
-  if (dt <= 0) dt = 1 / 60;
-
-  tuneQuality(dt);
-
-  if (mode === 'play') {
-    game.update(dt);
-    renderer.render(game.scene, game.camera);
-  } else if (mode === 'reveal') {
-    game.update(Math.min(dt, 1 / 30));   // keep the pile settling behind the scenes
-    reveal.update(dt);
-    renderer.render(reveal.scene, reveal.camera);
-  } else {
-    room.update(dt);
-    renderer.render(room.scene, room.camera);
+// An exception anywhere in a per-frame path would otherwise leave a frozen
+// picture on screen with no way out — and the player here cannot read an error
+// or think to reload. Recover by reloading once; the collection is on disk, so
+// nothing is lost. The guard stops a reproducible fault becoming a reload loop.
+const CRASH_KEY = 'nuigurumi-crane.recovered';
+function recoverFromCrash(err) {
+  renderer.setAnimationLoop(null);
+  audio.stopMotor();
+  let already = false;
+  try { already = sessionStorage.getItem(CRASH_KEY) === '1'; } catch (e) { /* private mode */ }
+  if (already) {
+    // second failure in a row: stop, and leave the boot screen up rather than
+    // reloading forever
+    ui.boot?.classList.remove('gone');
+    throw err;
   }
+  try { sessionStorage.setItem(CRASH_KEY, '1'); } catch (e) { /* private mode */ }
+  window.location.reload();
+}
 
-  if (!booted) {
-    booted = true;
-    ui.boot.classList.add('gone');
-    setTimeout(() => ui.boot.remove(), 700);
+renderer.setAnimationLoop(() => {
+  try {
+    const now = performance.now();
+    let dt = (now - last) / 1000;
+    last = now;
+    if (dt > 0.1) dt = 0.1;      // tab switch / hiccup guard
+    if (dt <= 0) dt = 1 / 60;
+
+    tuneQuality(dt);
+
+    if (mode === 'play') {
+      game.update(dt);
+      renderer.render(game.scene, game.camera);
+    } else if (mode === 'reveal') {
+      game.update(Math.min(dt, 1 / 30));   // keep the pile settling behind the scenes
+      reveal.update(dt);
+      renderer.render(reveal.scene, reveal.camera);
+    } else {
+      room.update(dt);
+      renderer.render(room.scene, room.camera);
+    }
+
+    if (!booted) {
+      booted = true;
+      ui.boot.classList.add('gone');
+      setTimeout(() => ui.boot.remove(), 700);
+      // a frame completed, so whatever went wrong last time is behind us
+      try { sessionStorage.removeItem(CRASH_KEY); } catch (e) { /* private mode */ }
+    }
+  } catch (err) {
+    recoverFromCrash(err);
   }
 });
 
