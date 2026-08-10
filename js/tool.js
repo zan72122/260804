@@ -42,6 +42,7 @@ function reset(state) {
 
 export default {
   init({ canvas, ctx, bus, state, config: cfg }) {
+    busRef = bus;
     sx = state.w ? state.w / 2 : 160;
     sy = state.h ? state.h / 2 : 260;
     state.tool.x = sx;
@@ -121,8 +122,8 @@ export default {
         t.dipping = false;
         t.caramel = 1;
         dipCooldown = DIP_COOLDOWN;
-        // release drips on exit
-        spawnDrip(t);
+        spawnDrip(t); // 1-2 drips on exit (single-slot drip system)
+        if (busRef) busRef.emit('tool:dipped', {});
       }
     } else if (pot && dipCooldown <= 0 && t.caramel < 0.9) {
       const dx = t.x - pot.x, dy = t.y - pot.y;
@@ -130,13 +131,7 @@ export default {
       if (inPot) {
         dipT = DIP_DURATION;
         t.dipping = true;
-        bus.emitDeferred = null; // no-op, placeholder to avoid lints
       }
-    }
-
-    // emit tool:dipped exactly once when dip animation completes — handled via flag
-    if (t.dipping && dipT === DIP_DURATION) {
-      // first frame of dip: nothing to emit yet (emit happens on completion below via _justDipped)
     }
 
     // --- occasional slow drip while loaded & tool nearly still ---
