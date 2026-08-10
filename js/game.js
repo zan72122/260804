@@ -34,6 +34,9 @@ window.Game = (function () {
   const BOWL_RY = BOWL_H / Math.sin(TH);
   const STEM_HW = 0.048, FOOT_T = 0.88, FOOT_HW = 0.23;
   const REROUTE_STR = 0.35;        // field strength needed to actually re-aim a stream
+  const PAINT_REARM_GAP = 0.15;    // grace period (s) before a paint-plop can re-arm —
+                                    // bridges a 1-frame str/segment flicker in the
+                                    // simulation without masking a deliberate lift
 
   // ---------- sky/sparkle themes (cycled on each replay) ----------
   // the drink itself is no longer themed — its colour comes from Tint / LiquidArt
@@ -456,14 +459,21 @@ window.Game = (function () {
     // armed-finger "plop": a one-shot per injection *event*, not per frame —
     // fires the instant a painted finger starts actually dyeing a stream,
     // stays silent while it continues to (would otherwise machine-gun at
-    // 60Hz across every deflected stream), and re-arms itself the moment
-    // the finger stops injecting, so lifting and re-touching (or drifting
+    // 60Hz across every deflected stream), and re-arms once the finger has
+    // truly stopped injecting, so lifting and re-touching (or drifting well
     // off-stream and back) makes a fresh plop rather than none at all.
+    // PAINT_REARM_GAP debounces re-arming itself: the stream-segment field
+    // can drop a segment's strength below REROUTE_STR for a single frame as
+    // the overflow cascade updates (most visible moments after a pour
+    // starts), which would otherwise flip paintingNow false->true->false
+    // and sneak out a second plop for what is really one continuous touch.
     for (const d of deflectors.values()) {
       if (d.paintingNow) {
+        d.paintGapT = 0;
         if (!d.paintSounded) { Sound.paint(); d.paintSounded = true; }
-      } else {
-        d.paintSounded = false;
+      } else if (d.paintSounded) {
+        d.paintGapT += dt;
+        if (d.paintGapT >= PAINT_REARM_GAP) { d.paintSounded = false; d.paintGapT = 0; }
       }
     }
   }
@@ -1391,7 +1401,7 @@ window.Game = (function () {
     const wasDry = !streamsNear(x, y);
     deflectors.set(id, { x, y, vx: 0, speed: 0, sprayT: 0, paint: brush,
                          lastX: x, lastT: performance.now(),
-                         paintingNow: false, paintSounded: false });
+                         paintingNow: false, paintSounded: false, paintGapT: 0 });
     pointers.set(id, { role: 'deflect' });
     if (!wasDry) everDeflected = true;
     if (wasDry && !autoPour) setPour(true);
