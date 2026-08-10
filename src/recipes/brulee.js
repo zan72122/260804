@@ -93,10 +93,15 @@ export function createRecipe(ctx) {
   // -----------------------------------------------------------------------
   // フェーズ遷移
   // -----------------------------------------------------------------------
-  let prevDown = false;
   let torchRoamT = Math.random() * 10;
   let lastPX = null, lastPY = null;
   let crackHoldTimer = 0;
+
+  // CRACK中は実イベントで即応（低fps環境ではフレームごとのpointer.downサンプリングだと
+  // すばやいタップのdown/upが1フレームの間に完結して検知漏れすることがあるため）
+  ctx.renderer.domElement.addEventListener('pointerdown', () => {
+    if (state.phase === 'CRACK') { handleCrackTap(); crackHoldTimer = 0; }
+  });
 
   function enterPhase(p) {
     state.phase = p;
@@ -383,8 +388,6 @@ export function createRecipe(ctx) {
     },
     update(dt, hdt, t) {
       clockT = t;
-      const justPressed = ctx.pointer.down && !prevDown;
-      prevDown = ctx.pointer.down;
 
       switch (state.phase) {
         case 'CUSTARD': updateCustard(dt, hdt); break;
@@ -392,9 +395,9 @@ export function createRecipe(ctx) {
         case 'SUGAR': updateSugar(dt, hdt); break;
         case 'TORCH': updateTorch(dt, hdt, t); break;
         case 'CRACK':
-          if (justPressed) { handleCrackTap(); crackHoldTimer = 0; }
-          else if (ctx.pointer.down && state.crackStage < 3) {
-            // 長押しでも確実に進む（無操作アシスト）
+          // タップ自体は上のpointerdownリスナーで即応済み。ここは長押しでも確実に
+          // 進める無操作アシストのみ担当（フレームサンプリングでの検知漏れを避ける）。
+          if (ctx.pointer.down && state.crackStage < 3) {
             crackHoldTimer += hdt;
             if (crackHoldTimer > 0.65) { handleCrackTap(); crackHoldTimer = 0; }
           } else if (!ctx.pointer.down) {

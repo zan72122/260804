@@ -7,23 +7,25 @@ export function buildKitchen(scene) {
   scene.add(kitchen);
 
   // --- 照明 ---
-  // 窓からの暖かい太陽光（キーライト・影あり）
-  const sun = new THREE.DirectionalLight(0xfff0dc, 3.2);
+  // 窓からの暖かい太陽光（キーライト・影あり）※主役を照らすキーとして強化
+  const sun = new THREE.DirectionalLight(0xfff0dc, 3.6);
   sun.position.set(0.9, 1.6, 0.9);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(1024, 1024);
+  sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.camera.near = 0.2;
   sun.shadow.camera.far = 5;
   sun.shadow.camera.left = -0.9;
   sun.shadow.camera.right = 0.9;
   sun.shadow.camera.top = 0.9;
   sun.shadow.camera.bottom = -0.9;
-  sun.shadow.bias = -0.0005;
+  // 高解像度化に合わせてbias/normalBiasを調整（アクネと接地部の浮き=ピーターパンを抑制）
+  sun.shadow.bias = -0.00012;
+  sun.shadow.normalBias = 0.012;
   scene.add(sun);
   scene.add(sun.target);
 
   // 空からの環境光（上: 空色 / 下: 木の照り返し）
-  const hemi = new THREE.HemisphereLight(0xcfe4ff, 0x8a6a48, 0.85);
+  const hemi = new THREE.HemisphereLight(0xcfe4ff, 0x8a6a48, 0.78);
   scene.add(hemi);
 
   // 手元を照らすフィルライト
@@ -31,22 +33,49 @@ export function buildKitchen(scene) {
   fill.position.set(-0.6, 0.8, 0.8);
   scene.add(fill);
 
-  // 空気遠近: 暖色フォグで遠景を溶かす
-  scene.fog = new THREE.Fog(0xf2ddc4, 2.0, 5.2);
-  scene.background = new THREE.Color(0xf2ddc4);
+  // リムライト（輪郭光）: スタンド上の主役(0,0.1,0)付近を背後上方から狙い、
+  // シルエットのエッジに薄いハイライトを乗せて立体感を出す。影は持たせない（負荷/アクネ回避）。
+  const rim = new THREE.SpotLight(0xdcebff, 3.2, 3.2, Math.PI * 0.32, 0.55, 1.4);
+  rim.position.set(-0.15, 1.05, -0.55);
+  rim.target.position.set(0, 0.12, 0);
+  rim.castShadow = false;
+  scene.add(rim);
+  scene.add(rim.target);
 
-  // 環境マップ（金属・クリアコートの反射用）: 窓明かりのある暖かい室内を模したグラデーション
-  const envTex = canvasTexture(256, (g, s) => {
+  // 空気遠近: 暖色フォグで遠景を溶かす（近中遠の分離をわずかに強める）
+  scene.fog = new THREE.Fog(0xefd6b8, 1.7, 5.0);
+  scene.background = new THREE.Color(0xefd6b8);
+
+  // 環境マップ（金属・クリアコートの反射用）: 窓明かりのある室内を模したグラデーション
+  // 天井-床の明暗差・窓ハイライトの強さ/数を増やし「窓が映り込んでいる」と分かる高コントラスト版に
+  const envTex = canvasTexture(512, (g, s) => {
     const gr = g.createLinearGradient(0, 0, 0, s);
-    gr.addColorStop(0, '#fff6e8');   // 天井: 明るい暖白
-    gr.addColorStop(0.45, '#eed7bc'); // 壁
-    gr.addColorStop(0.55, '#c9a377'); // 地平
-    gr.addColorStop(1, '#6e4a2c');   // 床: 木の茶
+    gr.addColorStop(0, '#fffdf6');    // 天井: 明るい暖白（より明るく）
+    gr.addColorStop(0.32, '#f2e2c4'); // 上壁
+    gr.addColorStop(0.5, '#cfa877');  // 地平（やや暗め）
+    gr.addColorStop(0.52, '#8a6a52'); // 地平のクール寄りの陰
+    gr.addColorStop(1, '#241408');    // 床: 濃い木の茶（コントラスト強化）
     g.fillStyle = gr; g.fillRect(0, 0, s, s);
-    // 窓のハイライト（強い反射光源）
-    g.fillStyle = 'rgba(255,255,255,0.95)';
-    g.fillRect(s * 0.15, s * 0.28, s * 0.14, s * 0.2);
-    g.fillRect(s * 0.65, s * 0.3, s * 0.1, s * 0.16);
+    // 窓のハイライト（強い反射光源）を3枚・より明るく大きく、柔らかい縁でにじませる
+    const windows = [
+      [s * 0.18, s * 0.30, s * 0.11],
+      [s * 0.62, s * 0.32, s * 0.085],
+      [s * 0.80, s * 0.27, s * 0.06],
+    ];
+    for (const [wx, wy, wr] of windows) {
+      const wg = g.createRadialGradient(wx, wy, 0, wx, wy, wr);
+      wg.addColorStop(0, 'rgba(255,255,255,1)');
+      wg.addColorStop(0.55, 'rgba(238,248,255,0.9)');
+      wg.addColorStop(1, 'rgba(238,248,255,0)');
+      g.fillStyle = wg;
+      g.beginPath(); g.arc(wx, wy, wr, 0, Math.PI * 2); g.fill();
+    }
+    // 反対側にわずかにクールな空の映り込みを足し、暖色→クール差を演出
+    const cg = g.createRadialGradient(s * 0.9, s * 0.18, 0, s * 0.9, s * 0.18, s * 0.16);
+    cg.addColorStop(0, 'rgba(200,225,255,0.55)');
+    cg.addColorStop(1, 'rgba(200,225,255,0)');
+    g.fillStyle = cg;
+    g.beginPath(); g.arc(s * 0.9, s * 0.18, s * 0.16, 0, Math.PI * 2); g.fill();
   }, { srgb: true });
   envTex.mapping = THREE.EquirectangularReflectionMapping;
   scene.environment = envTex;
@@ -86,6 +115,24 @@ export function buildKitchen(scene) {
   slab.position.set(0, 0.009, 0.02);
   slab.receiveShadow = true;
   kitchen.add(slab);
+
+  // 接触影ブロブ（主役=スタンド直下に柔らかい放射グラデの暗部を追加し、シャドウマップと併用して接地感を強化）
+  const blobShadowTex = canvasTexture(128, (g, s) => {
+    const grd = g.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
+    grd.addColorStop(0, 'rgba(18,12,8,0.5)');
+    grd.addColorStop(0.5, 'rgba(18,12,8,0.28)');
+    grd.addColorStop(0.8, 'rgba(18,12,8,0.1)');
+    grd.addColorStop(1, 'rgba(18,12,8,0)');
+    g.fillStyle = grd; g.fillRect(0, 0, s, s);
+  }, { srgb: false });
+  const blobShadow = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.4, 0.4),
+    new THREE.MeshBasicMaterial({ map: blobShadowTex, transparent: true, depthWrite: false, toneMapped: false })
+  );
+  blobShadow.rotation.x = -Math.PI / 2;
+  blobShadow.position.set(0, 0.0192, 0.02);
+  blobShadow.renderOrder = 1;
+  kitchen.add(blobShadow);
 
   // --- 遠景: 床・壁・窓 ---
   const floor = new THREE.Mesh(
