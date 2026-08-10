@@ -38,10 +38,6 @@
     t = clamp(t, 0, 1);
     return 1 - Math.pow(1 - t, 3);
   }
-  function easeOutQuad(t) {
-    t = clamp(t, 0, 1);
-    return 1 - (1 - t) * (1 - t);
-  }
 
   // 16進カラー -> {r,g,b}
   var hexCache = {};
