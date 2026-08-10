@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#ffe3ef">
+<title>おはなの ふんすいタワー</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="ui">
+  <button id="btnRestart" class="uiBtn" aria-label="さいしょから" title="さいしょから">🔄</button>
+  <button id="btnSound" class="uiBtn" aria-label="おと" title="おと">🔊</button>
+  <div id="themes">
+    <button class="themeBtn active" data-theme="0" aria-label="ピンクのきらきらすい">🌸</button>
+    <button class="themeBtn" data-theme="1" aria-label="にじいろジュース">🌈</button>
+    <button class="themeBtn" data-theme="2" aria-label="きらぼしのまほうすい">⭐</button>
+  </div>
+</div>
+
+<div id="splash">
+  <div class="splashCard">
+    <div class="splashDeco">🌸 ⛲ 🌸</div>
+    <div class="splashTitle">おはなの<br>ふんすいタワー</div>
+    <div class="splashHand">👆</div>
+  </div>
+</div>
+
+<script src="main.js"></script>
+</body>
+</html>

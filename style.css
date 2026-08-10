@@ -1,0 +1,144 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: fixed;
+  background: #ffe3ef;
+  font-family: "Hiragino Maru Gothic ProN", "Hiragino Kaku Gothic ProN",
+    "BIZ UDGothic", "Yu Gothic", system-ui, sans-serif;
+  touch-action: none;
+  overscroll-behavior: none;
+}
+
+#game {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+/* ---------- UI buttons ---------- */
+#ui {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.uiBtn {
+  pointer-events: auto;
+  position: absolute;
+  top: calc(10px + env(safe-area-inset-top, 0px));
+  width: 56px;
+  height: 56px;
+  border: none;
+  border-radius: 50%;
+  font-size: 27px;
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 3px 10px rgba(120, 60, 90, 0.25);
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+.uiBtn:active { transform: scale(0.88); }
+
+#btnRestart { left: calc(12px + env(safe-area-inset-left, 0px)); }
+#btnSound  { right: calc(12px + env(safe-area-inset-right, 0px)); }
+
+#btnRestart.pulse {
+  animation: btnPulse 1.2s ease-in-out infinite;
+}
+@keyframes btnPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); box-shadow: 0 3px 18px rgba(255, 120, 170, 0.6); }
+}
+
+#themes {
+  pointer-events: auto;
+  position: absolute;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 14px;
+}
+
+.themeBtn {
+  width: 54px;
+  height: 54px;
+  border: 3px solid rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  font-size: 25px;
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.65);
+  box-shadow: 0 3px 10px rgba(120, 60, 90, 0.25);
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.themeBtn:active { transform: scale(0.88); }
+.themeBtn.active {
+  transform: scale(1.14);
+  border-color: #ffd76e;
+  box-shadow: 0 0 0 4px rgba(255, 215, 110, 0.45), 0 3px 12px rgba(120, 60, 90, 0.3);
+}
+
+/* ---------- splash ---------- */
+#splash {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 38%,
+    rgba(255, 255, 255, 0.55), rgba(255, 200, 225, 0.15) 70%);
+  opacity: 1;
+  transition: opacity 0.6s ease;
+  z-index: 5;
+}
+#splash.hidden { opacity: 0; }
+
+.splashCard {
+  text-align: center;
+  padding: 24px 34px;
+  border-radius: 32px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 8px 30px rgba(200, 90, 140, 0.28);
+  animation: cardFloat 2.6s ease-in-out infinite;
+}
+@keyframes cardFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+.splashDeco { font-size: clamp(26px, 6vmin, 44px); }
+
+.splashTitle {
+  margin: 8px 0 4px;
+  font-size: clamp(26px, 7vmin, 52px);
+  font-weight: 800;
+  line-height: 1.25;
+  color: #e4508e;
+  text-shadow: 0 2px 0 #fff, 0 4px 10px rgba(228, 80, 142, 0.25);
+  letter-spacing: 0.04em;
+}
+
+.splashHand {
+  font-size: clamp(30px, 7vmin, 50px);
+  animation: handTap 1s ease-in-out infinite;
+}
+@keyframes handTap {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-12px) scale(1.15); }
+}
