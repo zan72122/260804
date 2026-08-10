@@ -76,19 +76,25 @@ an independent measurement of every body's position and orientation.
 ### Being fair to a four-year-old
 
 Real claw machines cheat by randomly weakening the grip. This one never does.
-Outcomes are a pure function of where you aimed:
+Aim decides everything, in two stages.
 
-| horizontal distance to the nearest toy | outcome |
-| --- | --- |
-| ≤ 0.50 | clean catch |
-| ≤ 0.74 | grabbed, then slips during the lift — the toy tumbles somewhere easier |
-| ≤ 1.25 | pushed: it rolls, rotates, rights itself, and drifts toward the front |
-| beyond that | the claw hits the mat and the whole platform jolts the pile |
+First, whether the fingers reach a toy at all — within about 0.74 m of the claw
+axis they close on it, further out they shove it, further still they hit the mat
+and jolt the whole platform.
 
-A hidden assist closes part of the gap before the descent when you were nearly
-right — the crane creeps a few centimetres during the "open" beat, so it reads
-as the machine settling rather than as auto-aim. There is no outcome where
-nothing at all changes, and no layout where a prize becomes unreachable.
+Then **which part** they closed on, which is what decides the rest:
+
+| caught by | holds? | what you see |
+| --- | --- | --- |
+| body, head | yes | lifts square and steady |
+| arm, leg | yes | hangs lopsided, the free limbs swinging |
+| ear, tail | no | the toy turns right over, then comes loose mid-lift |
+
+A toy that slips lands toward the front and centre — a miss always leaves the
+child better off, never worse. A hidden assist closes part of the gap before the
+descent when you were nearly right: the crane creeps a few centimetres during the
+"open" beat, so it reads as the machine settling rather than as auto-aim. No
+layout can make a prize unreachable, and no grab can leave the case unchanged.
 
 ---
 
@@ -110,6 +116,26 @@ nothing at all changes, and no layout where a prize becomes unreachable.
 | `src/audio.js` | Web Audio synthesis, including the iOS unlock |
 | `src/merge.js` | static-geometry merger (three's `BufferGeometryUtils` is not vendored) |
 | `src/storage.js` | collection persistence |
+
+### The prize heap
+
+Twelve toys in two tiers. The heap is **authored, not simulated**: a soft-sphere
+relaxation gives no guarantee of holding a saddle across hundreds of settle
+steps, and the minority of layouts where it failed left a toy either slid flat
+onto the mat or ratcheted up into mid-air — both instantly obvious, neither
+recoverable once the round had started. So every stacked toy is placed on a
+solved tangency seat, residual overlap is pushed apart with gravity off so
+nothing can slide, and the round is handed over asleep. The solver owns
+everything that happens *after* the claw arrives; it no longer decides what the
+shelf looks like.
+
+Two tiers rather than three, because a plush's mesh is smaller than its
+collision radius in most directions — a tall stack of touching spheres reads on
+screen as toys hovering with air between them. A wide base with one row nestled
+into its gaps buries four to six toys and still looks like a pile.
+
+`node tools/check.mjs settle` asserts all of it: everything asleep, nothing
+crossing the glass, nothing floating, something buried.
 
 ### The plush toys
 
@@ -148,8 +174,10 @@ None of it is rigid-body solving — it is all cause-and-effect a child can read
 
 - Pixel ratio is capped at 1.75 and auto-tuned from a rolling frame average;
   at the lowest tier shadows and fuzz shells switch off.
-- Prizes build at two detail levels: `hero` (win close-up, small collections)
-  and `game` (in the case), which drops trim smaller than a stitch.
+- Prizes build at three detail levels: `hero` (win close-up, small collections),
+  `game` (front and top of the heap) and `far` (buried or at the back, silhouette
+  and face only). Each toy's static parts are also merged per material, which is
+  what makes twelve of them affordable.
 - Shared low-poly primitives, one shadow-casting mesh per toy mass, sleeping
   physics bodies, and merged static cabinet geometry.
 - Roughly 127k triangles and ~306 draw calls in the play scene with twelve prizes.
