@@ -1,0 +1,237 @@
+/* css/style.css — UI分のみ（Agent-UI 所有）
+   CONTRACT.md「UI」節に準拠。body/canvas/#game の基本スタイルは index.html に
+   インライン済みのため、ここでは絶対に上書きしない（#game, html, body へは触れない）。
+   対象: 4歳女児。文字なし・絵とアイコンのみで伝えるやさしい和菓子屋トーン。
+*/
+
+#ui-root {
+  font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', sans-serif;
+}
+
+/* ------------------------------------------------------------------ */
+/* パネル本体: 画面下部固定。縦横どちらでも下端中央に、折り返しで重なり防止 */
+/* ------------------------------------------------------------------ */
+.nk-panel {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 16px 20px;
+
+  max-width: 100vw;
+  box-sizing: border-box;
+  padding-top: 14px;
+  padding-bottom: calc(14px + env(safe-area-inset-bottom));
+  padding-left: calc(16px + env(safe-area-inset-left));
+  padding-right: calc(16px + env(safe-area-inset-right));
+
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.22s ease, visibility 0.22s ease;
+
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.nk-panel.nk-show {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.nk-swatch-row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 14px 16px;
+}
+
+/* ------------------------------------------------------------------ */
+/* 共通ボタン基礎: ふんわり白ベースの円で暗い背景から浮かせる */
+/* ------------------------------------------------------------------ */
+.nk-swatch-btn,
+.nk-redo-btn {
+  position: relative;
+  width: 60px;
+  height: 60px;
+  min-width: 56px;
+  min-height: 56px;
+  padding: 6px;
+  border: none;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #fffdf8 0%, #fbeee6 100%);
+  box-shadow:
+    0 8px 18px rgba(20, 10, 12, 0.38),
+    0 1px 0 rgba(255, 255, 255, 0.7) inset,
+    0 -2px 4px rgba(190, 150, 140, 0.25) inset;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  -webkit-tap-highlight-color: transparent;
+  tap-highlight-color: transparent;
+  touch-action: manipulation;
+  cursor: pointer;
+  outline: none;
+
+  transform: scale(1);
+  transition: transform 0.1s ease-out, box-shadow 0.1s ease-out;
+  opacity: 0; /* pop-inアニメの初期値。.nk-show 側で上書き */
+}
+
+.nk-swatch-btn:focus-visible,
+.nk-redo-btn:focus-visible {
+  box-shadow:
+    0 8px 18px rgba(20, 10, 12, 0.38),
+    0 0 0 3px rgba(255, 214, 120, 0.9);
+}
+
+.nk-swatch-btn.nk-pressed,
+.nk-redo-btn.nk-pressed {
+  transform: scale(0.86);
+  box-shadow:
+    0 3px 8px rgba(20, 10, 12, 0.32),
+    0 1px 0 rgba(255, 255, 255, 0.6) inset;
+}
+
+/* ------------------------------------------------------------------ */
+/* 色ちがいボタン: キャンディ型スウォッチ */
+/* ------------------------------------------------------------------ */
+.nk-swatch {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  overflow: hidden;
+  box-shadow:
+    inset 0 -4px 6px rgba(60, 20, 30, 0.22),
+    inset 0 3px 4px rgba(255, 255, 255, 0.55);
+}
+
+.nk-swatch-hl {
+  position: absolute;
+  top: 12%;
+  left: 18%;
+  width: 34%;
+  height: 22%;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  filter: blur(1px);
+  transform: rotate(-20deg);
+}
+
+/* 現在テーマの印: 白いリング枠 */
+.nk-swatch-ring {
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 3px solid #ffffff;
+  box-shadow: 0 0 0 2px rgba(233, 150, 90, 0.55);
+  opacity: 0;
+  transform: scale(0.82);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  pointer-events: none;
+}
+
+/* 現在テーマの印: 小さな✓ (CSSのみで描画、絵文字非依存) */
+.nk-swatch-check {
+  position: absolute;
+  top: 42%;
+  left: 50%;
+  width: 15px;
+  height: 9px;
+  margin-left: -8px;
+  margin-top: -5px;
+  border-left: 3px solid #ffffff;
+  border-bottom: 3px solid #ffffff;
+  transform: rotate(-45deg) scale(0.7);
+  opacity: 0;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.4));
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  pointer-events: none;
+}
+
+.nk-swatch-btn.nk-current .nk-swatch-ring {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.nk-swatch-btn.nk-current .nk-swatch-check {
+  opacity: 1;
+  transform: rotate(-45deg) scale(1);
+}
+
+/* ------------------------------------------------------------------ */
+/* もういっかいボタン: 線画の ↻ アイコン(SVGインライン) */
+/* ------------------------------------------------------------------ */
+.nk-redo-svg {
+  width: 32px;
+  height: 32px;
+  overflow: visible;
+}
+
+.nk-redo-arc {
+  fill: none;
+  stroke: #cf7d92;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+}
+
+.nk-redo-head {
+  fill: #cf7d92;
+}
+
+/* ------------------------------------------------------------------ */
+/* pop-in アニメーション: scale 0.6 -> 1 のばね風 */
+/* ------------------------------------------------------------------ */
+@keyframes nkPopIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.6) translateY(14px);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(1.1) translateY(-4px);
+  }
+  78% {
+    transform: scale(0.95) translateY(1px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.nk-panel.nk-show .nk-swatch-btn,
+.nk-panel.nk-show .nk-redo-btn {
+  animation: nkPopIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.nk-panel.nk-show .nk-swatch-row .nk-swatch-btn:nth-child(1) { animation-delay: 0s; }
+.nk-panel.nk-show .nk-swatch-row .nk-swatch-btn:nth-child(2) { animation-delay: 0.05s; }
+.nk-panel.nk-show .nk-swatch-row .nk-swatch-btn:nth-child(3) { animation-delay: 0.1s; }
+.nk-panel.nk-show .nk-swatch-row .nk-swatch-btn:nth-child(4) { animation-delay: 0.15s; }
+.nk-panel.nk-show .nk-swatch-row .nk-swatch-btn:nth-child(5) { animation-delay: 0.2s; }
+.nk-panel.nk-show .nk-redo-btn { animation-delay: 0.22s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .nk-panel {
+    transition: none;
+  }
+  .nk-panel.nk-show .nk-swatch-btn,
+  .nk-panel.nk-show .nk-redo-btn {
+    animation: none;
+    opacity: 1;
+    transform: scale(1);
+  }
+}
