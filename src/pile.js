@@ -40,6 +40,26 @@ const SLEEP_TIME = 0.30;
 // wake propagating bottom-up through three tiers has room to finish.
 const SLEEP_SETTLE_STEPS = 300;
 
+// A stacked pair leans a small fraction of its horizontal correction toward
+// vertical, helping a body settle upward into a saddle instead of sliding
+// back out of it under gravity between relaxation passes — even a properly
+// solved, exactly-tangent starting position (see saddlePosition()) needs
+// *some* restoring push, or small numerical asymmetries between passes let
+// it slide off its seat over hundreds of settle steps. A large lean here
+// once caused the opposite failure (a body ratcheting upward indefinitely,
+// never touching anything again — see LIFT_CAP_FRAC below, which bounds
+// that risk directly regardless of how many passes or contacts combine).
+const STACK_LEAN = 0.4;
+
+// Hard ceiling on how far *up* any single body may be pushed by positional
+// correction in one step, regardless of how many overlapping pairs or
+// relaxation passes contribute — the direct fix for the "a body ratchets
+// upward until it clears every contact and can never sleep again" failure
+// mode. A body genuinely needing more lift than this just takes another
+// step to get there instead of teleporting in one; downward correction and
+// horizontal correction are not capped, only the unsafe direction is.
+const LIFT_CAP_FRAC = 0.25;   // fraction of the body's own radius, per step
+
 // One separation pass cannot hold a three-layer heap together (each pass only
 // resolves the *worst* overlap a body is in); a handful of cheap relaxation
 // passes converges close enough without turning this into a real solver.
@@ -144,22 +164,52 @@ function layerCounts(count) {
 }
 
 /**
- * Height a sphere of `radius` rests at when perched symmetrically in the
- * saddle between two support spheres — resting against both at once, not
- * just guessed from its own size. Used both for the rough pre-physics spawn
- * guess (so prominence sorting has a real height) and to reseat a tier once
- * the tier below it has actually finished settling (see the staged settle
- * in layout()), so a stacked toy spawns at its seat instead of far above it.
+ * Solve for where a sphere of `radius` genuinely rests tangent to BOTH of
+ * two support spheres at once — not a guess. The two spheres A, B (radii
+ * arad/brad — generally different, unlike an earlier version that averaged
+ * them, which was wrong whenever they actually differed) define a circle of
+ * possible tangent points (the intersection of two spheres of radius
+ * arad+radius and brad+radius centred on A and B); this returns the point
+ * on that circle with the greatest height, i.e. sitting up in the saddle
+ * rather than out to a side. Returns null if no such point exists (the
+ * supports are too far apart, or too close, for a sphere this size to touch
+ * both) — the caller should then rest it directly on the nearer support.
  */
-function perchY(radius, ax, ay, az, arad, bx, by, bz, brad) {
-  const rSup = (arad + brad) / 2;
-  const halfGap = Math.hypot(bx - ax, bz - az) / 2;
-  const rTouch = rSup + radius;
-  const riseSq = rTouch * rTouch - halfGap * halfGap;
-  // if the two supports are too far apart to physically touch a sphere
-  // resting between both, fall back to a reasonable perch height
-  const rise = riseSq > 0 ? Math.sqrt(riseSq) : rTouch * 0.55;
-  return (ay + by) / 2 + rise * 0.94;   // slightly under so gravity seats it, not hover-drop
+function saddlePosition(radius, ax, ay, az, arad, bx, by, bz, brad) {
+  const dA = arad + radius, dB = brad + radius;
+  const abx = bx - ax, aby = by - ay, abz = bz - az;
+  const d = Math.hypot(abx, aby, abz);
+  if (d < 1e-6 || d > dA + dB || d < Math.abs(dA - dB)) return null;
+  // standard sphere/sphere intersection: a circle of radius h, centred at
+  // distance `a` from A along the A->B axis, in the plane perpendicular to it
+  const a = (d * d + dA * dA - dB * dB) / (2 * d);
+  const h2 = dA * dA - a * a;
+  if (h2 <= 0) return null;
+  const h = Math.sqrt(h2);
+  const ux = abx / d, uy = aby / d, uz = abz / d;
+  const cx = ax + a * ux, cy = ay + a * uy, cz = az + a * uz;
+  // within that circle, lean toward whichever direction climbs highest:
+  // project "up" onto the plane perpendicular to the A->B axis
+  let px = -uy * ux, py = 1 - uy * uy, pz = -uy * uz;
+  const pl = Math.hypot(px, py, pz);
+  if (pl < 1e-6) { px = 1; py = 0; pz = 0; }   // axis is vertical -- any horizontal lean is equivalent
+  else { px /= pl; py /= pl; pz /= pl; }
+  return { x: cx + h * px, y: cy + h * py, z: cz + h * pz };
+}
+
+/**
+ * saddlePosition() with a fallback for when no saddle exists: rest directly
+ * on top of whichever support is horizontally nearer to (hintX, hintZ) —
+ * the spot's already-chosen target — tangent, centred above it.
+ */
+function seatOn(radius, ax, ay, az, arad, bx, by, bz, brad, hintX, hintZ) {
+  const p = saddlePosition(radius, ax, ay, az, arad, bx, by, bz, brad);
+  if (p) return p;
+  const distA = Math.hypot(hintX - ax, hintZ - az);
+  const distB = Math.hypot(hintX - bx, hintZ - bz);
+  return distA <= distB
+    ? { x: ax, y: ay + arad + radius, z: az }
+    : { x: bx, y: by + brad + radius, z: bz };
 }
 
 export class Pile {
@@ -173,6 +223,11 @@ export class Pile {
     this._q = new THREE.Quaternion();
     this._zero = new THREE.Vector3();
     this.onSoftHit = null;   // (body, strength) => void
+    // Scratch for the per-step upward-lift cap in _stepOnce (see LIFT_CAP_FRAC):
+    // pre-allocated once and grown only if the body count ever exceeds it, so
+    // capping never allocates inside the hot per-frame path.
+    this._liftCap = new Float64Array(32);
+    this._liftUsed = new Float64Array(32);
   }
 
   clear() {
@@ -263,15 +318,16 @@ export class Pile {
       if (s.layer === 0) {
         s.y = floorY + 0.02;
       } else {
-        // Spawn a stacked toy right at the height it should actually settle
-        // to — resting against both of the spot's two support neighbours —
-        // rather than a fixed multiple of its own radius that ignores how
-        // far apart (or how big) those neighbours actually are. supA/supB
-        // are already fully resolved here: spots is layer0 then layer1 then
-        // layer2, so a toy's supports were processed earlier in this loop.
+        // Spawn a stacked toy at (roughly — this is pre-physics, only used
+        // for prominence sorting below) the height it should actually
+        // settle to, solved against both of the spot's two support
+        // neighbours rather than guessed. supA/supB are already fully
+        // resolved here: spots is layer0 then layer1 then layer2, so a
+        // toy's supports were processed earlier in this loop.
         const supA = s.supA, supB = s.supB;
-        s.y = Math.max(floorY, perchY(s.radius, supA.x, supA.y, supA.z, supA.radius,
-                                                 supB.x, supB.y, supB.z, supB.radius));
+        const seat = seatOn(s.radius, supA.x, supA.y, supA.z, supA.radius,
+                                       supB.x, supB.y, supB.z, supB.radius, s.x, s.z);
+        s.y = Math.max(floorY, seat.y);
       }
     }
 
@@ -331,30 +387,69 @@ export class Pile {
     // mat instead of landing in the saddle. Settling layer 0 alone first,
     // then reseating layer 1 on layer 0's *actual* rest positions (and
     // likewise layer 2 on layer 1), removes that race entirely.
-    const SETTLE_STEPS = 70;
+    // A generous, one-time synchronous budget: a body reseated slightly off
+    // from where it will actually end up can end up gently grazing an
+    // already-settled neighbour on its way down rather than falling clean,
+    // which (correctly, see the velocity-kill comment below) slows real
+    // free-fall far more than an isolated drop would need — so this needs
+    // real headroom, not just enough for the common case.
+    const SETTLE_STEPS = 220;
     for (let i = 0; i < SETTLE_STEPS; i++) this.step(1 / 60, true);   // layer 0 alone
 
     for (let tier = 1; tier <= 2; tier++) {
+      const seated = [];   // [{body, supA, supB}] for this tier, for the re-seat pass below
       for (const s of spots) {
         if (s.layer !== tier) continue;
-        // reseat only the height: x/z keep the jittered variety already
-        // chosen above, which still reads fine against a support that has
-        // only shifted a little during its own settle
+        // Reseat fully (x, y and z) against the support tier's *actual*
+        // settled positions — not a height-only guess. A body genuinely
+        // tangent to both supports on arrival means the general pairwise
+        // solver only has to hold it there, not discover a seat by trial
+        // and error, which is what made the outcome seed-dependent (some
+        // layouts assembled a real heap, others quietly collapsed flat).
         const b = s.body, supA = s.supA.body, supB = s.supB.body;
-        b.pos.y = Math.max(b.floorY, perchY(
+        const seat = seatOn(
           b.radius, supA.pos.x, supA.pos.y, supA.pos.z, supA.radius,
-          supB.pos.x, supB.pos.y, supB.pos.z, supB.radius));
+          supB.pos.x, supB.pos.y, supB.pos.z, supB.radius, b.pos.x, b.pos.z);
+        let x = clamp(seat.x, A.minX, A.maxX);
+        let z = clamp(seat.z, A.minZ, A.maxZ);
+        const dh = Math.hypot(x - CAB.hole.x, z - CAB.hole.z);
+        const minH = CAB.hole.rim + b.radius + 0.05;
+        if (dh < minH) {
+          const invDh = dh || 1;
+          x = clamp(CAB.hole.x + (x - CAB.hole.x) / invDh * minH, A.minX, A.maxX);
+          z = clamp(CAB.hole.z + (z - CAB.hole.z) / invDh * minH, A.minZ, A.maxZ);
+        }
+        b.pos.set(x, Math.max(b.floorY, seat.y), z);
         b.held = false;
         b.syncMesh();
-        if (globalThis.__PILE_DEBUG) console.log('reseat', tier, this.bodies.indexOf(b), 'y=', b.pos.y.toFixed(3));
+        seated.push({ body: b, supA, supB });
       }
-      const dbgSteps = (globalThis.__PILE_DEBUG && tier === 2) ? 600 : SETTLE_STEPS;
-      for (let i = 0; i < dbgSteps; i++) {
-        this.step(1 / 60, true);
-        if (globalThis.__PILE_DEBUG && tier === 2 && (i % 20 === 0)) {
-          console.log('  step', i, this.bodies.map((bb) => bb.pos.y.toFixed(3)).join(','));
+      for (let i = 0; i < SETTLE_STEPS; i++) this.step(1 / 60, true);
+
+      // A body whose neighbours in this tier claimed part of its seat (two
+      // adjacent saddle spots can overlap slightly, since each is solved
+      // independently against its own support pair) can still end up
+      // shouldered down to the floor by the time the settle above finishes.
+      // Re-run the same tangent solve against the support pair's *current*
+      // position and, if this body has drifted meaningfully below that seat
+      // with nothing else genuinely holding it up there, put it back and
+      // give it one more settle window to hold on this time.
+      let driftedAny = false;
+      for (const { body: b, supA, supB } of seated) {
+        if (b.grounded) continue;   // legitimately settled on the floor -- leave it
+        const seat = seatOn(
+          b.radius, supA.pos.x, supA.pos.y, supA.pos.z, supA.radius,
+          supB.pos.x, supB.pos.y, supB.pos.z, supB.radius, b.pos.x, b.pos.z);
+        if (b.pos.y < seat.y - b.radius * 0.5) {
+          b.pos.set(
+            clamp(seat.x, A.minX, A.maxX), Math.max(b.floorY, seat.y),
+            clamp(seat.z, A.minZ, A.maxZ));
+          b.vel.set(0, 0, 0);
+          b.syncMesh();
+          driftedAny = true;
         }
       }
+      if (driftedAny) for (let i = 0; i < SETTLE_STEPS; i++) this.step(1 / 60, true);
     }
 
     // ---- let already-stable bodies actually fall asleep before the round
@@ -491,6 +586,13 @@ export class Pile {
     // three-layer heap together far better than one. Positions resolve on
     // every pass; the velocity impulse (and its sound cue) is only applied on
     // the last one, so repeated passes cannot pump energy into the pile.
+    if (this._liftCap.length < n) {
+      this._liftCap = new Float64Array(n + 16);
+      this._liftUsed = new Float64Array(n + 16);
+    }
+    for (let i = 0; i < n; i++) { this._liftCap[i] = 0; this._liftUsed[i] = 0; }
+    const liftCap = this._liftCap, liftUsed = this._liftUsed;
+
     for (let iter = 0; iter < SEP_ITERS; iter++) {
       const resolveVelocity = iter === SEP_ITERS - 1;
       for (let i = 0; i < n; i++) {
@@ -526,23 +628,35 @@ export class Pile {
           if (d2 >= rr * rr) continue;   // touching, but nothing to resolve this pass
           const d = Math.sqrt(d2);
           const inv = 1 / d;
-          const nx = dx * inv, ny = dy * inv, nz = dz * inv;   // true contact normal
+          const nx = dx * inv, ny = dy * inv, nz = dz * inv;   // true contact normal, used for the bounce below
           const pen = rr - d;
           const stacked = Math.abs(dy) > support * 0.5;
 
-          // Position moves exactly along the true centre-to-centre normal —
-          // NOT redirected toward vertical for a stacked pair. An earlier
-          // version leaned the push direction upward here to help a toy
-          // climb into a saddle, but that moves a body further than the
-          // actual overlap requires: the correction no longer converges to
-          // zero once the pair is genuinely separated along its real axis,
-          // so repeated passes (three a step, hundreds of steps across a
-          // settle) can ratchet a body upward indefinitely — once clear of
-          // every neighbour it is never grounded or resting again and hangs
-          // there forever, awake, in a limit cycle. The true-normal
-          // correction is self-limiting: it always converges to exactly
-          // resolving the real overlap and nothing more.
-          //
+          // Position mostly moves along the true centre-to-centre normal —
+          // a large lean redirected toward vertical here once let a body
+          // ratchet upward indefinitely (the correction no longer converges
+          // to zero once actually separated along its real axis, so
+          // hundreds of settle steps could pump it clear of every contact
+          // and it would hang there forever, never grounded or resting
+          // again). A *small* lean (STACK_LEAN) is safe precisely because
+          // LIFT_CAP_FRAC below bounds how far up any single step can move
+          // a body regardless of direction or how many pairs contribute —
+          // it supplies the small restoring push a saddle-seated body needs
+          // between relaxation passes (see saddlePosition()) without being
+          // able to run away.
+          let cx = nx, cy = ny, cz = nz;
+          if (stacked) {
+            const horiz = Math.hypot(nx, nz);
+            if (horiz > 1e-4) {
+              const upSign = dy >= 0 ? 1 : -1;
+              cx = nx * (1 - STACK_LEAN);
+              cz = nz * (1 - STACK_LEAN);
+              cy = ny + upSign * STACK_LEAN * horiz;
+              const cl = Math.hypot(cx, cy, cz) || 1;
+              cx /= cl; cy /= cl; cz /= cl;
+            }
+          }
+
           // The lower body of a stacked pair still moves less than the
           // upper one (some inertia, so the heap's base does not sink every
           // time something settles onto it) — but gently, not by giving the
@@ -561,8 +675,34 @@ export class Pile {
           // the pair absorbs the whole correction instead of its usual share.
           if (a.sleeping) { shareB += shareA; shareA = 0; }
           else if (b.sleeping) { shareA += shareB; shareB = 0; }
-          a.pos.x -= nx * pen * shareA; a.pos.y -= ny * pen * shareA; a.pos.z -= nz * pen * shareA;
-          b.pos.x += nx * pen * shareB; b.pos.y += ny * pen * shareB; b.pos.z += nz * pen * shareB;
+
+          // Apply x/z freely; apply y through the per-body upward-lift cap
+          // (downward is never capped — sinking into the floor plane is
+          // already handled separately, and is not the runaway direction).
+          const dyA = -cy * pen * shareA, dyB = cy * pen * shareB;
+          a.pos.x -= cx * pen * shareA; a.pos.z -= cz * pen * shareA;
+          b.pos.x += cx * pen * shareB; b.pos.z += cz * pen * shareB;
+          if (dyA > 0) {
+            // the running cap grows to admit at least the largest single
+            // pair's own demand (so one genuine deep overlap still resolves
+            // in one go) but never past LIFT_CAP_FRAC of the body's own
+            // radius, an absolute ceiling independent of how that demand
+            // arose.
+            liftCap[i] = Math.min(a.radius * LIFT_CAP_FRAC, Math.max(liftCap[i], dyA));
+            const budget = Math.max(0, liftCap[i] - liftUsed[i]);
+            const applied = Math.min(dyA, budget);
+            a.pos.y += applied; liftUsed[i] += applied;
+          } else {
+            a.pos.y += dyA;
+          }
+          if (dyB > 0) {
+            liftCap[j] = Math.min(b.radius * LIFT_CAP_FRAC, Math.max(liftCap[j], dyB));
+            const budget = Math.max(0, liftCap[j] - liftUsed[j]);
+            const applied = Math.min(dyB, budget);
+            b.pos.y += applied; liftUsed[j] += applied;
+          } else {
+            b.pos.y += dyB;
+          }
 
           // Waking is contagious, but only when the contact actually carries
           // relative motion — two bodies resting quietly against each other
@@ -576,19 +716,24 @@ export class Pile {
             a.wake(); b.wake();
           }
 
-          // A positional correction must never be "free": leaving the
-          // velocity that drove a body into this overlap untouched means it
-          // simply re-penetrates next step, and the same correction fires
-          // again — the exact pump that let a body ratchet away from
-          // equilibrium. This removes the closing component of the pair's
-          // relative velocity (no bounce, split by the same shares as the
-          // position fix above) on *every* pass, not only the last, so no
-          // iteration's correction can ever be free. The bouncier,
-          // restitution-based impulse below (with its impact sound) still
-          // only fires once, on the final pass, as the "real" collision
-          // response layered on top.
+          // A positional correction must never be "free" for a body that is
+          // basically settling: leaving a small residual closing velocity
+          // untouched means it simply re-penetrates next step, the same
+          // correction fires again, and repeated across many relaxation
+          // passes and steps that is the pump that lets a body ratchet away
+          // from equilibrium. This removes a *small* closing component of
+          // the pair's relative velocity (no bounce, split by the same
+          // shares as the position fix above) on every pass, not only the
+          // last. It deliberately does not touch a large closing speed —
+          // that is a body still genuinely falling, only grazing this pair
+          // for a single frame on its way past (skirting a crowded stack
+          // toward open floor); killing a real fall's momentum every time
+          // it grazes something turns a sub-second drop into one that takes
+          // many seconds. A real impact is handled by the bouncier,
+          // restitution-based impulse below, which still only fires once,
+          // on the final pass, as the "real" collision response.
           const vnAll = rvx * nx + rvy * ny + rvz * nz;
-          if (vnAll < 0) {
+          if (vnAll < 0 && vnAll > -1.0) {
             if (!a.sleeping) { a.vel.x -= nx * vnAll * shareA; a.vel.y -= ny * vnAll * shareA; a.vel.z -= nz * vnAll * shareA; }
             if (!b.sleeping) { b.vel.x += nx * vnAll * shareB; b.vel.y += ny * vnAll * shareB; b.vel.z += nz * vnAll * shareB; }
           }
@@ -634,12 +779,19 @@ export class Pile {
       // that quietly re-falls into its support every frame (a slow sink
       // that never actually stops), or a small positive one that stands
       // and micro-bounces forever without settling. Both are noise, not
-      // real motion — squash hard in both directions (matching CONTACT_DAMP's
-      // own aggressive 0.35 factor is not enough on its own to stop a sink
-      // that gets re-seeded every step, so this cuts harder than the
-      // horizontal case above and then snaps what's left near zero).
-      b.vel.y *= 0.1;
-      if (Math.abs(b.vel.y) < 0.3) b.vel.y = 0;
+      // real motion — squash hard in both directions.
+      //
+      // Only for a genuinely small residual, though: a body still actually
+      // falling with real speed can graze another body's SUPPORT_SLACK
+      // zone for a single frame without truly landing on it (skirting past
+      // a crowded stack on the way to open floor) — squashing *that* every
+      // time it grazes turns a normal ~0.3s fall into one that takes many
+      // seconds, one grazed contact at a time. Only noise this small is a
+      // seated toy's own jitter, never a real fall in progress.
+      if (Math.abs(b.vel.y) < 0.5) {
+        b.vel.y *= 0.1;
+        if (Math.abs(b.vel.y) < 0.3) b.vel.y = 0;
+      }
     }
 
     // clamp everything back inside after separation (same WALL_SQUASH rule)
