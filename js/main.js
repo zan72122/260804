@@ -2,7 +2,7 @@
 import bus from './bus.js';
 import config from './config.js';
 import { createState } from './state.js';
-import scene from './scene.js';
+import scene, { applyCamera } from './scene.js';
 import threads from './threads.js';
 import tool from './tool.js';
 import input from './input.js';
@@ -108,7 +108,7 @@ function boot() {
     ctx.fillStyle = config.BG_BOTTOM;
     ctx.fillRect(0, 0, state.w, state.h);
     ctx.save();
-    safeCall('scene.applyCamera', () => scene.applyCamera(ctx, state));
+    safeCall('scene.applyCamera', () => applyCamera(ctx, state));
     for (const [name, mod] of RENDER_MODULES) {
       if (mod && typeof mod.render === 'function') safeCall(`${name}.render`, () => mod.render(ctx, state));
     }
