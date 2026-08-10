@@ -100,10 +100,14 @@ html, body {
 /* Big replay button, shown after the celebration. It used to be a fully
    opaque rainbow disc sitting at top:62%, right on top of the middle rows
    of the just-finished tower — the picture the child made was half-hidden
-   behind her own replay button. It is now a translucent glass ring (via
-   ::before, masked to a hollow rainbow band): still 118px, still pulsing,
-   still unmistakably a big colourful button, but the centre and the gaps
-   around it let the painted glasses show straight through. */
+   behind her own replay button. It is now a hollow rainbow ring (via
+   ::before, masked down to a band): still 118px, still pulsing, still
+   unmistakably a big colourful button, but ONLY the band and the ↺ glyph
+   are opaque — the button itself paints nothing, so every glass the ring
+   encloses (and the gaps around it) shows straight through. The 118x118
+   box stays the tap target even though most of it is now invisible: a
+   button's hit-test uses its box, not its painted pixels, so shrinking
+   what's drawn does not shrink what's tappable. */
 #btn-replay {
   position: fixed;
   z-index: 20;
@@ -113,9 +117,7 @@ html, body {
   height: 118px;
   border-radius: 50%;
   border: none;
-  background: rgba(255, 255, 255, 0.14);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
+  background: none;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -136,10 +138,19 @@ html, body {
   mask-image: radial-gradient(circle closest-side, transparent 60%, #000 61%);
   pointer-events: none;
 }
+/* the ↺ glyph is the only other opaque thing in the button. With the
+   frosted backing gone it needs its own contrast against whatever is
+   behind it — a pale, mostly-white tower or a saturated multi-colour one
+   — so it gets a dark halo (two tight drop-shadows) plus a soft ambient
+   glow, rather than relying on a backing disc. */
 #btn-replay svg {
   position: relative;
   z-index: 1;
-  filter: drop-shadow(0 2px 4px rgba(60, 20, 90, 0.5));
+  filter:
+    drop-shadow(0 0 2px rgba(15, 8, 40, 0.95))
+    drop-shadow(0 0 2px rgba(15, 8, 40, 0.95))
+    drop-shadow(0 0 6px rgba(15, 8, 40, 0.75))
+    drop-shadow(0 2px 4px rgba(15, 8, 40, 0.6));
 }
 #btn-replay.hidden { display: none; }
 
