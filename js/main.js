@@ -96,10 +96,12 @@
   btnReset.addEventListener('click', () => {
     btnReplay.classList.add('hidden');
     Game.reset(false);
+    Palette.clear();   // Game.reset() drops the brush; keep the swatch in sync
   });
   btnReplay.addEventListener('click', () => {
     btnReplay.classList.add('hidden');
     Game.reset(true);            // next drink theme
+    Palette.clear();   // ditto — the armed swatch must not outlive the brush
   });
   if (btnAlbum) {
     btnAlbum.addEventListener('click', () => {
