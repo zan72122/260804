@@ -2,8 +2,8 @@
 import config from './config.js';
 
 // --- module-private tuning ---
-const SPRING_STIFF = 260;      // rad/s^2 scale, critically damped -> settle < 150ms
-const SPRING_DAMP = 2 * Math.sqrt(SPRING_STIFF); // critical damping
+const SPRING_STIFF = 1100;     // px/s^2 per px error; critically damped -> ~140ms settle (<150ms target)
+const SPRING_DAMP = 2 * Math.sqrt(SPRING_STIFF); // critical damping (no overshoot, no lag)
 const ANGLE_MAX = 0.5;
 const ANGLE_EASE = 10;
 const IDLE_BOB_AMP = 4;
@@ -24,8 +24,9 @@ let dipT = 0;                 // dip animation timer, 0 = not dipping
 let dipCooldown = 0;
 let drip = null;              // {x,y,t} single live drip
 let dripCooldown = 0;
-let inited = false;
 let busRef = null;
+let idleBaseX = 0, idleBaseY = 0; // where the tool settled before pointer lifted, for idle bob
+let wasDown = false;
 
 function reset(state) {
   sx = state.w / 2 || restX;
@@ -33,6 +34,8 @@ function reset(state) {
   vx = 0; vy = 0;
   dipT = 0; dipCooldown = 0;
   drip = null; dripCooldown = 0;
+  idleBaseX = sx; idleBaseY = sy;
+  wasDown = false;
   state.tool.caramel = 1;
   state.tool.dipping = false;
   state.tool.angle = 0;
@@ -41,7 +44,7 @@ function reset(state) {
 }
 
 export default {
-  init({ canvas, ctx, bus, state, config: cfg }) {
+  init({ bus, state }) {
     busRef = bus;
     sx = state.w ? state.w / 2 : 160;
     sy = state.h ? state.h / 2 : 260;
@@ -50,6 +53,7 @@ export default {
     state.tool.angle = 0;
     state.tool.caramel = 1; // pre-dipped so first swipe works immediately
     state.tool.dipping = false;
+    idleBaseX = sx; idleBaseY = sy;
 
     bus.on('threads:added', ({ delta }) => {
       // full load (caramel 1) should last ~CARAMEL_PASSES passes; a pass ~= totals ~4 delta.
@@ -59,14 +63,9 @@ export default {
     });
 
     bus.on('game:reset', () => reset(state));
-
-    inited = true;
   },
 
-  resize(state) {
-    if (!inited) return;
-    // keep tool within bounds softly; no hard snap needed, spring will catch up.
-  },
+  resize() {}, // spring naturally re-targets on next update; no snap needed
 
   update(dt, state) {
     const t = state.tool;
@@ -82,10 +81,13 @@ export default {
     } else if (state.pointer.down) {
       tx = state.pointer.x; ty = state.pointer.y;
     } else {
-      // idle: float at last spring position with a slight bob
+      // idle: float near where the finger last left it, with a slight bob
+      if (wasDown) { idleBaseX = sx; idleBaseY = sy; }
       bobT += dt * IDLE_BOB_SPEED;
-      tx = sx; ty = sy - Math.sin(bobT) * IDLE_BOB_AMP * dt * 60 * 0 + Math.sin(bobT) * IDLE_BOB_AMP;
+      tx = idleBaseX;
+      ty = idleBaseY + Math.sin(bobT) * IDLE_BOB_AMP;
     }
+    wasDown = state.pointer.down && !parked;
 
     // --- critically damped spring toward target ---
     const ax = SPRING_STIFF * (tx - sx) - SPRING_DAMP * vx;
