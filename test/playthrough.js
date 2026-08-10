@@ -64,8 +64,8 @@ async function main() {
 
   await shot('01-title.png');
 
-  // --- はじめる ---
-  await page.tap('#startBtn', { force: true });
+  // --- はじめる（ドームケーキを選ぶ） ---
+  await page.tap('#recipeSelect [data-recipe="dome"]', { force: true });
   await page.waitForTimeout(3600); // 材料投入の演出
   await page.waitForFunction(() => window.__game.state.mixReady === true, null, { timeout: 10000 });
   await shot('02-mix-start.png');
