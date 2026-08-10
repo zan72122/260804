@@ -452,14 +452,9 @@
     ctx.fillRect(0, -0.5, 1, 1);
     ctx.restore();
 
-    // 根元の切り込み影（すっと入った線）
-    ctx.strokeStyle = rgbaStr('#3a2420', 0.26 * liftC);
-    ctx.lineWidth = 0.04;
-    ctx.beginPath();
-    ctx.moveTo(-0.02, -0.5 * 0.55);
-    ctx.lineTo(0.06, 0);
-    ctx.lineTo(-0.02, 0.5 * 0.55);
-    ctx.stroke();
+    // (根元の切り込みは個々の花びらへ直線ストロークを描かず、drawCenterCrease() の
+    //  柔らかい円形クリースでまとめて表現する。花びらが多数並ぶとここの直線が隣同士で
+    //  つながり、中心の周りに硬い多角形の輪郭線に見えてしまうため。)
 
     ctx.restore();
   }
@@ -469,10 +464,12 @@
   // 見た目の迫力(密度・豪華さ)専用の値をここで独立管理する。
   //   rootBase : 切った直後(lift=0)の根元半径(world)
   //   growth   : lift到達時に根元がさらにせり出す量(world)。完了時の根元半径 ≈ rootBase+growth
-  //   len      : 花びらの長さパラメータ(world)。完了時の先端半径 ≈ (rootBase+growth) + len*1.00
+  //   len      : 花びらの長さパラメータ(world)。buildPetalPathの先端は二次ベジエの制御点由来で
+  //              実際の最大到達点は len の約0.91倍(制御点1.00そのものではない)。
+  //              完了時の先端半径 ≈ (rootBase+growth) + len*0.91
   //   width    : 花びらの幅パラメータ(world)
   var PETAL_GEOM = [
-    { rootBase: 0.28, growth: 0.12, len: 0.64, width: 0.62 }, // 外周10枚: 根元≈0.40→先端≈1.04(練り切りの縁にわずかに掛かる)
+    { rootBase: 0.28, growth: 0.12, len: 0.705, width: 0.62 }, // 外周10枚: 根元≈0.40→先端≈1.04(花のシルエットが円でなくスカラップ状に見える分だけ練り切りの縁より外へ)
     { rootBase: 0.11, growth: 0.07, len: 0.42, width: 0.42 }, // 中段7枚: 根元≈0.18→先端≈0.60(外周花びらの根元に重なる)
   ];
   var PETAL_GEOM_FALLBACK = { rootBase: 0.05, growth: 0.03, len: 0.20, width: 0.18 };
@@ -499,6 +496,36 @@
     for (var i = 0; i < state.rings.length; i++) {
       drawPetalsForRing(state, theme, i);
     }
+  }
+
+  // ============ 中心まわりの柔らかいクリース ============
+  // 未完成の中央ドームと花びらの間の「継ぎ目」を、直線の集合(=硬い多角形)ではなく
+  // 完全な円(グラデーションの薄い影の輪)で表現する。ctx.arc由来の真円なので
+  // 花びらの枚数に関わらずカクカクした輪郭にはならない。
+  function drawCenterCrease(state, theme, breathScale) {
+    var cx = view.cx, cy = view.cy;
+    var squish = (state.center && state.center.squish) || 0;
+    var need = (state.center && state.center.need) || 3;
+    var count = (state.center && state.center.count) || 0;
+    var progress = need > 0 ? clamp(count / need, 0, 1) : 0;
+
+    // 花芯が締まる(progress上昇)につれてクリースも少し内側へ寄る。squishでほんの少し息づく。
+    var pulse = 1 + 0.05 * Math.sin(squish * Math.PI);
+    var innerR = (0.27 - progress * 0.05) * view.scale * breathScale * pulse;
+    var outerR = (0.47 - progress * 0.07) * view.scale * breathScale * pulse;
+    if (outerR <= innerR + 0.001) return;
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.beginPath();
+    ctx.arc(0, 0, outerR, 0, Math.PI * 2);
+    var cg = ctx.createRadialGradient(0, 0, innerR, 0, 0, outerR);
+    cg.addColorStop(0, 'rgba(0,0,0,0)');
+    cg.addColorStop(0.5, rgbaStr(theme.deep, 0.15));
+    cg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = cg;
+    ctx.fill();
+    ctx.restore();
   }
 
   // ============ 中心のしべ ============
@@ -706,6 +733,7 @@
 
       // 練り切り+花びらは rotation を適用済みの角度で描画(drawPetal内でview.rotationを加算)
       drawMochiBase(state, theme, breathScale);
+      drawCenterCrease(state, theme, breathScale);
       if (state.rings) drawAllPetals(state, theme);
       drawCenter(state, theme, breathScale);
 
