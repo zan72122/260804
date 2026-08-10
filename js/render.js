@@ -281,15 +281,15 @@
     ctx.arc(cx, cy, plateR * 0.985, 0, Math.PI * 2);
     ctx.stroke();
 
-    // 控えめな艶ハイライト（弧状）
+    // 控えめな艶ハイライト（細い弧状の光筋）
     ctx.save();
     ctx.beginPath();
     ctx.arc(cx, cy, plateR, 0, Math.PI * 2);
     ctx.clip();
     ctx.beginPath();
-    ctx.ellipse(cx - plateR * 0.32, cy - plateR * 0.4, plateR * 0.55, plateR * 0.22, -0.5, 0, Math.PI * 2);
-    var hi = ctx.createRadialGradient(cx - plateR * 0.32, cy - plateR * 0.4, 0, cx - plateR * 0.32, cy - plateR * 0.4, plateR * 0.55);
-    hi.addColorStop(0, 'rgba(255,255,255,0.16)');
+    ctx.ellipse(cx - plateR * 0.38, cy - plateR * 0.46, plateR * 0.34, plateR * 0.11, -0.55, 0, Math.PI * 2);
+    var hi = ctx.createRadialGradient(cx - plateR * 0.38, cy - plateR * 0.46, 0, cx - plateR * 0.38, cy - plateR * 0.46, plateR * 0.34);
+    hi.addColorStop(0, 'rgba(255,255,255,0.10)');
     hi.addColorStop(1, 'rgba(255,255,255,0)');
     ctx.fillStyle = hi;
     ctx.fill();
@@ -393,43 +393,61 @@
     var lenPx = outerLen * view.scale * scaleT;
     var widPx = width * view.scale * scaleT;
     var path = getPetalPath(1, 1); // 単位パス、transformでスケール
+    var liftC = clamp(lift, 0, 1);
+
+    // 根元の接地陰(花びらが本体から起き上がって見えるコントラクトシャドウ)
+    ctx.save();
+    ctx.translate(rootX, rootY);
+    ctx.rotate(angle);
+    ctx.beginPath();
+    ctx.ellipse(widPx * 0.06, 0, widPx * 0.55, widPx * 0.30, 0, 0, Math.PI * 2);
+    var cs = ctx.createRadialGradient(0, 0, 0, 0, 0, widPx * 0.55);
+    cs.addColorStop(0, rgbaStr(theme.deep, 0.30 * liftC));
+    cs.addColorStop(1, rgbaStr(theme.deep, 0));
+    ctx.fillStyle = cs;
+    ctx.fill();
+    ctx.restore();
 
     ctx.save();
     ctx.translate(rootX, rootY);
     ctx.rotate(angle);
     ctx.scale(lenPx, widPx);
 
-    // 花びらグラデ: 根元(deep寄り) -> 先端(tip寄り、明るい)
+    // 花びらグラデ: 根元(deep寄り・はっきり) -> 中間(base) -> 先端(tip寄り、明るい)
     var g = ctx.createLinearGradient(0, 0, 1.0, 0);
-    g.addColorStop(0, mixHex(theme.base, theme.deep, 0.25));
-    g.addColorStop(0.45, theme.base);
-    g.addColorStop(1, mixHex(theme.base, theme.tip, clamp(0.55 + 0.35 * t, 0, 1)));
+    g.addColorStop(0, mixHex(theme.deep, theme.base, 0.28));
+    g.addColorStop(0.4, theme.base);
+    g.addColorStop(1, mixHex(theme.base, theme.tip, clamp(0.4 + 0.28 * t, 0, 0.78)));
     ctx.fillStyle = g;
     ctx.fill(path);
 
     // 中央の淡い筋（マットな質感の陰影・花弁の谷）
     ctx.save();
     ctx.clip(path);
-    ctx.strokeStyle = rgbaStr(theme.deep, 0.16);
-    ctx.lineWidth = 0.05;
+    ctx.strokeStyle = rgbaStr(theme.deep, 0.20);
+    ctx.lineWidth = 0.045;
     ctx.beginPath();
-    ctx.moveTo(0.08, 0);
-    ctx.lineTo(0.9, 0);
+    ctx.moveTo(0.1, 0);
+    ctx.lineTo(0.88, 0);
     ctx.stroke();
-    // 先端の明るいハイライト
-    var hi = ctx.createRadialGradient(0.78, 0, 0.02, 0.78, 0, 0.5);
-    hi.addColorStop(0, 'rgba(255,255,255,0.35)');
+    // 縁の内側にほんの少し影を落として輪郭を締める
+    ctx.strokeStyle = rgbaStr(theme.deep, 0.14);
+    ctx.lineWidth = 0.045;
+    ctx.stroke(path);
+    // 先端の明るいハイライト（控えめ）
+    var hi = ctx.createRadialGradient(0.76, -0.06, 0.02, 0.76, -0.06, 0.42);
+    hi.addColorStop(0, 'rgba(255,255,255,0.28)');
     hi.addColorStop(1, 'rgba(255,255,255,0)');
     ctx.fillStyle = hi;
     ctx.fillRect(0, -0.5, 1, 1);
     ctx.restore();
 
     // 根元の切り込み影（すっと入った線）
-    ctx.strokeStyle = rgbaStr('#3a2420', 0.22 * clamp(lift, 0, 1));
-    ctx.lineWidth = 0.035;
+    ctx.strokeStyle = rgbaStr('#3a2420', 0.26 * liftC);
+    ctx.lineWidth = 0.04;
     ctx.beginPath();
     ctx.moveTo(-0.02, -0.5 * 0.55);
-    ctx.lineTo(0.05, 0);
+    ctx.lineTo(0.06, 0);
     ctx.lineTo(-0.02, 0.5 * 0.55);
     ctx.stroke();
 
@@ -567,53 +585,62 @@
     drawSparkle(glowR * 0.55, -glowR * 0.35, view.scale * 0.035, 0.6 * pulse + 0.2);
     drawSparkle(-glowR * 0.5, glowR * 0.4, view.scale * 0.028, 0.5 * pulse + 0.2);
 
-    // 簡略ハサミ(✂風)アイコン: 2枚の刃 + 支点の丸
-    var s = view.scale * (0.11 + 0.008 * pulse);
+    // 簡略ハサミ(✂風)アイコン: 支点(原点)を中心に2本の腕が交差するX字。
+    // 各腕は「持ち手の輪(手前)〜支点〜刃先(奥)」が一直線になるよう構成し、
+    // 2本の腕の角度を上下対称にすることで本物のハサミらしい交差が生まれる。
+    var s = view.scale * (0.20 + 0.014 * pulse);
     ctx.save();
-    ctx.rotate(-0.55);
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.lineWidth = s * 0.16;
-    ctx.strokeStyle = 'rgba(120,70,60,0.85)';
-    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    ctx.rotate(-0.5);
+    var armAngle = 0.36; // 腕の開き角(rad)
+    var handleLen = s * 0.62;
+    var bladeLen = s * 0.98;
+    var ringR = s * 0.20;
+    var outline = 'rgba(110,64,54,0.92)';
+    var fillCol = 'rgba(255,255,255,0.97)';
 
-    // 支点
+    function drawArm(ang) {
+      var dx = Math.cos(ang), dy = Math.sin(ang);
+      var hx = -handleLen * dx, hy = -handleLen * dy; // 持ち手側
+      var bx = bladeLen * dx, by = bladeLen * dy;      // 刃先側
+      // 腕(白フチ+濃い縁)
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(hx, hy);
+      ctx.lineTo(bx, by);
+      ctx.strokeStyle = fillCol;
+      ctx.lineWidth = s * 0.155;
+      ctx.stroke();
+      ctx.strokeStyle = outline;
+      ctx.lineWidth = s * 0.06;
+      ctx.stroke();
+      // 刃先(小さな三角の切っ先)
+      var nx = -dy, ny = dx;
+      var tipW = s * 0.085;
+      ctx.beginPath();
+      ctx.moveTo(bx, by);
+      ctx.lineTo(bx - dx * s * 0.16 + nx * tipW, by - dy * s * 0.16 + ny * tipW);
+      ctx.lineTo(bx - dx * s * 0.16 - nx * tipW, by - dy * s * 0.16 - ny * tipW);
+      ctx.closePath();
+      ctx.fillStyle = outline;
+      ctx.fill();
+      // 持ち手の輪(指を通す穴)
+      ctx.beginPath();
+      ctx.arc(hx, hy, ringR, 0, Math.PI * 2);
+      ctx.fillStyle = fillCol;
+      ctx.fill();
+      ctx.lineWidth = s * 0.075;
+      ctx.strokeStyle = outline;
+      ctx.stroke();
+    }
+
+    drawArm(-armAngle);
+    drawArm(armAngle);
+
+    // 支点のねじ
     ctx.beginPath();
-    ctx.arc(0, 0, s * 0.10, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(120,70,60,0.85)';
+    ctx.arc(0, 0, s * 0.075, 0, Math.PI * 2);
+    ctx.fillStyle = outline;
     ctx.fill();
-
-    // 上刃
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.quadraticCurveTo(s * 0.5, -s * 0.05, s * 1.05, -s * 0.5);
-    ctx.strokeStyle = 'rgba(255,255,255,0.95)';
-    ctx.lineWidth = s * 0.20;
-    ctx.stroke();
-    ctx.strokeStyle = 'rgba(120,70,60,0.9)';
-    ctx.lineWidth = s * 0.09;
-    ctx.stroke();
-
-    // 下刃
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.quadraticCurveTo(s * 0.5, s * 0.05, s * 1.05, s * 0.5);
-    ctx.strokeStyle = 'rgba(255,255,255,0.95)';
-    ctx.lineWidth = s * 0.20;
-    ctx.stroke();
-    ctx.strokeStyle = 'rgba(120,70,60,0.9)';
-    ctx.lineWidth = s * 0.09;
-    ctx.stroke();
-
-    // 持ち手の丸(小さい輪 x2)
-    ctx.lineWidth = s * 0.11;
-    ctx.strokeStyle = 'rgba(120,70,60,0.85)';
-    ctx.beginPath();
-    ctx.arc(-s * 0.55, -s * 0.18, s * 0.22, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(-s * 0.55, s * 0.18, s * 0.22, 0, Math.PI * 2);
-    ctx.stroke();
 
     ctx.restore();
     ctx.restore();
