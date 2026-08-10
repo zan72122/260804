@@ -4,7 +4,7 @@ import * as THREE from '../../vendor/three.module.js';
 import { createStream, createSteam, createConfetti, createPitcher } from '../cake.js';
 import { tween, ease, clamp, lerp } from '../util.js';
 import {
-  createDish, createCustardPool, createIceScoop, createMeringueDome,
+  createDish, createCustardPool, createIceScoop, createMeringueDome, createMeringueWedges,
   createSugarGlints, createSugarFall, createTorchTool, createGlassShell,
   createCrackOverlay, createShards, createSparkler, createColdMist,
 } from './bruleeObjects.js';
@@ -59,15 +59,20 @@ export function createRecipe(ctx) {
   sugarFall.points.position.set(0, custardTopY, 0);
   scene.add(sugarFall.points);
 
-  const glassShell = createGlassShell(DOME_R, DOME_ELONGATE);
-  glassShell.mesh.position.set(0, custardTopY, 0);
-  scene.add(glassShell.mesh);
+  const glassShell = createGlassShell(meringue.geometry, meringue.coverageTexture, DOME_R, DOME_ELONGATE);
+  glassShell.group.position.set(0, custardTopY, 0);
+  scene.add(glassShell.group);
 
-  const crackOverlay = createCrackOverlay(DOME_R, DOME_ELONGATE);
+  // パリン割れ後にメレンゲが「割れ開く」ためのくさび片（外側へ倒れて器の縁に残る）
+  const meringueWedges = createMeringueWedges(meringue, 5);
+  meringueWedges.group.position.set(0, custardTopY, 0);
+  scene.add(meringueWedges.group);
+
+  const crackOverlay = createCrackOverlay(meringue.geometry, DOME_R, DOME_ELONGATE);
   crackOverlay.mesh.position.set(0, custardTopY, 0);
   scene.add(crackOverlay.mesh);
 
-  const shards = createShards(10);
+  const shards = createShards(13);
   scene.add(shards.group);
 
   const torchTool = createTorchTool();
@@ -94,8 +99,11 @@ export function createRecipe(ctx) {
   // フェーズ遷移
   // -----------------------------------------------------------------------
   let torchRoamT = Math.random() * 10;
+  let ambientRoamT = Math.random() * 10;
   let lastPX = null, lastPY = null;
   let crackHoldTimer = 0;
+  let crackArmed = false; // TORCHからの押しっぱなしを引き継いで誤爆しないためのガード
+  let confettiShowerId = null;
 
   // CRACK中は実イベントで即応（低fps環境ではフレームごとのpointer.downサンプリングだと
   // すばやいタップのdown/upが1フレームの間に完結して検知漏れすることがあるため）
@@ -149,21 +157,34 @@ export function createRecipe(ctx) {
       ctx.camPhase([0.14, custardTopY + 0.24, 0.30], [0, custardTopY + 0.14, 0]);
       ui.setHint('たっぷして わってみよう！', '👆');
       ui.setProgress(0);
+      // TORCHでなぞっていた指がそのまま押しっぱなしで入ってくることがあるため、
+      // 一度指が離れるまでは長押しアシストを起動しない（誤って一気に割れるのを防ぐ）
+      crackArmed = !ctx.pointer.down;
+      crackHoldTimer = 0;
     } else if (p === 'DONE') {
       ui.setHint('わあ！ できあがり！', '🎉');
       ui.setProgress(null);
+      // 紙吹雪は落下が速いので一度きりだと撮影/観賞タイミングによっては
+      // もう落ちきっている。DONE中はずっと軽く降らせ続けて見栄えを保つ
+      if (!confettiShowerId) {
+        confettiShowerId = setInterval(() => {
+          const ox = (Math.random() - 0.5) * 0.08, oz = (Math.random() - 0.5) * 0.08;
+          confetti.burst(new THREE.Vector3(ox, custardTopY + 0.12, oz), clockT);
+        }, 550);
+      }
     }
   }
 
   // -----------------------------------------------------------------------
   // トレイ: アイスの味
   // -----------------------------------------------------------------------
-  const SCOOP_OFFSETS = [[-0.030, -0.010], [0.030, -0.010], [0.0, 0.028]];
+  const SCOOP_OFFSETS = [[-0.028, 0.010], [0.028, 0.010], [0.0, -0.010]];
+  const SCOOP_LIFT = [0, 0, 0.016]; // 3個目は少し高く盛って前の2個の間から覗かせる
   function spawnScoop(flavor) {
     const scoop = createIceScoop(flavor);
     const idx = state.scoopCount;
     const off = SCOOP_OFFSETS[idx % SCOOP_OFFSETS.length];
-    const landY = custardTopY + scoop.radius * 0.85;
+    const landY = custardTopY + scoop.radius * 0.85 + SCOOP_LIFT[idx % SCOOP_LIFT.length];
     scoop.group.position.set(off[0], landY + 0.32, off[1]);
     scene.add(scoop.group);
     scoops.push(scoop);
@@ -289,17 +310,32 @@ export function createRecipe(ctx) {
 
     if (down) {
       // ねらった場所（レイキャスト）が当たればそこ、外れたら自動でゆっくり移動する場所を焼く
+      // ※ロームの速さはhdt基準（進捗と同じ時間軸）にし、低fps環境でも
+      //   torchProgressが先に満タンになって塗り残しが出ないようにする
       let u, v, point;
       const hits = ctx.raycastMeshes([meringue.mesh]);
       if (hits.length > 0 && hits[0].uv) {
         u = hits[0].uv.x; v = hits[0].uv.y; point = hits[0].point;
       } else {
-        torchRoamT += dt * 0.6;
+        torchRoamT += hdt * 0.6;
         u = (Math.sin(torchRoamT * 0.9) * 0.5 + 0.5 + 0.13) % 1;
         v = 0.18 + (Math.sin(torchRoamT * 0.53 + 1.7) * 0.5 + 0.5) * 0.72;
         point = meringue.worldPointAt(u, v);
       }
-      meringue.paintScorch(u, v, clamp(hdt * 9, 0, 1));
+      meringue.paintScorch(u, v, clamp(hdt * 9, 0, 1), true);
+
+      // 狙い所とは別に、ドーム全体をゆっくり巡回して余熱でうっすら焼く
+      // （指を動かさず長押しだけでも最終的に全体がこんがりするように）
+      ambientRoamT += hdt * 0.55;
+      const au = (Math.sin(ambientRoamT * 0.71) * 0.5 + 0.5 + 0.37) % 1;
+      const av = 0.10 + (Math.sin(ambientRoamT * 0.41 + 2.3) * 0.5 + 0.5) * 0.86;
+      meringue.paintScorch(au, av, clamp(hdt * 3.4, 0, 1), true);
+
+      // ドーム全体にじんわり余熱を回す（谷はクリーム色止まり・峰は濃い琥珀+焦げに）。
+      // これがないと指でなぞった筋だけが焼けて「白地に筋」のままになってしまう
+      meringue.soakHeat(hdt, true);
+      meringue.requestRedraw();
+
       state.torchProgress = clamp(state.torchProgress + hdt / 6.5, 0, 1);
 
       _normal.copy(meringue.normalAt(u, v)).transformDirection(meringue.mesh.matrixWorld);
@@ -346,26 +382,24 @@ export function createRecipe(ctx) {
   function shatterAndReveal() {
     ui.setHint('', '');
     const apex = new THREE.Vector3(0, apexY, 0);
-    shards.burst(apex);
-    glassShell.mesh.visible = false;
+    // 破片は器のすぐ外〜皿の上に、実時間だけを基準に確実に着地するアニメーション
+    shards.burst(apex, STAND_TOP + 0.001, clockT);
+    glassShell.group.visible = false;
     crackOverlay.mesh.visible = false;
-    // メレンゲドームが開いて中身が見える
-    tween({
-      from: 1, to: 0, duration: 0.65, easing: ease.inOutCubic,
-      onUpdate: v => {
-        meringue.group.scale.setScalar(Math.max(0.001, v));
-        meringue.group.position.y = custardTopY + (1 - v) * 0.18;
-      },
-      onComplete: () => { meringue.group.visible = false; },
-    });
+    // メレンゲドームはくさび状に割れて外側へ倒れ開く（丸ごと消えない。
+    // 下側は器の縁に残ったまま上だけ開く見た目になる）
+    meringue.group.visible = false;
+    meringueWedges.open(clockT);
+    // 冷気ミストは強く立ち上らせた後、DONE中もずっと軽く漂わせ続ける
     coldMist.setStrength(1);
-    setTimeout(() => coldMist.setStrength(0), 3000);
+    setTimeout(() => coldMist.setStrength(0.4), 2400);
     const sparkY = custardTopY + 0.10;
     sparkler.group.position.set(0, sparkY, 0);
     sparkler.ignite(clockT);
     audio.sfx.whoosh();
+    confetti.burst(new THREE.Vector3(0, custardTopY + 0.14, 0), clockT);
     setTimeout(() => {
-      confetti.burst(new THREE.Vector3(0, apexY * 0.7, 0), clockT);
+      confetti.burst(new THREE.Vector3(0.03, custardTopY + 0.12, -0.02), clockT);
       audio.sfx.fanfare();
       ui.showBanner('パリン！ できあがり！');
       setTimeout(() => {
@@ -397,7 +431,11 @@ export function createRecipe(ctx) {
         case 'CRACK':
           // タップ自体は上のpointerdownリスナーで即応済み。ここは長押しでも確実に
           // 進める無操作アシストのみ担当（フレームサンプリングでの検知漏れを避ける）。
-          if (ctx.pointer.down && state.crackStage < 3) {
+          // ただしTORCHでなぞっていた指がそのまま押しっぱなしで来た場合は、一度
+          // 離れるまでアシストを起動しない（でないと一瞬で3段階割れてしまう）。
+          if (!crackArmed) {
+            if (!ctx.pointer.down) crackArmed = true;
+          } else if (ctx.pointer.down && state.crackStage < 3) {
             crackHoldTimer += hdt;
             if (crackHoldTimer > 0.65) { handleCrackTap(); crackHoldTimer = 0; }
           } else if (!ctx.pointer.down) {
@@ -422,7 +460,8 @@ export function createRecipe(ctx) {
       if (torchTool.group.visible) torchTool.flame.update(dt, t);
       torchSteam.update(dt, t);
       coldMist.update(dt, t);
-      shards.update(dt, STAND_TOP + dish.wellFloorY);
+      shards.update(t);
+      meringueWedges.update(t);
       sparkler.update(dt, t);
       confetti.update(dt, t);
     },

@@ -2,21 +2,21 @@
 // フェーズ: MOUSSE → INSERT → FREEZE → UNMOLD → GLAZE → DECO → CUT → DONE
 import * as THREE from '../../vendor/three.module.js';
 import { createStream, createPitcher, createDecoration, createConfetti, createSparkles, createDrips } from '../cake.js';
-import { tween, ease, clamp, lerp } from '../util.js';
+import { tween, ease, clamp, lerp, glowTexture } from '../util.js';
 import {
   MOLD_R, MOLD_H, MOUSSE_R, LAYER_H, GLAZE_R, RIGHT_THETA, LEFT_THETA,
   createMold, createMousseLayer, createPourSurface, createCapPlane,
-  createGlazeSide, createGlazeTop, createKnife, createFrostParticles,
-  createGoldBit, createFlowerDeco, paintCapCanvas,
+  createGlazeSide, createGlazeTop, createKnife, createFrostParticles, createFrostShell,
+  createGoldBit, createFlowerDeco, createContactShadow, paintCapCanvas, createEdgeChamfer,
 } from './glazeObjects.js';
 
 export const meta = { id: 'glaze', title: 'かがみのケーキ', emoji: '🪞' };
 
 const MOUSSE_COLORS = { pink: 0xffb3c6, mint: 0xa8e6c9, lemon: 0xfff2a8 };
 const GLAZE_COLORS = {
-  pink: { a: 0xffd0e0, b: 0xe85f8f },
-  choco: { a: 0xcf9a5c, b: 0x5a3417 },
-  rainbow: { a: 0xffffff, b: 0xffffff },
+  pink: { a: 0xffd0e0, b: 0xe85f8f, drip: 0xe85f8f },
+  choco: { a: 0xcf9a5c, b: 0x5a3417, drip: 0x5a3417 },
+  rainbow: { a: 0xffe3f2, b: 0xbfe0ff, drip: 0xf2a6dc },
 };
 // 天面かざりの置き場所（半分ごとの左右振り分けに x の符号を使う）
 const DECO_SLOTS = [[0.02, 0], [-0.02, 0], [0.03, 0.03], [-0.03, 0.03], [0.02, -0.035], [-0.02, -0.035]];
@@ -56,6 +56,10 @@ export function createRecipe(ctx) {
   cakeRoot.position.set(0, ctx.STAND_TOP, 0);
   scene.add(cakeRoot);
 
+  // 接地感: 型・ケーキの直下に柔らかい暗部
+  const contactShadow = createContactShadow(MOLD_R * 1.4);
+  cakeRoot.add(contactShadow.mesh);
+
   const mold = createMold();
   cakeRoot.add(mold.group);
 
@@ -65,14 +69,18 @@ export function createRecipe(ctx) {
     layers.forEach(l => group.add(l.mesh));
     const surface = createPourSurface(thetaStart);
     group.add(surface.mesh);
-    const glazeSide = createGlazeSide(thetaStart);
+    const frost = createFrostShell(thetaStart);
+    group.add(frost.mesh);
+    const chamfer = createEdgeChamfer(thetaStart);
+    group.add(chamfer.mesh);
+    const glazeSide = createGlazeSide(thetaStart, scene.environment);
     group.add(glazeSide.mesh);
-    const glazeTop = createGlazeTop(thetaStart);
+    const glazeTop = createGlazeTop(thetaStart, scene.environment);
     group.add(glazeTop.mesh);
     const cap = createCapPlane();
     group.add(cap.mesh);
     cakeRoot.add(group);
-    return { group, layers, surface, glazeSide, glazeTop, cap, decos: [] };
+    return { group, layers, surface, frost, chamfer, glazeSide, glazeTop, cap, decos: [] };
   }
   const rightHalf = buildHalf(RIGHT_THETA);
   const leftHalf = buildHalf(LEFT_THETA);
@@ -226,9 +234,11 @@ export function createRecipe(ctx) {
     const colors = GLAZE_COLORS[key];
     for (const h of halves) {
       h.glazeSide.setColors(colors.a, colors.b);
-      h.glazeSide.setRainbow(key === 'rainbow');
-      h.glazeTop.setColor(key === 'rainbow' ? 0xfafcff : colors.a);
+      h.glazeSide.setMode(key);
+      h.glazeTop.setColors(colors.a, colors.b);
+      h.glazeTop.setMode(key);
     }
+    drips.group.traverse(o => { if (o.isMesh) o.material.color.set(colors.drip); });
     tintPitcherContents(glazePitcher, key === 'rainbow' ? 0xffffff : colors.a);
     trayGlaze.hide();
     ctx.ui.setHint('ながおしで とろ〜り かけよう', '🫗');
@@ -279,6 +289,8 @@ export function createRecipe(ctx) {
       ctx.camPhase([0.16, ctx.STAND_TOP + MOLD_H + 0.11, 0.24], [0, ctx.STAND_TOP + MOLD_H * 0.65, 0]);
       ctx.ui.setHint('フルーツを ぽちゃんと いれてね', '🍓');
       trayFruit.show();
+      // 全層そそぎ終わったので、上端のわずかな面取りリングを表示（紙のように硬い縁を和らげる）
+      for (const h of halves) h.chamfer.setVisible(true);
     } else if (next === 'FREEZE') {
       trayFruit.hide();
       ctx.camPhase([0.15, ctx.STAND_TOP + MOLD_H + 0.1, 0.24], [0, ctx.STAND_TOP + MOLD_H * 0.55, 0]);
@@ -304,7 +316,8 @@ export function createRecipe(ctx) {
       trayGdeco.show();
     } else if (next === 'CUT') {
       trayGdeco.hide();
-      ctx.camPhase([0.03, ctx.STAND_TOP + MOLD_H * 0.75, 0.3], [0, ctx.STAND_TOP + MOLD_H * 0.5, 0]);
+      const cakeCenterY = ctx.STAND_TOP + MOLD_H * 0.5;
+      ctx.camPhase([0.04, cakeCenterY + 0.05, 0.2], [0, cakeCenterY, 0]);
       ctx.ui.setHint('ながおしで きってみよう', '🔪');
       ctx.ui.setFinger('hold');
       ctx.ui.setProgress(0);
@@ -374,20 +387,25 @@ export function createRecipe(ctx) {
     ctx.ui.setHint('カチコチ こおったよ！', '❄️');
     sfx.freeze();
     frost.setStrength(1);
+    for (const h of halves) { h.frost.setStrength(1); h.frost.mesh.visible = true; }
     tween({ from: 0, to: 1.5, duration: 0.5, easing: ease.outCubic, onUpdate: v => { coldLight.intensity = v; } });
     const origColors = halves.map(h => h.layers.map(l => l.mat.color.clone()));
+    // 型抜き後にサテンのつやが出るよう下地を用意（roughness+sheen）
+    for (const h of halves) h.layers.forEach(l => { l.mat.sheen = 0.7; l.mat.sheenColor.set(0xffffff); l.mat.sheenRoughness = 0.35; });
     tween({
       from: 0, to: 1, duration: 1.6, easing: ease.outCubic,
       onUpdate: v => {
         halves.forEach((h, hi) => h.layers.forEach((l, li) => {
-          l.mat.color.copy(origColors[hi][li]).lerp(new THREE.Color(0xf5faff), v * 0.82);
-          l.mat.roughness = lerp(0.45, 0.14, v);
-          l.mat.clearcoat = lerp(0.4, 0.9, v);
+          // クリーム味がかった白（純白すぎない）に寄せる
+          l.mat.color.copy(origColors[hi][li]).lerp(new THREE.Color(0xfbf3e4), v * 0.8);
+          l.mat.roughness = lerp(0.45, 0.32, v);
+          l.mat.clearcoat = lerp(0.4, 0.55, v);
         }));
       },
     });
     setTimeout(() => {
       frost.setStrength(0);
+      tween({ from: 1, to: 0, duration: 0.8, onUpdate: v => { for (const h of halves) h.frost.setStrength(v); } });
       tween({ from: coldLight.intensity, to: 0.3, duration: 0.6, onUpdate: v => { coldLight.intensity = v; } });
       if (state.phase === 'FREEZE') enterPhase('UNMOLD');
     }, 3000);
@@ -475,21 +493,52 @@ export function createRecipe(ctx) {
 
   function openHalves() {
     const capTex = paintCapCanvas(mousseColorHex, insertedFruits);
-    rightHalf.cap.mat.map = capTex;
-    rightHalf.cap.mat.needsUpdate = true;
-    rightHalf.cap.mesh.visible = true;
-    leftHalf.cap.mat.map = capTex;
-    leftHalf.cap.mat.needsUpdate = true;
-    leftHalf.cap.mesh.visible = true;
+    for (const h of [rightHalf, leftHalf]) {
+      h.cap.mat.map = capTex.map;
+      h.cap.mat.roughnessMap = capTex.roughMap;
+      h.cap.mat.needsUpdate = true;
+      h.cap.mesh.visible = true;
+    }
+    // 各半分は「ムース全層+グレーズ殻+断面キャップ+天面飾り」を1つの剛体として
+    // X移動+Y回転のみで開く（傾いたり倒れたりしない。皿に接地したまま）。
+    // 回転の向きは断面キャップがカメラ側(+Z)を向くように選ぶ（逆だと断面が奥へ隠れる）。
+    const OPEN_X = 0.07, OPEN_ROT = THREE.MathUtils.degToRad(30);
     tween({
       from: 0, to: 1, duration: 1.0, easing: ease.outCubic,
       onUpdate: v => {
-        rightHalf.group.position.x = v * 0.05;
-        rightHalf.group.rotation.y = -v * 0.38;
-        leftHalf.group.position.x = -v * 0.05;
-        leftHalf.group.rotation.y = v * 0.38;
+        rightHalf.group.position.x = v * OPEN_X;
+        rightHalf.group.rotation.y = v * OPEN_ROT;
+        leftHalf.group.position.x = -v * OPEN_X;
+        leftHalf.group.rotation.y = -v * OPEN_ROT;
       },
     });
+    // 入刀時に断面がきらめく演出
+    spawnCutGlints();
+  }
+
+  // ナイフが入った瞬間、断面のまわりに小さなきらめきを散らす
+  const glintTex = glowTexture('rgba(255,255,255,1)', 'rgba(255,255,255,0)');
+  function spawnCutGlints() {
+    for (let i = 0; i < 12; i++) {
+      const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: glintTex, transparent: true, depthWrite: false, opacity: 0 }));
+      const y = ctx.STAND_TOP + Math.random() * MOLD_H;
+      const z = (Math.random() - 0.5) * MOUSSE_R * 1.6;
+      spr.position.set((Math.random() - 0.5) * 0.01, y, z);
+      spr.scale.setScalar(0.001);
+      scene.add(spr);
+      const peak = 0.02 + Math.random() * 0.012;
+      tween({
+        from: 0, to: 1, duration: 0.22 + Math.random() * 0.2, easing: ease.outCubic,
+        onUpdate: v => { spr.scale.setScalar(peak * v); spr.material.opacity = v; },
+        onComplete: () => {
+          tween({
+            from: 1, to: 0, duration: 0.3, delay: Math.random() * 0.15,
+            onUpdate: v => { spr.material.opacity = v; },
+            onComplete: () => scene.remove(spr),
+          });
+        },
+      });
+    }
   }
 
   function finishCut() {
@@ -525,15 +574,19 @@ export function createRecipe(ctx) {
       case 'DONE': {
         doneTime += dt;
         const a = doneTime * 0.3;
-        const r = 0.32, top = ctx.STAND_TOP + MOLD_H * 0.55;
-        ctx.camPhase([Math.sin(a) * r, top + 0.17, Math.cos(a) * r], [0, top, 0]);
+        const r = 0.5, top = ctx.STAND_TOP + MOLD_H * 0.55;
+        ctx.camPhase([Math.sin(a) * r, top + r * 0.24, Math.cos(a) * r], [0, top, 0]);
         break;
       }
       default: break; // INSERT / DECO はトレイのタップだけで進む
     }
     mousseStream.update(dt, t);
     glazeStream.update(dt, t);
-    for (const h of halves) h.glazeSide.update(dt, t);
+    for (const h of halves) {
+      h.glazeSide.update(dt, t);
+      h.glazeTop.update(dt, t);
+      h.frost.update(dt, t);
+    }
     frost.update(dt, t);
     confetti.update(dt, t);
     sparkles.update(dt, t);
