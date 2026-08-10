@@ -96,6 +96,43 @@ window.Sound = (function () {
     tone(330, 0.17, 0.18, 0.03, 'sine');
   }
 
+  // short bright blip when a palette swatch is picked
+  function pick() {
+    tone(NOTES[7], 0, 0.11, 0.08, 'triangle');
+    tone(NOTES[7] * 2, 0.02, 0.07, 0.025, 'sine');
+  }
+
+  // soft wet "plop" the instant colour is injected into a stream
+  function paint() {
+    if (!ready) return;
+    const t0 = ctx.currentTime;
+
+    const o = ctx.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(520, t0);
+    o.frequency.exponentialRampToValueAtTime(180, t0 + 0.11);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.linearRampToValueAtTime(0.08, t0 + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.16);
+    o.connect(g); g.connect(master);
+    o.start(t0); o.stop(t0 + 0.2);
+
+    // a breath of filtered noise for the wet texture
+    const len = Math.floor(ctx.sampleRate * 0.08);
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.frequency.value = 900; bp.Q.value = 1.1;
+    const ng = ctx.createGain();
+    ng.gain.value = 0.05;
+    src.connect(bp); bp.connect(ng); ng.connect(master);
+    src.start(t0);
+  }
+
   function toggleMute() {
     muted = !muted;
     try { localStorage.setItem('rgt_muted', muted ? '1' : '0'); } catch (e) {}
@@ -103,6 +140,6 @@ window.Sound = (function () {
     return muted;
   }
 
-  return { init, resume, setPour, chime, sparkle, fanfare, pop, boing, toggleMute,
-           isMuted: () => muted };
+  return { init, resume, setPour, chime, sparkle, fanfare, pop, boing, pick, paint,
+           toggleMute, isMuted: () => muted };
 })();

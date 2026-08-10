@@ -6,6 +6,10 @@
   const btnSound = document.getElementById('btn-sound');
   const btnReset = document.getElementById('btn-reset');
   const btnReplay = document.getElementById('btn-replay');
+  const btnAlbum = document.getElementById('btn-album');
+  const albumBadge = document.getElementById('album-badge');
+  const albumOverlay = document.getElementById('album-overlay');
+  const palette = document.getElementById('palette');
 
   const params = new URLSearchParams(location.search);
   const AUTO = params.has('auto');     // test/demo: pours by itself
@@ -13,12 +17,32 @@
 
   if (Sound.isMuted()) btnSound.classList.add('muted');
 
+  function refreshAlbumBadge() {
+    if (!albumBadge) return;
+    const n = Album.count();
+    albumBadge.textContent = n > 0 ? String(n) : '';
+    albumBadge.classList.toggle('hidden', n === 0);
+  }
+
   Game.init(canvas, {
     turbo: TURBO,
     round: parseInt(params.get('round') || '0', 10) || 0,
     forceRows: parseInt(params.get('rows') || '0', 10) || 0,
-    onComplete: () => btnReplay.classList.remove('hidden'),
+    onComplete: () => {
+      Album.save(Game.getTintGrid());
+      refreshAlbumBadge();
+      btnReplay.classList.remove('hidden');
+    },
   });
+
+  Palette.init({
+    onPick: (t) => {
+      Game.setBrush(t);
+      if (t) Sound.pick();   // blip on a real pick, not on deselect
+    },
+  });
+  Album.init();
+  refreshAlbumBadge();       // show whatever survived a reload
 
   // ---- pointer forwarding: the game decides what each finger does
   //      (touch a stream = push it, a glass = tilt it, anywhere else = pour)
@@ -47,6 +71,22 @@
   document.addEventListener('gesturestart', (e) => e.preventDefault());
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
+  // ---- palette / album never leak into the canvas's input model ----
+  // The palette bar and album overlay are DOM elements stacked above the
+  // canvas, so a tap that lands on them never reaches canvas's own pointer
+  // listeners in the first place. The one gap: the canvas never calls
+  // setPointerCapture, so a finger that started a grab/tilt on the canvas and
+  // then drags onto the palette (or is released there) stops delivering
+  // pointermove/pointerup to canvas — Game would keep that deflector forever.
+  // Treat any pointer activity on these panels as "this finger is UI now".
+  if (palette) {
+    palette.addEventListener('pointerdown', () => Game.releaseAll());
+    palette.addEventListener('pointerup', () => Game.releaseAll());
+  }
+  if (albumOverlay) {
+    albumOverlay.addEventListener('pointerdown', () => Game.releaseAll());
+  }
+
   // ---- buttons ----
   btnSound.addEventListener('click', () => {
     Sound.init();
@@ -61,6 +101,15 @@
     btnReplay.classList.add('hidden');
     Game.reset(true);            // next drink theme
   });
+  if (btnAlbum) {
+    btnAlbum.addEventListener('click', () => {
+      // A finger may still be down on the canvas (multi-touch) when the
+      // album is opened from a second finger — release it so nothing is
+      // left grabbing a stream while the overlay covers the tower.
+      Game.releaseAll();
+      Album.open();
+    });
+  }
 
   // ---- responsive / orientation ----
   window.addEventListener('resize', () => Game.resize());
@@ -71,7 +120,8 @@
   });
 
   // ---- headless test / demo hooks ----
-  // ?script=tilt:0:0:1;grab:1:0:R:2:0;cloudgrab:1:1 — scripted inputs before ?sim
+  // ?script=tilt:0:0:1;grab:1:0:R:2:0;cloudgrab:1:1;paint:1:0:L:32:1 — scripted
+  // inputs before ?sim
   if (params.has('script')) {
     setTimeout(() => {
       for (const cmd of params.get('script').split(';')) {
@@ -79,6 +129,7 @@
         if (f[0] === 'tilt') Game.test.tilt(+f[1], +f[2], +f[3]);
         else if (f[0] === 'grab') Game.test.grab(+f[1], +f[2], f[3], +f[4], +f[5]);
         else if (f[0] === 'cloudgrab') Game.test.grabCloud(+f[1], +f[2]);
+        else if (f[0] === 'paint') Game.test.paintStream(+f[1], +f[2], f[3], Tint.make(+f[4], +f[5]));
       }
     }, 300);
   }
