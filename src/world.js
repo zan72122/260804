@@ -699,5 +699,42 @@ export function buildWorld(scene, renderer) {
   scene.add(burst);
   world.doorBurst = burst;
 
+  // ゲスト立ち位置（各テーブルの椅子×12＋ステージ脇2点＝計14）
+  // 椅子のワールド座標を確定させるため一度だけ行列を更新
+  scene.updateMatrixWorld(true);
+  world.seatSpots = [];
+  const seatWorldPos = new THREE.Vector3();
+  for (const ch of world.chairSpots) {
+    ch.getWorldPosition(seatWorldPos);
+    const tableCenter = ch.parent.position; // テーブルGroupはscene直下なのでpositionがワールド座標
+    // テーブル中心→椅子の方向に0.28m進めた点を立ち位置とする（テーブルと反対側）
+    const dx = seatWorldPos.x - tableCenter.x;
+    const dz = seatWorldPos.z - tableCenter.z;
+    const dist = Math.sqrt(dx * dx + dz * dz) || 1;
+    const sx = seatWorldPos.x + (dx / dist) * 0.28;
+    const sz = seatWorldPos.z + (dz / dist) * 0.28;
+    const faceY = Math.atan2(tableCenter.x - sx, tableCenter.z - sz);
+    world.seatSpots.push({ x: sx, z: sz, faceY });
+  }
+  world.seatSpots.push({ x: -1.9, z: -8.9, faceY: Math.PI });
+  world.seatSpots.push({ x: 1.9, z: -8.9, faceY: Math.PI });
+
+  // 天井の梁（吊り飾り配置用のガイド線）
+  world.beamLines = [
+    { y: 6.6, z: -8.5, xMin: -7, xMax: 7 },
+    { y: 6.6, z: -4.5, xMin: -7, xMax: 7 },
+    { y: 6.6, z: -0.5, xMin: -7, xMax: 7 },
+  ];
+
+  // メインテーブル上の花瓶アンカー（ローカル座標をワールドへ変換）
+  world.headTable.updateWorldMatrix(true, false);
+  world.headVaseAnchors = [];
+  for (let i = 0; i < 5; i++) {
+    world.headVaseAnchors.push(world.headTable.localToWorld(new THREE.Vector3(-1.1 + i * 0.55, 0.74, 0.1)));
+  }
+
+  // テーブルクロス上に花を置ける半径
+  world.clothRadius = 0.72;
+
   return world;
 }

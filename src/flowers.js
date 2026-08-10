@@ -93,9 +93,9 @@ const TYPE_DEFS = {
   },
 };
 
-const CAPACITY = { rose: 9200, tulip: 2700, daisy: 10600 };
-const CENTER_CAP = 480;
-const CALYX_CAP = 480;
+const CAPACITY = { rose: 12000, tulip: 3600, daisy: 14000 };
+const CENTER_CAP = 700;
+const CALYX_CAP = 700;
 
 const _m = new THREE.Matrix4();
 const _mYaw = new THREE.Matrix4();

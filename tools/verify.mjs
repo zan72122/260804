@@ -47,11 +47,8 @@ while (Date.now() - t0 < LIMIT) {
   }
   if (s.phase === 'fill') {
     if (!seen.has('fill-1')) {
-      await page.waitForTimeout(2500);
+      await page.waitForTimeout(2000);
       await shotOnce('fill-1');
-    } else if (!seen.has('fill-2')) {
-      await page.waitForTimeout(5500);
-      await shotOnce('fill-2');
     }
     await page.waitForTimeout(600);
     continue;
@@ -70,6 +67,8 @@ while (Date.now() - t0 < LIMIT) {
   const onScreen = s.targets.filter((t) => t.x > 8 && t.x < W - 8 && t.y > 8 && t.y < H - 8);
   if (!onScreen.length) { console.log('WARN: no on-screen targets', JSON.stringify(s.targets)); break; }
   const t = onScreen[0];
+  // targets() の要素には星ボタン用に next:true が混ざることがあるが、
+  // 星ボタンも通常ターゲットと同様に {x,y} をタップするだけでよいのでロジック変更は不要。
   if (t.drag && t.dropX !== undefined) {
     await page.mouse.move(t.x, t.y);
     await page.mouse.down();
@@ -87,6 +86,9 @@ while (Date.now() - t0 < LIMIT) {
 // パーティーの後半（花びら・開花が進んだ状態）
 await page.waitForTimeout(6000);
 await shotOnce('party-late');
+// ゲスト入場・着席が進んだ状態
+await page.waitForTimeout(8000);
+await shotOnce('party-guests');
 // パーティー中のタップ（花びらバースト）
 await page.mouse.click(W / 2, H / 2);
 await page.waitForTimeout(1500);
