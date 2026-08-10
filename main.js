@@ -376,6 +376,8 @@ const SFX = {
   pshh() { noise(0.45, 0.34, 1900, 'highpass'); noise(0.9, 0.1, 3800, 'highpass', 0.12); },
   pon() { tone(420, 0.09, 'sine', 0.32, 0, 940); noise(0.03, 0.12, 2400, 'highpass'); },
   kotori() { tone(300, 0.06, 'sine', 0.14, 0, 180); },
+  hop() { tone(250, 0.12, 'triangle', 0.22, 0, 560); },
+  turn() { tone(700, 0.04, 'triangle', 0.11); noise(0.02, 0.05, 2600, 'highpass'); },
   jingle() {
     [[523, 0], [659, 0.11], [784, 0.22], [1047, 0.34]].forEach(([f, d]) => tone(f, 0.16, 'triangle', 0.18, d));
     tone(2093, 0.3, 'sine', 0.08, 0.45);
@@ -408,9 +410,13 @@ function rollStart() {
   const f = AC.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 420; f.Q.value = 0.8;
   const g = AC.createGain(); g.gain.value = 0;
   s.connect(f); f.connect(g); g.connect(masterGain); s.start();
-  rollNodes = { s, g };
+  rollNodes = { s, g, f };
 }
-function rollSet(v) { if (rollNodes) rollNodes.g.gain.value = clamp(v, 0, 0.16); }
+function rollSet(v, freq) {
+  if (!rollNodes) return;
+  rollNodes.g.gain.value = clamp(v, 0, 0.16);
+  if (freq) rollNodes.f.frequency.value = clamp(freq, 200, 1400);
+}
 function rollStop() { if (rollNodes) { rollNodes.s.stop(); rollNodes = null; } }
 function fizzStart() {
   if (!AC || fizzNodes) return;
@@ -481,6 +487,11 @@ let railTheta = RAIL_B.base;   // 度
 let railTargetBase = RAIL_B.base;
 let railHeld = false;
 let railTouchedThisRound = false;
+let railYOff = 0;              // レールの上下オフセット（px）
+let railOmega = 0, railVy = 0; // 角速度（度/s）・上下速度（px/s）
+let railPrevTheta = RAIL_B.base, railPrevYOff = 0;
+let railGrabY = 0, railGrabYOff = 0;
+let hopCd = 0;                 // ポンッのクールダウン
 let flapK = 1;                  // 1=閉 0.1=開
 let flapJit = 0;                // 商品接近時の微振動
 let flapLatched = false;
@@ -495,9 +506,10 @@ function segFor(name) {
   if (name === 'A') return { x1: RAIL_A.x1, y1: RAIL_A.y1, x2: RAIL_A.x2, y2: RAIL_A.y2, m1: 0, m2: 0, name };
   if (name === 'B') {
     const th = railTheta * Math.PI / 180;
+    const cy = RAIL_B.cy + railYOff;
     return {
-      x1: RAIL_B.cx - RAIL_B.half * Math.cos(th), y1: RAIL_B.cy - RAIL_B.half * Math.sin(th),
-      x2: RAIL_B.cx + RAIL_B.half * Math.cos(th), y2: RAIL_B.cy + RAIL_B.half * Math.sin(th),
+      x1: RAIL_B.cx - RAIL_B.half * Math.cos(th), y1: cy - RAIL_B.half * Math.sin(th),
+      x2: RAIL_B.cx + RAIL_B.half * Math.cos(th), y2: cy + RAIL_B.half * Math.sin(th),
       m1: 26, m2: 26, name
     };
   }
@@ -641,6 +653,8 @@ function pressButton(i) {
   prod.x = col; prod.y = shelf; prod.vx = 0; prod.vy = 0; prod.rot = 0; prod.wob = 0; prod.squash = 0;
   prod.phase = 'tip'; prod.tipT = 0; prod.rollT = 0; prod.timeOnB = 0; prod.pauseT = 0;
   prod.col = col; prod.shelfY = shelf; prod.glowO = 0; prod.shadowO = 0; prod.trailT = 0;
+  prod.autoT = 0; prod.vSign = 0; prod.spinBoost = 0; prod.wasHop = false; hopCd = 0;
+  railYOff = 0; railPrevYOff = 0; railPrevTheta = RAIL_B.base;
   // 「これが動くよ」の商品色リング
   const ring = el('circle', { cx: col, cy: shelf - 38, r: 24, fill: 'none', stroke: PRODUCTS[i].c1, 'stroke-width': 4, opacity: 0.9, 'pointer-events': 'none' }, rollLayer);
   tween(420, k => { ring.setAttribute('r', 24 + 46 * k); ring.setAttribute('opacity', 0.9 * (1 - k)); }, () => ring.remove());
@@ -682,6 +696,14 @@ function landOn(seg, vAlong, impact) {
   prod.squash = clamp(impact / 400, 0.15, 0.8);
   SFX.koto(impact / 320);
   setRailLit(seg.name);
+  // ポンッからの着地はごほうびのきらめき
+  if (prod.wasHop) {
+    prod.wasHop = false; prod.spinBoost = 0;
+    SFX.sparkle();
+    for (let i = 0; i < 5; i++) {
+      spawnPWorld(prod.x + rnd(-14, 14), prod.y - rnd(0, 30), { vx: rnd(-40, 40), vy: rnd(-90, -30), g: 220, life: rnd(0.35, 0.6), r: rnd(2, 3.6), fill: i % 2 ? '#fff3b0' : '#ffd23e', shrink: true });
+    }
+  }
   if (seg.name === 'B') prod.timeOnB = 0;
   if (seg.name === 'A') {
     prod.v += 55; // 着地の勢いで転がり出す（間延び防止）
@@ -707,9 +729,12 @@ function stepProd(dt) {
     spawnPWorld(prod.x, prod.y - PROD_R, { life: 0.28, r: 5, fill: PRODUCTS[selected].c1, shrink: true });
   }
 
-  // 保険：転がりが長引いたら確実に届ける
-  if (prod.rollT > 12 && prod.phase !== 'chutefall') {
+  // 保険：放置が長引いたら確実に届ける（遊んでいる最中は奪わない）
+  prod.autoT = (prod.autoT || 0) + (railHeld ? 0 : dt);
+  hopCd = Math.max(0, hopCd - dt);
+  if ((prod.autoT > 11 || prod.rollT > 25) && prod.phase !== 'chutefall' && prod.phase !== 'done') {
     prod.phase = 'chutefall'; prod.x = 210; prod.y = 575; prod.vx = 0; prod.vy = 60;
+    setRailLit(null);
   }
 
   if (prod.phase === 'tip') {
@@ -737,8 +762,15 @@ function stepProd(dt) {
     prod.skipT = Math.max(0, (prod.skipT || 0) - dt);
     const prevY = prod.y;
     prod.vy = Math.min(prod.vy + GRAV * dt, 620);
+    prod.vx = clamp(prod.vx, -330, 330);
     prod.x += prod.vx * dt; prod.y += prod.vy * dt;
     prod.rot += prod.vx * dt * 1.4;
+    // ポンッの後の「くるっ」
+    if (prod.spinBoost) {
+      prod.rot += prod.spinBoost * dt;
+      prod.spinBoost *= Math.max(0, 1 - 2.2 * dt);
+      if (Math.abs(prod.spinBoost) < 30) prod.spinBoost = 0;
+    }
     // 内壁
     if (prod.y > 350 && prod.y < 600) {
       if (prod.x < WALL_L) { prod.x = WALL_L; prod.vx = Math.abs(prod.vx) * variation.wallRest; SFX.tin(); }
@@ -783,6 +815,19 @@ function stepProd(dt) {
   } else if (prod.phase === 'rail') {
     const seg = segFor(prod.seg);
     const g = segGeom(seg);
+    // 上への素早いフリックで缶が「ポンッ」と跳ねる
+    if (prod.seg === 'B' && railHeld && railVy < -150 && hopCd <= 0) {
+      prod.phase = 'ballistic';
+      prod.vx = clamp(prod.v * g.cos + railOmega * 0.2, -300, 300);
+      prod.vy = clamp(-150 + railVy * 0.3, -240, -110);
+      prod.skipSeg = 'B'; prod.skipT = 0.14;
+      prod.spinBoost = (prod.v >= 0 ? 1 : -1) * rnd(400, 560);
+      prod.wasHop = true; hopCd = 0.55;
+      SFX.hop();
+      setRailLit(null);
+      renderProd();
+      return;
+    }
     if (prod.pauseT > 0) {
       prod.pauseT -= dt;
       // 引っかかって「ぐらぐら」している（意味のある静止として見せる）
@@ -791,11 +836,22 @@ function stepProd(dt) {
     } else {
       prod.wob = (prod.wob || 0) * Math.max(0, 1 - 10 * dt);
       let a = GRAV * g.sin;
-      // レールBの「届けたい」補正
       if (prod.seg === 'B') {
+        // 傾ける動作そのものが缶を押す（指の動きが即、缶に伝わる）
+        prod.v += railOmega * 4.5 * dt;
+        // 方向転換の「クッ」という合図
+        const sgn = prod.v > 25 ? 1 : (prod.v < -25 ? -1 : 0);
+        if (sgn && prod.vSign && sgn !== prod.vSign) {
+          SFX.turn();
+          prod.squash = Math.max(prod.squash, 0.2);
+          spawnPWorld(prod.x, prod.y, { vy: -45, life: 0.3, r: 2.6, fill: '#cfd8e4', shrink: true });
+        }
+        if (sgn) prod.vSign = sgn;
+        // 「届けたい」補正（触っていない時だけ強く働く）
         prod.timeOnB += dt;
         if (prod.timeOnB > 4 && !railHeld) a += (prod.s > g.len / 2 ? 70 : -70);
-        if (prod.timeOnB > 7) a += (prod.s > g.len / 2 ? 190 : -190);
+        if (prod.timeOnB > 7 && !railHeld) a += (prod.s > g.len / 2 ? 190 : -190);
+        if (prod.timeOnB > 10 && railHeld) a += (prod.s > g.len / 2 ? 120 : -120);
       }
       prod.v += a * dt;
       prod.v *= Math.max(0, 1 - variation.damp * dt);
@@ -824,7 +880,8 @@ function stepProd(dt) {
         SFX.sparkle();
       }
     }
-    rollSet(Math.abs(prod.v) / 1400);
+    // 転がり音：速度とレール角度で音程・音量が変わる
+    rollSet(Math.abs(prod.v) / 1400, 300 + Math.abs(prod.v) * 0.9 + Math.abs(railTheta) * 8);
     renderProd();
     return;
   }
@@ -1050,7 +1107,9 @@ svg.addEventListener('pointerdown', e => {
   } else if (S === 'ROLLING') {
     if (w.x > 56 && w.x < 364 && w.y > 405 && w.y < 545) {
       grab(e, 'rail');
-      railGrabX = w.x; railGrabTheta = railTheta; railHeld = true; railTouchedThisRound = true;
+      railGrabX = w.x; railGrabTheta = railTheta;
+      railGrabY = w.y; railGrabYOff = railYOff;
+      railHeld = true; railTouchedThisRound = true;
       railGlowRect.setAttribute('opacity', 0.5);
       handled = true;
     }
@@ -1096,7 +1155,8 @@ svg.addEventListener('pointermove', e => {
     const near = dist(coinPos.x, coinPos.y, SLOT.x, SLOT.y) < 100;
     slotGlow.setAttribute('opacity', near ? 0.9 : 0.45);
   } else if (dragging === 'rail') {
-    railTheta = clamp(railGrabTheta + (w.x - railGrabX) * 0.17, RAIL_B.min, RAIL_B.max);
+    railTheta = clamp(railGrabTheta + (w.x - railGrabX) * 0.2, RAIL_B.min, RAIL_B.max);
+    railYOff = clamp(railGrabYOff + (w.y - railGrabY) * 0.45, -13, 10);
   } else if (dragging === 'flap') {
     flapK = clamp(flapStartK - (flapStartY - w.y) / 105, 0.1, 1);
     renderFlap();
@@ -1199,11 +1259,16 @@ function frame(now) {
   lastT = now;
   stepTweens(now);
 
-  // レールBの姿勢
+  // レールBの姿勢（離すとバネで戻る）
   if (!railHeld) {
     railTheta = lerp(railTheta, railTargetBase, 1 - Math.pow(0.02, dt));
+    railYOff = lerp(railYOff, 0, 1 - Math.pow(0.002, dt));
   }
-  railBG.setAttribute('transform', `translate(${RAIL_B.cx} ${RAIL_B.cy}) rotate(${railTheta})`);
+  railOmega = (railTheta - railPrevTheta) / Math.max(dt, 1e-4);
+  railPrevTheta = railTheta;
+  railVy = (railYOff - railPrevYOff) / Math.max(dt, 1e-4);
+  railPrevYOff = railYOff;
+  railBG.setAttribute('transform', `translate(${RAIL_B.cx} ${RAIL_B.cy + railYOff}) rotate(${railTheta})`);
 
   // 硬貨：持ち上がり（スケール＋影）と投入口への磁力
   {
@@ -1263,7 +1328,7 @@ document.addEventListener('visibilitychange', () => {
 // ---------------------------------------------------------------
 window.__T = {
   get state() { return S; },
-  get prod() { return { phase: prod.phase, x: prod.x, y: prod.y, v: prod.v, seg: prod.seg }; },
+  get prod() { return { phase: prod.phase, x: prod.x, y: prod.y, v: prod.v, vy: prod.vy, seg: prod.seg, spinBoost: prod.spinBoost || 0 }; },
   get railTheta() { return railTheta; },
   get coinPos() { return { ...coinPos }; },
   get flapK() { return flapK; },
