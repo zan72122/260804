@@ -97,7 +97,13 @@ html, body {
 #btn-sound.muted .ic-on { display: none; }
 #btn-sound.muted .ic-off { display: block; }
 
-/* Big replay button, shown after the celebration */
+/* Big replay button, shown after the celebration. It used to be a fully
+   opaque rainbow disc sitting at top:62%, right on top of the middle rows
+   of the just-finished tower — the picture the child made was half-hidden
+   behind her own replay button. It is now a translucent glass ring (via
+   ::before, masked to a hollow rainbow band): still 118px, still pulsing,
+   still unmistakably a big colourful button, but the centre and the gaps
+   around it let the painted glasses show straight through. */
 #btn-replay {
   position: fixed;
   z-index: 20;
@@ -106,17 +112,35 @@ html, body {
   width: 118px;
   height: 118px;
   border-radius: 50%;
-  border: 5px solid rgba(255, 255, 255, 0.95);
-  background: conic-gradient(#ff5f6d, #ffa14f, #ffe95f, #7be07b, #5fc9ff, #b78bff, #ff5f6d);
+  border: none;
+  background: rgba(255, 255, 255, 0.14);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 6px 30px rgba(255, 150, 220, 0.55), 0 0 60px rgba(255, 255, 255, 0.35);
+  box-shadow: 0 6px 30px rgba(255, 150, 220, 0.45), 0 0 50px rgba(255, 255, 255, 0.3);
   animation: replay-pulse 1.3s ease-in-out infinite;
   touch-action: manipulation;
 }
-#btn-replay svg { filter: drop-shadow(0 2px 4px rgba(60, 20, 90, 0.5)); }
+/* the rainbow ring itself: a full conic-gradient disc, masked down to a
+   hollow band so the middle (and the picture behind it) stays clear */
+#btn-replay::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(#ff5f6d, #ffa14f, #ffe95f, #7be07b, #5fc9ff, #b78bff, #ff5f6d);
+  -webkit-mask-image: radial-gradient(circle closest-side, transparent 60%, #000 61%);
+  mask-image: radial-gradient(circle closest-side, transparent 60%, #000 61%);
+  pointer-events: none;
+}
+#btn-replay svg {
+  position: relative;
+  z-index: 1;
+  filter: drop-shadow(0 2px 4px rgba(60, 20, 90, 0.5));
+}
 #btn-replay.hidden { display: none; }
 
 @keyframes replay-pulse {
@@ -248,6 +272,39 @@ html, body {
   box-shadow: 0 2px 12px rgba(20, 8, 50, 0.3);
 }
 #album-close:active { transform: scale(0.9); }
+
+/* Narrow phones in portrait (~481px wide or less, e.g. iPhone 12/13/14/15
+   standard widths at 390px): 7 swatches (white + 6 colours) at the base
+   56px size + 10px gaps overflow to 480px wide, which clips blue and hides
+   purple off-screen entirely with no visual hint (no scrollbar, no peek).
+   Shrink swatch size/gap/padding so all 7 fit with room to spare.
+   Width check @390: 2*8 (h-padding) + 6*7 (gaps) + 7*46 (swatches)
+                    = 16 + 42 + 322 = 380px <= 390px. */
+@media (max-width: 480px) {
+  :root {
+    --sw-size: 46px;
+    --palette-h: 108px; /* 14 + 46 + 14 (padding+swatch+padding) + 34 (max iOS portrait inset) */
+  }
+  #palette {
+    gap: 7px;
+    padding: 14px 8px calc(14px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* Very narrow phones (~340px wide or less, e.g. iPhone SE / 5th-gen at
+   320px): the 46px tier above still overflows (380 > 320), so shrink again.
+   Width check @320: 2*7 (h-padding) + 6*5 (gaps) + 7*38 (swatches)
+                    = 14 + 30 + 266 = 310px <= 320px. */
+@media (max-width: 340px) {
+  :root {
+    --sw-size: 38px;
+    --palette-h: 92px; /* 10 + 38 + 10 (padding+swatch+padding) + 34 (max iOS portrait inset) */
+  }
+  #palette {
+    gap: 5px;
+    padding: 10px 7px calc(10px + env(safe-area-inset-bottom, 0px));
+  }
+}
 
 /* Short landscape phones (~390px tall or less): shrink the palette bar so it
    doesn't eat too much of the limited vertical space. */
