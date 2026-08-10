@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>ちょきちょき きくのねりきり</title>
+<style>
+  /* 基本スタイル（ディレクター所有・上書き禁止） */
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #2a2226; }
+  #game { position: fixed; inset: 0; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+  #ui-root { position: fixed; inset: 0; pointer-events: none; }
+  #ui-root * { pointer-events: auto; }
+</style>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="ui-root"></div>
+<script src="js/config.js"></script>
+<script src="js/bus.js"></script>
+<script src="js/core.js"></script>
+<script src="js/render.js"></script>
+<script src="js/fx.js"></script>
+<script src="js/input.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
