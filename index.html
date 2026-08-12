@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<title>おえかきパティシエの おかし通り</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='55' r='38' fill='%23F794B4'/><circle cx='50' cy='55' r='14' fill='%23FDEEEC'/><circle cx='36' cy='40' r='4' fill='%23FFD166'/><circle cx='62' cy='38' r='4' fill='%237FD8BE'/><circle cx='70' cy='58' r='4' fill='%239AB7FF'/></svg>">
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #FDEEEC;
+    overscroll-behavior: none;
+    position: fixed;
+    inset: 0;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #game {
+    display: block;
+    touch-action: none;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<script src="js/util.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/materials.js"></script>
+<script src="js/sweets.js"></script>
+<script src="js/chars.js"></script>
+<script src="js/street.js"></script>
+<script src="js/making.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
