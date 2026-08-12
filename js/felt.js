@@ -64,29 +64,36 @@ const Felt = {
     ctx.shadowColor = 'transparent';
     ctx.shadowBlur = 0;
     ctx.shadowOffsetY = 0;
-    // ふち周辺をほんのり明るく（毛羽立ち感）— 半透明ストロークの重ねがけ
     ctx.clip();
+    // 面のふくらみ：上辺にハイライト、下辺に落ち込み（フェルトの厚み）
+    ctx.save();
+    ctx.translate(0, -5);
     shapeFn(ctx);
-    ctx.strokeStyle = 'rgba(255,255,255,0.16)';
-    ctx.lineWidth = 8;
+    ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+    ctx.lineWidth = 11;
     ctx.stroke();
+    ctx.restore();
+    ctx.save();
+    ctx.translate(0, 6);
     shapeFn(ctx);
-    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
-    ctx.lineWidth = 4;
+    ctx.strokeStyle = 'rgba(110,60,100,0.15)';
+    ctx.lineWidth = 13;
     ctx.stroke();
-    // 内側の点線ぬい目
+    ctx.restore();
+    // ふち周辺をほんのり明るく（毛羽立ち感）
+    shapeFn(ctx);
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+    ctx.lineWidth = 5;
+    ctx.stroke();
+    // ふちのぬい目：クリップで外半分が欠ける分、倍幅で描いて内側にフル幅を残す
     if (opt.stitch !== false) {
       shapeFn(ctx);
       ctx.strokeStyle = stitchCol;
-      ctx.lineWidth = opt.stitchWidth || 2.4;
-      ctx.setLineDash([7, 6]);
+      ctx.lineWidth = (opt.stitchWidth || 3) * 2;
+      ctx.setLineDash([8, 7]);
       ctx.lineDashOffset = opt.dashOffset || 0;
       ctx.lineCap = 'round';
-      ctx.save();
-      // パスを少し内側で描くため縮小…は複雑なので、太めのクリップ内ストロークで代用
-      ctx.translate(0, 0);
       ctx.stroke();
-      ctx.restore();
       ctx.setLineDash([]);
     }
     ctx.restore();

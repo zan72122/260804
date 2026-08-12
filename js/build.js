@@ -102,9 +102,10 @@ const Build = {
       const rnd = U.mulberry32(item.seed);
 
       // 家の横幅は線の広がりから（長い線→大きな家）
-      const w = U.clamp(bb.w * 1.05, 300, 760);
+      const w = U.clamp(bb.w * 1.05, 340, 760);
       const cx = U.clamp(bb.x + bb.w / 2, 240, 760);
-      const roofBase = U.clamp(bb.y + bb.h + 20, 330, 640);
+      // 平らな線・短い線でも屋根に必ず布の面が残るよう、稜線の下に最低150の高さを確保
+      const roofBase = U.clamp(Math.max(bb.y + bb.h + 20, bb.y + 150), 330, 680);
       const x0 = cx - w / 2, x1 = cx + w / 2;
       const wallCol = P.light, roofCol = P.main;
 
@@ -115,9 +116,17 @@ const Build = {
       });
 
       // --- 屋根（子どもの線の真下に布が張られる）---
-      const roofPoly = item.stroke.slice();
-      roofPoly.push({ x: Math.max(x1 + 24, item.stroke[63].x), y: roofBase + 14 });
-      roofPoly.push({ x: Math.min(x0 - 24, item.stroke[0].x), y: roofBase + 14 });
+      // 右→左に描かれた線でも自己交差しないよう、左→右向きに揃えてから閉じる
+      let rp = item.stroke;
+      if (rp[0].x > rp[rp.length - 1].x) rp = rp.slice().reverse();
+      const xr = Math.max(x1 + 22, rp[rp.length - 1].x + 8);
+      const xl = Math.min(x0 - 22, rp[0].x - 8);
+      const roofPoly = rp.slice();
+      // ひさしの端は尖らせず、垂直の切り口（ファシア）で受ける
+      roofPoly.push({ x: xr, y: roofBase - 4 });
+      roofPoly.push({ x: xr, y: roofBase + 16 });
+      roofPoly.push({ x: xl, y: roofBase + 16 });
+      roofPoly.push({ x: xl, y: roofBase - 4 });
       const apex = U.pointAt(item.stroke, 0.5);
       Build.grow(ctx, t, 0.3, 0.62, apex.x, roofBase + 10, () => {
         Felt.piece(ctx, Felt.poly(roofPoly), roofCol, { stitchColor: 'rgba(255,255,255,0.9)' });
@@ -144,7 +153,8 @@ const Build = {
       });
 
       // --- 点 → ドア or ボタン窓 ---
-      const doorW = U.clamp(w * 0.24, 80, 130);
+      // 壁が低い家ではドアも低くして屋根に食い込まないように
+      const doorW = U.clamp(Math.min(w * 0.24, (GROUND - roofBase) * 0.6), 70, 130);
       if (doorMode) {
         const dx = U.clamp(item.dot.x, x0 + doorW / 2 + 20, x1 - doorW / 2 - 20);
         item._doorX = dx;
@@ -301,10 +311,10 @@ const Build = {
       const x0 = cx - w / 2, x1 = cx + w / 2;
       const topY = U.clamp(bb.y + bb.h + 30, 320, 560);
 
-      // --- 店の箱 ---
+      // --- 店の箱（制作マットと同化しないよう選んだ色のフェルトで）---
       Build.grow(ctx, t, 0.15, 0.48, cx, GROUND, () => {
-        Felt.piece(ctx, Felt.rrect(x0, topY, w, GROUND - topY, 24), '#fdf3e3',
-          { stitchColor: U.rgba(P.dark, 0.6) });
+        Felt.piece(ctx, Felt.rrect(x0, topY, w, GROUND - topY, 24), P.light,
+          { stitchColor: U.rgba(P.dark, 0.75) });
       });
 
       // --- ひさし（ストライプのオーニング）---
@@ -327,15 +337,15 @@ const Build = {
         }
       });
 
-      // --- ショーウィンドウ ---
+      // --- ショーウィンドウ（あかり色のフェルト。ドアと重ならない高さで止める）---
       Build.grow(ctx, t, 0.48, 0.68, cx, U.lerp(awnY, GROUND, 0.55), () => {
         const wy = awnY + awnH + 14;
-        const wh = GROUND - wy - 34;
-        Felt.piece(ctx, Felt.rrect(cx - w * 0.32, wy, w * 0.64, wh, 20), '#fdf8e8',
-          { stitchColor: U.rgba(P.dark, 0.7) });
+        const wh = Math.max(GROUND - wy - 168, 70);
+        Felt.piece(ctx, Felt.rrect(cx - w * 0.32, wy, w * 0.64, wh, 20), '#fff3c9',
+          { stitchColor: U.rgba(P.dark, 0.85) });
         // 窓の中の小物（リボンとハート）
-        Felt.bow(ctx, cx - w * 0.15, wy + wh * 0.5, 34, P.accent, 1);
-        Felt.heart(ctx, cx + w * 0.15, wy + wh * 0.5, 16, P.main, 1);
+        Felt.bow(ctx, cx - w * 0.15, wy + wh * 0.5, Math.min(34, wh * 0.4), P.main, 1);
+        Felt.heart(ctx, cx + w * 0.15, wy + wh * 0.5, Math.min(16, wh * 0.2), P.dark, 1);
       });
 
       // --- 看板リボン（子どもの線に布の帯が張られる）---

@@ -414,7 +414,7 @@ function drawTown(dt) {
     const item = G.items[L.id];
     if (item) {
       const cache = getItemCache(L.id, item);
-      if (!refreshed && G.time - cache.at > 0.12) {
+      if (!refreshed && G.time - cache.at > 0.5) {
         renderItemCache(cache, item);
         refreshed = true;
       }
@@ -534,6 +534,28 @@ function startCraft(spotId) {
   G.sceneT = 0;
 }
 
+// 手芸マットのキャッシュ（shadowBlur付きの大面積を毎フレーム描かない）
+let matCache = null;
+const MAT_M = 28; // 影のはみ出しマージン
+function drawCraftMat(B) {
+  const full = B.size + 28 + MAT_M * 2;
+  if (!matCache || matCache.size !== B.size || matCache.dpr !== DPR) {
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = Math.round(full * DPR);
+    const c = cv.getContext('2d');
+    c.setTransform(DPR, 0, 0, DPR, 0, 0);
+    Felt.piece(c, Felt.rrect(MAT_M, MAT_M, B.size + 28, B.size + 28, 36), '#fff6ea',
+      { stitchColor: 'rgba(240,107,168,0.65)' });
+    const bx = MAT_M + 22, by = MAT_M + 22, ex = MAT_M + B.size + 6;
+    Felt.button(c, bx, by, 11, '#ffb7d2', 1);
+    Felt.button(c, ex, by, 11, '#8fe3c0', 1);
+    Felt.button(c, bx, ex, 11, '#ffe27a', 1);
+    Felt.button(c, ex, ex, 11, '#b9a2ea', 1);
+    matCache = { cv, size: B.size, dpr: DPR, full };
+  }
+  ctx.drawImage(matCache.cv, B.x - 14 - MAT_M, B.y - 14 - MAT_M, matCache.full, matCache.full);
+}
+
 // ボード（1000x1000）の画面上の位置
 function boardRect() {
   const size = Math.min(W * 0.94, H * 0.66);
@@ -586,14 +608,8 @@ function drawCraft(dt) {
     ctx.restore();
   }
 
-  // 制作ボード（手芸マット）
-  Felt.piece(ctx, Felt.rrect(B.x - 14, B.y - 14, B.size + 28, B.size + 28, 36), '#fff6ea',
-    { stitchColor: 'rgba(240,107,168,0.65)' });
-  // 角のボタン
-  Felt.button(ctx, B.x + 8, B.y + 8, 11, '#ffb7d2', 1);
-  Felt.button(ctx, B.x + B.size - 8, B.y + 8, 11, '#8fe3c0', 1);
-  Felt.button(ctx, B.x + 8, B.y + B.size - 8, 11, '#ffe27a', 1);
-  Felt.button(ctx, B.x + B.size - 8, B.y + B.size - 8, 11, '#b9a2ea', 1);
+  // 制作ボード（手芸マット）— 静的なのでオフスクリーンキャッシュから描く
+  drawCraftMat(B);
 
   ctx.save();
   ctx.beginPath();
@@ -667,14 +683,15 @@ function drawCraft(dt) {
   drawCraftUI(dt, B);
   drawParticles();
   drawMuteButton();
-  drawBackButton();
+  drawBackButton(C);
 
   // ---- 仕立てアニメの進行 ----
+  // 早送りタップで t が先に 1.0 へ張り付いても必ず done に到達させる
   if (C.phase === 'magic') {
     const prev = C.t;
     C.t = Math.min(1, C.t + dt / 4.6);
     magicSfx(prev, C.t);
-    if (C.t >= 1 && prev < 1) beginDonePhase();
+    if (C.t >= 1) beginDonePhase();
   }
 }
 
@@ -758,14 +775,32 @@ function bubbleAbove(B, text) {
 }
 
 let backBtn = null;
-function drawBackButton() {
-  const r = Math.max(MIN * 0.038, 22);
-  backBtn = feltRoundButton(r + 16, r + 16, r, '#f5a8c8', (rr) => {
+function drawBackButton(C) {
+  // 仕立てアニメ中は戻れない（作品が消える誤タップの防止）
+  if (C && C.phase === 'magic') { backBtn = null; return; }
+  const armed = C && C.backArm && C.backArm > G.time && C.phase !== 'done';
+  const r = Math.max(MIN * 0.038, 22) * (armed ? 1.25 : 1);
+  const wob = armed ? Math.sin(G.time * 22) * 0.12 : 0;
+  ctx.save();
+  ctx.translate(r + 16, r + 16);
+  ctx.rotate(wob);
+  ctx.translate(-(r + 16), -(r + 16));
+  backBtn = feltRoundButton(r + 16, r + 16, r, armed ? '#f06ba8' : '#f5a8c8', (rr) => {
     ctx.strokeStyle = '#fff'; ctx.lineWidth = rr * 0.2; ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.moveTo(rr * 0.25, -rr * 0.38); ctx.lineTo(-rr * 0.3, 0); ctx.lineTo(rr * 0.25, rr * 0.38);
     ctx.stroke();
+    if (armed) {
+      // 残り時間リング（もう一回押すと戻る、の非文字ヒント）
+      const k = (C.backArm - G.time) / 2.2;
+      ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+      ctx.lineWidth = rr * 0.12;
+      ctx.beginPath();
+      ctx.arc(0, 0, rr * 1.12, -Math.PI / 2, -Math.PI / 2 + U.TAU * k);
+      ctx.stroke();
+    }
   });
+  ctx.restore();
 }
 
 // 仕立てアニメ中の効果音（段階演出に同期）
@@ -786,6 +821,7 @@ function magicSfx(prev, t) {
 
 function beginDonePhase() {
   const C = G.craft;
+  if (!C || C.phase !== 'magic') return;
   C.phase = 'done';
   Snd.cheer();
   // 住民がボードに駆けつける
@@ -878,8 +914,17 @@ function onDown(x, y) {
   if (G.scene === 'craft') {
     const C = G.craft;
     if (hitCircle(backBtn, x, y)) {
-      Snd.tap();
-      G.craft = null; G.scene = 'town'; G.sceneT = 0;
+      // 完成後の戻る＝作品を保存して町へ（1タップで作品が消える事故を防ぐ）
+      if (C.phase === 'done') { Snd.tap(); commitCraft(); return; }
+      // 色と線を選んだあとは2段階（1回目：ボタンが「ほんとに？」と震える）
+      const hasWork = C.colorIdx >= 0 && C.stroke.length > 1;
+      if (!hasWork || (C.backArm && C.backArm > G.time)) {
+        Snd.tap();
+        G.craft = null; G.scene = 'town'; G.sceneT = 0;
+      } else {
+        C.backArm = G.time + 2.2;
+        Snd.tap();
+      }
       return;
     }
     if (C.phase === 'color') {
@@ -904,15 +949,12 @@ function onDown(x, y) {
       return;
     }
     if (C.phase === 'dot') {
+      // すぐ確定しない：指が動いたら「線の続き」、ちょんと離したら「点」
       const p = toBoard(x, y);
       if (p.x > -30 && p.x < BOARD + 30 && p.y > -30 && p.y < BOARD + 30) {
-        C.dot = { x: U.clamp(p.x, 30, 970), y: U.clamp(p.y, 30, 970) };
-        Snd.pon();
-        const sp = boardToScreen(C.dot.x, C.dot.y);
-        for (let i = 0; i < 5; i++) spawnParticle('star', sp.x, sp.y, '#ffe27a');
-        C.item = Build.make(C.spotId, C.stroke, C.dot, C.colorIdx, C.seed);
-        C.phase = 'magic';
-        C.t = 0;
+        C.pending = { x: U.clamp(p.x, 30, 970), y: U.clamp(p.y, 30, 970) };
+        C.pendLast = { x: p.x, y: p.y };
+        C.pendMoved = 0;
       }
       return;
     }
@@ -933,7 +975,22 @@ function onDown(x, y) {
 
 function onMove(x, y) {
   const C = G.craft;
-  if (!C || C.phase !== 'draw' || !C.drawing) return;
+  if (!C) return;
+  // 点フェーズでドラッグが始まったら、線の描き足しとして扱う（ためらい描きの救済）
+  if (C.phase === 'dot' && C.pending) {
+    const p = toBoard(x, y);
+    C.pendMoved += U.dist(C.pendLast.x, C.pendLast.y, p.x, p.y);
+    C.pendLast = { x: p.x, y: p.y };
+    if (C.pendMoved > 30) {
+      C.phase = 'draw';
+      C.drawing = true;
+      C.stroke.push({ x: C.pending.x, y: C.pending.y });
+      C.stroke.push({ x: U.clamp(p.x, 15, 985), y: U.clamp(p.y, 15, 985) });
+      C.pending = null;
+    }
+    return;
+  }
+  if (C.phase !== 'draw' || !C.drawing) return;
   const p = toBoard(x, y);
   const q = { x: U.clamp(p.x, 15, 985), y: U.clamp(p.y, 15, 985) };
   const last = C.stroke[C.stroke.length - 1];
@@ -950,11 +1007,24 @@ function onMove(x, y) {
 
 function onUp() {
   const C = G.craft;
-  if (!C || C.phase !== 'draw' || !C.drawing) return;
+  if (!C) return;
+  // 点フェーズ：ほぼ動かず指を離した＝「点」を確定
+  if (C.phase === 'dot' && C.pending) {
+    commitDot(C, C.pending);
+    C.pending = null;
+    return;
+  }
+  if (C.phase !== 'draw' || !C.drawing) return;
   C.drawing = false;
+  Snd.tap();
+  C.phase = 'dot';
+  C.pending = null;
+}
+
+function commitDot(C, dot) {
   // どんな入力でも成立させる：短すぎる線はやさしいアーチに育てる
   if (U.polyLength(C.stroke) < 70) {
-    const c = C.stroke[0];
+    const c = C.stroke[0] || { x: 500, y: 450 };
     const cx = U.clamp(c.x, 260, 740), cy = U.clamp(c.y, 300, 700);
     C.stroke = [];
     for (let i = 0; i <= 24; i++) {
@@ -962,8 +1032,13 @@ function onUp() {
       C.stroke.push({ x: cx - 220 + 440 * t, y: cy + 60 - Math.sin(t * Math.PI) * 140 });
     }
   }
-  Snd.tap();
-  C.phase = 'dot';
+  C.dot = { x: dot.x, y: dot.y };
+  Snd.pon();
+  const sp = boardToScreen(C.dot.x, C.dot.y);
+  for (let i = 0; i < 5; i++) spawnParticle('star', sp.x, sp.y, '#ffe27a');
+  C.item = Build.make(C.spotId, C.stroke, C.dot, C.colorIdx, C.seed);
+  C.phase = 'magic';
+  C.t = 0;
 }
 
 // ポインタイベント（タッチ・マウス統合）
