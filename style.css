@@ -1,0 +1,78 @@
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{
+  height:100%;width:100%;
+  position:fixed;inset:0;
+  overflow:hidden;
+  touch-action:none;
+  overscroll-behavior:none;
+  background:#bfe6f2;
+  user-select:none;-webkit-user-select:none;
+  -webkit-touch-callout:none;
+}
+canvas#game{
+  position:fixed;inset:0;
+  width:100%;height:100%;
+  display:block;
+  touch-action:none;
+}
+
+/* ---- color palette (max 3 big buttons) ---- */
+#colorBar{
+  position:fixed;
+  left:50%;transform:translateX(-50%);
+  bottom:calc(env(safe-area-inset-bottom,0px) + 14px);
+  display:flex;gap:22px;
+  z-index:10;
+}
+.colorBtn{
+  width:66px;height:66px;
+  border-radius:50%;
+  border:none;
+  background:rgba(255,255,255,.55);
+  box-shadow:0 4px 14px rgba(60,40,80,.25), inset 0 0 0 3px rgba(255,255,255,.8);
+  padding:7px;
+  transition:transform .18s cubic-bezier(.34,1.56,.64,1), box-shadow .25s;
+  touch-action:none;
+  cursor:pointer;
+}
+.colorBtn .swatch{
+  display:block;width:100%;height:100%;
+  border-radius:50%;
+  box-shadow:inset 0 -4px 8px rgba(0,0,0,.14), inset 0 3px 6px rgba(255,255,255,.5);
+}
+.swatch.pink{background:radial-gradient(circle at 35% 30%, #ffd6ea, #ff8fc8 55%, #ef62a8);}
+.swatch.purple{background:radial-gradient(circle at 35% 30%, #eadaff, #b892f0 55%, #9a6fe0);}
+.swatch.rainbow{
+  background:conic-gradient(#ff6f91,#ffb45f,#f7e463,#7fe08e,#5fd4e6,#9f97ff,#ff6f91);
+  animation:swatchSpin 7s linear infinite;
+}
+@keyframes swatchSpin{to{transform:rotate(360deg);}}
+.colorBtn.selected{
+  transform:scale(1.18);
+  box-shadow:0 6px 18px rgba(60,40,80,.3),
+             inset 0 0 0 3px rgba(255,255,255,.95),
+             0 0 22px 5px rgba(255,225,140,.6);
+}
+.colorBtn:active{transform:scale(.92);}
+.colorBtn.selected:active{transform:scale(1.06);}
+
+/* ---- undo ---- */
+#undoBtn{
+  position:fixed;
+  left:calc(env(safe-area-inset-left,0px) + 12px);
+  bottom:calc(env(safe-area-inset-bottom,0px) + 24px);
+  width:50px;height:50px;
+  border-radius:50%;
+  border:none;
+  background:rgba(255,255,255,.42);
+  color:rgba(96,64,44,.78);
+  box-shadow:0 3px 10px rgba(60,40,80,.18);
+  display:flex;align-items:center;justify-content:center;
+  z-index:10;
+  transition:opacity .4s, transform .15s;
+  touch-action:none;
+  cursor:pointer;
+}
+#undoBtn svg{width:26px;height:26px;}
+#undoBtn:active{transform:scale(.88);}
+#undoBtn.hidden{opacity:0;pointer-events:none;}

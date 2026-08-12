@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>ぽんぽん！まほうの花さかガーデン</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#bfe6f2">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%B7%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<button id="undoBtn" class="hidden" aria-label="もどす">
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M18.6 14.2a7 7 0 1 1-1.2-7.3" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>
+    <path d="M18.9 2.6 18.2 7.5 13.3 6.8" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+</button>
+
+<div id="colorBar">
+  <button class="colorBtn selected" data-color="pink" aria-label="ピンク"><span class="swatch pink"></span></button>
+  <button class="colorBtn" data-color="purple" aria-label="むらさき"><span class="swatch purple"></span></button>
+  <button class="colorBtn" data-color="rainbow" aria-label="にじいろ"><span class="swatch rainbow"></span></button>
+</div>
+
+<script src="js/util.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/bg.js"></script>
+<script src="js/crayon.js"></script>
+<script src="js/flower.js"></script>
+<script src="js/creatures.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
