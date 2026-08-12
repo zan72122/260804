@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#ffd9ec">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23ff9ecb'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%23ffe27a'/%3E%3C/svg%3E">
+<title>いっぽん・いってん！ にじいろタウン</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="stage">
+  <canvas id="world"></canvas>
+  <canvas id="ink"></canvas>
+
+  <div id="ui">
+    <!-- 花びら型もどるボタン -->
+    <button id="btnBack" class="petalBtn hidden" aria-label="もどる">
+      <svg viewBox="0 0 100 100">
+        <defs>
+          <radialGradient id="petalG" cx="35%" cy="30%" r="90%">
+            <stop offset="0%" stop-color="#ffe6f4"/>
+            <stop offset="55%" stop-color="#ffb1d8"/>
+            <stop offset="100%" stop-color="#ff8ec4"/>
+          </radialGradient>
+        </defs>
+        <path d="M50 6 C88 10 96 52 84 78 C70 102 24 100 12 74 C2 50 16 12 50 6 Z" fill="url(#petalG)" stroke="#e86aa8" stroke-width="3"/>
+        <path d="M58 30 L38 50 L58 70" fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M58 30 L38 50 L58 70" fill="none" stroke="#c94f8c" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+
+    <!-- おかたづけ（リセット） -->
+    <button id="btnReset" class="petalBtn tiny hidden" aria-label="おかたづけ">
+      <svg viewBox="0 0 100 100">
+        <defs>
+          <radialGradient id="brushG" cx="35%" cy="30%" r="90%">
+            <stop offset="0%" stop-color="#e8fbff"/>
+            <stop offset="60%" stop-color="#9fe6ef"/>
+            <stop offset="100%" stop-color="#6fd2e0"/>
+          </radialGradient>
+        </defs>
+        <circle cx="50" cy="50" r="44" fill="url(#brushG)" stroke="#4db3c4" stroke-width="3"/>
+        <g transform="rotate(20 50 50)">
+          <rect x="44" y="18" width="12" height="34" rx="6" fill="#fff" stroke="#4db3c4" stroke-width="3"/>
+          <path d="M38 52 h24 l-3 22 c-1 8 -17 8 -18 0 Z" fill="#ffd98e" stroke="#d9a34e" stroke-width="3"/>
+          <path d="M42 56 v14 M50 57 v16 M58 56 v14" stroke="#d9a34e" stroke-width="2.5" stroke-linecap="round"/>
+        </g>
+      </svg>
+    </button>
+
+    <!-- クレヨン選択 -->
+    <div id="crayonBar" class="hidden">
+      <div id="crayonTitle"><span>どの いろで かく？</span></div>
+      <div id="crayonRow"></div>
+    </div>
+
+    <!-- さいごに、ぽん！ -->
+    <div id="ponBanner" class="hidden">
+      <div class="ponText">さいごに、<b>ぽん！</b></div>
+      <div class="tapHand">
+        <svg viewBox="0 0 120 120">
+          <circle class="ripple r1" cx="60" cy="38" r="16"/>
+          <circle class="ripple r2" cx="60" cy="38" r="16"/>
+          <g class="handG">
+            <path d="M54 34 c0 -8 12 -8 12 0 l0 30 c10 -6 26 2 24 14 c-2 12 -8 22 -22 24 c-14 2 -24 -4 -28 -16 l-6 -18 c-3 -9 8 -13 12 -5 l4 9 Z"
+              fill="#fff" stroke="#e88bb8" stroke-width="4" stroke-linejoin="round"/>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <!-- できた！ -->
+    <div id="doneBanner" class="hidden"><span>できた！</span></div>
+
+    <!-- チュートリアルの手 -->
+    <div id="hintHand" class="hidden">
+      <svg viewBox="0 0 120 120">
+        <circle class="ripple r1" cx="60" cy="38" r="16"/>
+        <circle class="ripple r2" cx="60" cy="38" r="16"/>
+        <g class="handG">
+          <path d="M54 34 c0 -8 12 -8 12 0 l0 30 c10 -6 26 2 24 14 c-2 12 -8 22 -22 24 c-14 2 -24 -4 -28 -16 l-6 -18 c-3 -9 8 -13 12 -5 l4 9 Z"
+            fill="#fff" stroke="#e88bb8" stroke-width="4" stroke-linejoin="round"/>
+        </g>
+      </svg>
+    </div>
+
+    <!-- おかたづけ かくにん -->
+    <div id="confirmReset" class="hidden">
+      <div class="confirmCard">
+        <div class="confirmText">まちを ぜんぶ<br>おかたづけする？</div>
+        <div class="confirmRow">
+          <button id="btnResetYes" class="bigChoice yes">
+            <svg viewBox="0 0 100 100">
+              <circle cx="50" cy="50" r="40" fill="none" stroke="#fff" stroke-width="12"/>
+            </svg>
+            <span>はい</span>
+          </button>
+          <button id="btnResetNo" class="bigChoice no">
+            <svg viewBox="0 0 100 100">
+              <path d="M62 22 L34 50 L62 78" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span>やめる</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- タイトル -->
+    <div id="title">
+      <div class="titleSky"></div>
+      <div class="titleInner">
+        <svg id="titleRainbow" viewBox="0 0 300 150">
+          <path d="M20 150 A130 130 0 0 1 280 150" fill="none" stroke="#ff9ecb" stroke-width="14" stroke-linecap="round"/>
+          <path d="M36 150 A114 114 0 0 1 264 150" fill="none" stroke="#ffd48a" stroke-width="14" stroke-linecap="round"/>
+          <path d="M52 150 A98 98 0 0 1 248 150" fill="none" stroke="#fff59b" stroke-width="14" stroke-linecap="round"/>
+          <path d="M68 150 A82 82 0 0 1 232 150" fill="none" stroke="#a9e8b8" stroke-width="14" stroke-linecap="round"/>
+          <path d="M84 150 A66 66 0 0 1 216 150" fill="none" stroke="#9fd8ff" stroke-width="14" stroke-linecap="round"/>
+          <path d="M100 150 A50 50 0 0 1 200 150" fill="none" stroke="#cdb3ff" stroke-width="14" stroke-linecap="round"/>
+        </svg>
+        <h1><span class="tSmall">いっぽん・いってん！</span><span class="tBig">にじいろタウン</span></h1>
+        <div class="titleTap">タップしてね</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="js/util.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/fx.js"></script>
+<script src="js/stroke.js"></script>
+<script src="js/chars.js"></script>
+<script src="js/gen_garden.js"></script>
+<script src="js/gen_house.js"></script>
+<script src="js/gen_cake.js"></script>
+<script src="js/save.js"></script>
+<script src="js/town.js"></script>
+<script src="js/make.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
